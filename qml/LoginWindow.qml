@@ -63,9 +63,17 @@ ApplicationWindow {
         }
 
         CheckBox {
+            Layout.fillWidth: true
             text: "Skip TLS certificate verification (insecure, dev only)"
             checked: root.xmppClient.insecureSkipTlsVerification
             onToggled: root.xmppClient.insecureSkipTlsVerification = checked
+
+            contentItem: Label {
+                text: parent.text
+                wrapMode: Text.WordWrap
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: parent.indicator.width + parent.spacing
+            }
         }
 
         Button {

@@ -667,14 +667,47 @@ doesn't have) against a live `roof`/`telescope` pair: `xmppClient.jid`
 populated correctly on connect; `EventLogModel::entriesOfType("LogEvent")`
 returned the wrong (empty) `module` for stale catch-up events before the
 staleness-filter fix, and the correct one (`"roof"`) for a live event
-triggered by `IRoof.init()` after the fix. Window-visibility toggling
-(`LoginWindow`/`MainWindow` swap) could not be confirmed via this harness
-- a control test showed even a trivial hardcoded `visible: true` window
-reads back `false` through a synchronous `QObject::property()` check under
-`QT_QPA_PLATFORM=offscreen`, confirming this is an artifact of that
-platform/technique rather than a real bug (the binding itself is
-simple, standard QML) - but it means an actual visual check on a real
-display is still outstanding.
+triggered by `IRoof.init()` after the fix.
+
+**Correction (found later, on a real display, not just this harness):**
+window-visibility toggling was originally reported here as unconfirmable,
+blamed on a `QT_QPA_PLATFORM=offscreen` control test that read a
+hardcoded `visible: true` back as `false`, and dismissed as a harness
+artifact rather than a real bug. That was wrong on two counts, confirmed
+by bisecting against minimal reproductions outside this project:
+
+1. `Main.qml`'s root was `Item`, not `Window`/`QtObject`. `Item` is a
+   visual type that expects to belong to a `QQuickWindow`'s scene graph;
+   as the `QQmlApplicationEngine` root it never gets one, and on this
+   project's actual Qt 6.10.2/KWin-Wayland setup that silently breaks
+   visibility of the `Window` children declared inside it - they get
+   created (`Component.onCompleted` fires, no errors anywhere) but never
+   map on the real compositor either, not just under `offscreen`. Fixed
+   by making the root a `QtObject` instead (the correct type for
+   something that only ever holds other objects, never renders itself).
+2. Fixing #1 alone still didn't show a window, because of a second,
+   unrelated bug introduced while fixing #1: giving the `XmppClient`
+   instance its own property name (e.g. `property var xmppClient:
+   XmppClient {}`) and then writing `xmppClient: xmppClient` on
+   `LoginWindow`/`MainWindow` is a self-shadowing reference - the RHS
+   resolves to that object's *own* (not-yet-assigned) `xmppClient`
+   property before falling back to the outer scope, so `LoginWindow`/
+   `MainWindow` see `xmppClient` as `undefined` internally
+   (`TypeError: Cannot read property 'status' of undefined` from
+   `LoginWindow.qml`'s own state labels). The original code avoided this
+   by using `XmppClient { id: xmppClient }` - `id`s live in a separate
+   namespace from properties, so they never shadow. The fix keeps that
+   `id`-based reference and only wraps the child objects in
+   differently-named properties (`_client`, `_loginWindow`,
+   `_mainWindow`) to satisfy `QtObject` having no default property for
+   bare child declarations.
+
+Confirmed fixed on a real KDE Plasma/Wayland session (not `offscreen`):
+queried KWin's own window list via a small KWin script
+(`workspace.windowList()`) while the process was confirmed running -
+before the fix, zero windows belonging to this app ever appeared, no
+matter how `visible` was set; after the fix, `pyobs-gui++ - Sign in`
+appears as a real, mapped window immediately on launch.
 
 ---
 
@@ -726,10 +759,15 @@ Phases 0 through 7.5 are done, committed, and pushed to `main`. **Phase 8
 Phases 7/7.5 — not blocking, but worth closing out before treating those
 phases as fully done:
 
-- No real visual/interactive check of `RoofWidget` or the
-  `LoginWindow`/`MainWindow` split has been done on an actual display —
-  only headless/offscreen verification (see Phase 7/7.5's own notes on
-  why: repeated loss of X11 access mid-session). Worth a manual look.
+- `LoginWindow`/`MainWindow` visibility has now been confirmed on a real
+  display (see Phase 7.5's corrected note): the app previously never
+  showed any window at all, root-caused to `Main.qml`'s root being `Item`
+  instead of `QtObject`, plus a self-shadowing `xmppClient: xmppClient`
+  property reference - both fixed. `RoofWidget` itself still hasn't had
+  a real visual/interactive check on an actual display (only headless/
+  offscreen verification so far, see Phase 7's own notes on why:
+  repeated loss of X11 access mid-session). Worth a manual look, now that
+  a window actually appears to look at.
 - `ShellView.qml`'s command execution is still all-null params, same as
   every other entry point in this project so far — real, type-aware
   per-parameter widgets (reading each param's actual `WireType` from disco
