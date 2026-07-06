@@ -42,6 +42,19 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         }
         return result;
     }
+    case CommandsRole: {
+        QVariantList result;
+        for (auto it = info.interfaces.constBegin(); it != info.interfaces.constEnd(); ++it) {
+            for (auto cmdIt = it.value().commands.constBegin(); cmdIt != it.value().commands.constEnd(); ++cmdIt) {
+                QVariantMap entry;
+                entry.insert(QStringLiteral("interface"), it.value().name);
+                entry.insert(QStringLiteral("name"), cmdIt.value().name);
+                entry.insert(QStringLiteral("paramCount"), cmdIt.value().params.size());
+                result.push_back(entry);
+            }
+        }
+        return result;
+    }
     default:
         return {};
     }
@@ -53,6 +66,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { JidRole, "jid" },
         { NameRole, "name" },
         { StatefulInterfacesRole, "statefulInterfaces" },
+        { CommandsRole, "commands" },
     };
 }
 

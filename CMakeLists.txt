@@ -40,6 +40,8 @@ qt_add_executable(pyobs-gui++
     src/comm/StateSubscription.cpp
     src/comm/StateSubscriptionManager.h
     src/comm/StateSubscriptionManager.cpp
+    src/comm/Rpc.h
+    src/comm/Rpc.cpp
     src/codec/WireValue.h
     src/codec/Decode.h
     src/codec/Decode.cpp
@@ -50,6 +52,8 @@ qt_add_executable(pyobs-gui++
     src/codec/SchemaParse.cpp
     src/codec/VariantBridge.h
     src/codec/VariantBridge.cpp
+    src/codec/Encode.h
+    src/codec/Encode.cpp
 )
 
 qt_add_qml_module(pyobs-gui++

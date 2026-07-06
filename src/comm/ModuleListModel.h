@@ -29,6 +29,13 @@ public:
         // for. Interfaces without a state block are omitted, not just
         // empty-stated, since there's nothing to render for them.
         StatefulInterfacesRole,
+        // QVariantList of {"interface":..., "name":..., "paramCount":...}
+        // entries, one per command across every interface - Phase 5's
+        // debug panel needs this to let you pick a discovered command and
+        // know how many null params to pass. Dispatch itself is by method
+        // name alone (pyobs-core routes RPC calls without an interface
+        // qualifier), so "interface" here is for display/grouping only.
+        CommandsRole,
     };
     Q_ENUM(Role)
 

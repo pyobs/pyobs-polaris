@@ -1,8 +1,13 @@
 #include "XmppClient.h"
 
 #include "Discovery.h"
+#include "Rpc.h"
 #include "StateSubscriptionManager.h"
 
+#include "../codec/VariantBridge.h"
+
+#include <QDebug>
+#include <QJsonDocument>
 #include <QXmppConfiguration.h>
 #include <QXmppError.h>
 #include <QXmppPubSubManager.h>
@@ -140,6 +145,34 @@ StateSubscription *XmppClient::subscribeState(const QString &bareJid, const QStr
                                               QObject *parent)
 {
     return m_stateSubscriptions->subscribe(bareJid, interfaceName, version, parent);
+}
+
+void XmppClient::executeMethod(const QString &bareJid, const QString &methodName, int paramCount)
+{
+    const QString fullJid = bareJid + QStringLiteral("/pyobs");
+    // All-null params, one FieldSchema slot each (its type is never
+    // consulted: valueToXml() writes <nil/> for a null WireValue
+    // regardless of the declared type) - see Q_INVOKABLE declaration.
+    const QVector<codec::WireValue> params(paramCount);
+    const QVector<codec::FieldSchema> paramSchemas(paramCount);
+
+    comm::executeMethod(m_client, fullJid, methodName, params, paramSchemas, [this, methodName](RpcResult result) {
+        if (result.success) {
+            m_lastRpcResult = result.value.isNull()
+                ? QStringLiteral("%1 -> success").arg(methodName)
+                : QStringLiteral("%1 -> success: %2")
+                      .arg(methodName,
+                           QString::fromUtf8(QJsonDocument::fromVariant(codec::toQVariant(result.value))
+                                                  .toJson(QJsonDocument::Compact)));
+        } else {
+            m_lastRpcResult = QStringLiteral("%1 -> error%2: %3")
+                                   .arg(methodName,
+                                        result.errorClass.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(result.errorClass),
+                                        result.errorMessage);
+        }
+        qInfo().noquote() << "RPC" << m_lastRpcResult;
+        Q_EMIT lastRpcResultChanged();
+    });
 }
 
 void XmppClient::probeRosterPresence()

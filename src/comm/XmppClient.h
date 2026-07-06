@@ -32,6 +32,7 @@ class XmppClient : public QObject
     Q_PROPERTY(bool insecureSkipTlsVerification READ insecureSkipTlsVerification
                    WRITE setInsecureSkipTlsVerification NOTIFY insecureSkipTlsVerificationChanged)
     Q_PROPERTY(comm::ModuleListModel *modules READ modules CONSTANT)
+    Q_PROPERTY(QString lastRpcResult READ lastRpcResult NOTIFY lastRpcResultChanged)
 
 public:
     explicit XmppClient(QObject *parent = nullptr);
@@ -39,6 +40,7 @@ public:
     QString status() const;
     QString errorMessage() const;
     ModuleListModel *modules() const { return m_modules; }
+    QString lastRpcResult() const { return m_lastRpcResult; }
 
     // Off by default. Skips TLS certificate validation entirely for this
     // client - only ever meant for a self-signed/local dev ejabberd instance.
@@ -67,9 +69,19 @@ public:
     Q_INVOKABLE comm::StateSubscription *subscribeState(const QString &bareJid, const QString &interfaceName,
                                                         int version, QObject *parent);
 
+    // Phase 5: no real param-entry UI yet (see DEVELOPMENT.md) - every
+    // param is passed as null, which pyobs-core's own IRoof/IMotion
+    // commands all accept since their params are declared optional. Full
+    // JID is derived as bareJid + "/pyobs" (matches PYOBS_RESOURCE,
+    // already the convention Main.qml's debug fetch button uses).
+    // Dispatch is by method name alone - pyobs-core routes RPC calls
+    // without an interface qualifier, so this doesn't need one either.
+    Q_INVOKABLE void executeMethod(const QString &bareJid, const QString &methodName, int paramCount);
+
 Q_SIGNALS:
     void statusChanged();
     void insecureSkipTlsVerificationChanged();
+    void lastRpcResultChanged();
 
 private:
     enum class Status { Disconnected, Connecting, Connected, Error };
@@ -104,6 +116,7 @@ private:
     // happens to emit those two signals in internally.
     bool m_hadError = false;
     bool m_insecureSkipTlsVerification = false;
+    QString m_lastRpcResult;
 };
 
 }

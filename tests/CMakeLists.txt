@@ -51,3 +51,16 @@ target_include_directories(tst_statesubscription PRIVATE
 target_link_libraries(tst_statesubscription PRIVATE Qt6::Test Qt6::Xml Qt6::Network Qt6::Qml QXmppQt6)
 
 add_test(NAME tst_statesubscription COMMAND tst_statesubscription)
+
+add_executable(tst_encode
+    codec/tst_encode.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/WireType.h
+    ${CMAKE_SOURCE_DIR}/src/codec/WireType.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/WireValue.h
+    ${CMAKE_SOURCE_DIR}/src/codec/Encode.h
+    ${CMAKE_SOURCE_DIR}/src/codec/Encode.cpp
+)
+target_include_directories(tst_encode PRIVATE ${CMAKE_SOURCE_DIR}/src/codec)
+target_link_libraries(tst_encode PRIVATE Qt6::Test Qt6::Xml)
+
+add_test(NAME tst_encode COMMAND tst_encode)

@@ -325,6 +325,40 @@ observe the effect on the server; call one that raises a real exception and
 confirm the fault's `exceptionClass`/message come through correctly, not
 just "some XMPP error."
 
+Implementation notes:
+- `codec::valueToXml` writes directly to a `QXmlStreamWriter` rather than
+  building a `QDomElement` first - there's no natural "detached DOM
+  element" concept for building outgoing XML in Qt the way there is in JS,
+  and outgoing IQs in this project are already built this way (see
+  `Discovery.cpp`'s disco#info request).
+- `comm::executeMethod` mirrors `useXmpp.ts`'s `findRpcFault`/
+  `parseRpcReturn` structurally: a small `findDescendantByLocalTag` (full
+  subtree DFS, mirrors `getElementsByTagName()[0]`) locates `<fault>`/
+  `<params>` anywhere in the response, then direct-children-only
+  navigation from there - not another full-tree search at each step,
+  matching the TS port exactly rather than searching more broadly than it
+  does.
+- `XmppClient::executeMethod`'s Q_INVOKABLE deliberately takes just a
+  `paramCount` (not real typed param values or even a `CommandSchema`):
+  every param is sent as `WireValue::null()`, and `valueToXml` writes
+  `<nil/>` for a null value regardless of the declared `WireType` - so the
+  schema's actual param types don't matter for this phase's "fixed set of
+  null params" debug panel. A real param-entry UI (if one's ever needed -
+  every real `IRoof`/`IMotion` command's params are already optional, see
+  Phase 7) would need the full `CommandSchema`; deferred until something
+  actually requires it.
+
+Verified live, both cases, against a real running `roof` module using
+`XmppClient::executeMethod` itself (not pyobs-core's Python client this
+time - this is the phase that IS this project's own RPC path):
+`IRoof.init()` with 0 params succeeded and the server's log confirmed the
+real effect (`Changed motion status to idle`); `IConfig.get_config_value`
+with 1 null param - a required, non-optional `name: str` parameter -
+correctly triggered a real remote `ValueError("No parameter name given.")`
+(pyobs-core's own `Module.get_config_value` treats a falsy/`None` name as
+missing), surfaced with `exceptionClass="ValueError"` and the exact
+message, not a generic transport error.
+
 ---
 
 ## Phase 6 — events

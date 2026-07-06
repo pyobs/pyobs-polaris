@@ -82,6 +82,18 @@ ApplicationWindow {
             enabled: xmppClient.status === "connected" && discoveryJidField.text.length > 0
             onClicked: xmppClient.fetchModuleInfo(discoveryJidField.text, discoveryJidField.text + "/pyobs")
         }
+
+        // Phase 5 debug-only entry point: no real command UI yet (see
+        // DEVELOPMENT.md) - every command's params are passed as null
+        // (comm::XmppClient::executeMethod), which every real IRoof/IMotion
+        // command accepts since their params are all declared optional.
+        Label {
+            Layout.alignment: Qt.AlignHCenter
+            visible: xmppClient.lastRpcResult.length > 0
+            text: xmppClient.lastRpcResult
+            wrapMode: Text.WrapAnywhere
+            Layout.preferredWidth: 280
+        }
     }
 
     // Module list, populated automatically via presence + disco#info
@@ -105,6 +117,7 @@ ApplicationWindow {
             required property string jid
             required property string name
             required property var statefulInterfaces
+            required property var commands
 
             ItemDelegate {
                 Layout.fillWidth: true
@@ -150,6 +163,25 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.leftMargin: 8
                             value: interfaceBlock.subscription ? interfaceBlock.subscription.value : undefined
+                        }
+                    }
+                }
+
+                // Phase 5 debug entry point: every param goes through as
+                // null (see comm::XmppClient::executeMethod) - fine for
+                // every real IRoof/IMotion command, whose params are all
+                // declared optional. Result/fault goes to xmppClient's
+                // lastRpcResult label above, not per-row here.
+                Flow {
+                    Layout.fillWidth: true
+
+                    Repeater {
+                        model: moduleDelegate.expanded ? moduleDelegate.commands : []
+
+                        delegate: Button {
+                            required property var modelData
+                            text: modelData.interface + "." + modelData.name
+                            onClicked: xmppClient.executeMethod(moduleDelegate.jid, modelData.name, modelData.paramCount)
                         }
                     }
                 }
