@@ -92,10 +92,21 @@ discovery, no UI beyond a status string.
   `useXmpp.ts`'s `sessionStorage`/`localStorage` persistence yet — that's a
   UI-polish concern for later, and premature credential persistence in an
   unfinished client is a needless risk to carry through every phase.
+- TLS: `QXmppClient` defaults to `TLSEnabled` with strict certificate
+  validation, and that default is kept — don't weaken it. A local/dev
+  ejabberd with a self-signed cert (e.g. one whose cert doesn't cover
+  `localhost`) will correctly land in the `error` state against it. For
+  that case `XmppClient` exposes an explicit, off-by-default
+  `insecureSkipTlsVerification` property (not an env var, not persisted)
+  that the login UI surfaces as a clearly-labeled checkbox — opt-in per
+  session, never silently on.
 
 **Acceptance:** connects to a real ejabberd instance with real credentials;
 status transitions visibly through connecting → connected; wrong password
-shows the error state. Verified live, not just against a mock.
+shows the error state. Verified live, not just against a mock — confirmed
+against a local ejabberd with both a correct and a wrong password, using
+`insecureSkipTlsVerification` since that instance's cert doesn't cover
+`localhost`.
 
 ---
 

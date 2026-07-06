@@ -29,6 +29,8 @@ FetchContent_MakeAvailable(qxmpp)
 
 qt_add_executable(pyobs-gui++
     src/main.cpp
+    src/comm/XmppClient.cpp
+    src/comm/XmppClient.h
 )
 
 qt_add_qml_module(pyobs-gui++
@@ -44,3 +46,15 @@ target_link_libraries(pyobs-gui++ PRIVATE
     Qt6::Network
     QXmppQt6
 )
+
+# QXmppQt6's target_include_directories only exposes qxmpp_export.h (from
+# generate_export_header) as a PRIVATE include, so consumers linking against
+# it via FetchContent need this added explicitly.
+target_include_directories(pyobs-gui++ PRIVATE ${qxmpp_BINARY_DIR}/src)
+
+# qmltyperegistrar emits #include <HeaderName.h> using only the header's
+# basename (taken from the #include in the .cpp that defined the QML_ELEMENT
+# class), so every directory holding such a header needs to be on the include
+# path directly - add each new one here as later phases add QML_ELEMENT types
+# outside src/comm.
+target_include_directories(pyobs-gui++ PRIVATE src/comm)
