@@ -66,6 +66,7 @@ qt_add_qml_module(pyobs-gui++
     QML_FILES
         qml/Main.qml
         qml/widgets/KeyValueCard.qml
+        qml/widgets/RoofWidget.qml
 )
 
 target_link_libraries(pyobs-gui++ PRIVATE

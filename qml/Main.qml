@@ -6,7 +6,7 @@ import pyobs.gui
 
 ApplicationWindow {
     width: 640
-    height: 480
+    height: 760
     visible: true
     title: "pyobs-gui++"
 
@@ -192,6 +192,16 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+
+        // Phase 7: the first hand-designed, interface-specific widget -
+        // proves "generic by default, custom where it earns its place"
+        // alongside the still-fully-generic module list above, not
+        // instead of it.
+        RoofWidget {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 220
+            xmppClient: xmppClient
         }
 
         Label {

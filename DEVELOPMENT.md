@@ -425,27 +425,55 @@ hard problem) — a lot of surface area for what this phase is actually
 trying to prove. `IRoof` needs none of that: it's IMotion (already fully
 generic since Phase 4) plus three buttons, so the phase stays focused on
 the generic/custom boundary itself rather than camera-specific chrome.
-Note `IRoof` itself (see the Python interface) declares no commands or
-state of its own at all — everything actually on the wire (`init`,
-`park`, `stop_motion`, the `status`/`devices`/`time` state) comes from
-`IMotion`, which `IRoof` extends purely as a semantic marker. Confirm this
-against a live module's disco#info reply before writing any QML anyway —
-don't assume from memory of the Python interface definition, since
-`RoofOpenedEvent`/`RoofClosingEvent` (Phase 6) are module-specific extras
-`IRoof` doesn't declare either, and confirming what's actually on the wire
-today is the whole point of this project's verification discipline.
-- `widgets/RoofWidget.qml`: filters the module list for `IRoof`, embeds
-  `KeyValueCard` (Phase 4) for the module's `IMotion` state, and adds
-  hand-designed chrome on top — "Open" (`init`), "Close" (`park`), "Stop"
-  (`stop_motion`) buttons wired through `executeMethod` (Phase 5), each
-  disabled while a command for that module is in flight, matching
-  `RoofView.vue`'s per-jid `running`/`errors` tracking.
+The Python `IRoof` class itself (see the interface definition) declares no
+commands or state of its own — it extends `IMotion` purely as a semantic
+marker. **This is not what's actually on the wire, though**: a live
+disco#info reply for `roof` lists `IRoof` as its own separate `<interface>`
+entry, with the *same* `init`/`park`/`stop_motion` commands and its own
+`state/IRoof/1` state block duplicated alongside `IMotion`'s
+`state/IMotion/1` - `pyobs-core`'s disco#info generation walks every
+interface a module implements, including inherited ones, and emits a full
+schema for each. Confirmed by repeatedly observing this across Phases 3-6's
+live testing, not assumed from the Python class definition - exactly the
+kind of protocol-reality-vs-Python-definition drift this project's
+verification discipline exists to catch. Doesn't change which interface's
+state to render, though: `RoofView.vue` explicitly picks `IMotion` (not
+`IRoof`) for its state card regardless, so this port does too, for the
+same reason - one is as good as the other on the wire, and matching the
+reference exactly is simpler than re-deciding it.
+- `widgets/RoofWidget.qml`: filters the module list for `IRoof` (checking
+  by name in `ModuleListModel`'s existing `statefulInterfaces` role - it's
+  populated from every interface with a state block, and `IRoof` is one,
+  confirmed above), embeds `KeyValueCard` (Phase 4) for the module's
+  `IMotion` state, and adds hand-designed chrome on top — "Open" (`init`),
+  "Close" (`park`), "Stop" (`stop_motion`) buttons wired through
+  `executeMethod` (Phase 5), each disabled while a command for that module
+  is in flight, matching `RoofView.vue`'s per-jid `running`/`errors`
+  tracking. `executeMethod` gained a second overload taking a QML JS
+  callback (`{success, errorClass, errorMessage}`) - Phase 5's shared
+  `lastRpcResult` debug label isn't enough once more than one module's
+  commands can be in flight at once, which per-widget per-jid tracking
+  needs.
 
 **Acceptance:** the widget shows live `IMotion` state via the generic
 plumbing and can successfully issue at least one real command (e.g. "Open"
 → `init`) against a live `roof` module, observing the same live
 `idle → parking/initializing → parked/idle` transition Phase 4 already
 proved — verified live, same bar as every prior phase.
+
+Verified live: the new `executeMethod(..., callback)` overload - the
+actual code path "Open"/"Close"/"Stop" trigger - was exercised end-to-end
+through a real `QQmlApplicationEngine` (not just plain C++ calls) against
+the running `roof` module, both success (`init()` → `{success: true}`,
+confirmed by the server's own log) and a real remote fault
+(`get_config_value` with a null param → `{success: false, errorClass:
+"ValueError", errorMessage: "No parameter name given."}`, reusing Phase
+5's own known-fault trigger) came through the JS callback correctly. The
+underlying `subscribeState`/`executeMethod` machinery `RoofWidget.qml`
+reuses was already proven live in Phases 4-5. A full visual/interactive
+check of the widget in the running app was not done this session (lost
+X11 access session-side, unrelated to the code) - worth a manual look
+before considering this phase fully closed.
 
 ---
 

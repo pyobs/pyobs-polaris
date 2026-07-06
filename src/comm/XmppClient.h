@@ -4,6 +4,7 @@
 #include "ModuleListModel.h"
 #include "StateSubscription.h"
 
+#include <QJSValue>
 #include <QObject>
 #include <QString>
 #include <QXmppClient.h>
@@ -81,6 +82,16 @@ public:
     // Dispatch is by method name alone - pyobs-core routes RPC calls
     // without an interface qualifier, so this doesn't need one either.
     Q_INVOKABLE void executeMethod(const QString &bareJid, const QString &methodName, int paramCount);
+
+    // Phase 7: an overload that also reports the result back to a QML JS
+    // callback (called with one object argument: {success, errorClass,
+    // errorMessage}) - RoofWidget.qml needs this for its own per-module
+    // running/error tracking (RoofView.vue's reactive running/errors
+    // maps), unlike Phase 5's shared lastRpcResult debug label, which
+    // isn't enough once more than one module's commands can be in flight
+    // at once.
+    Q_INVOKABLE void executeMethod(const QString &bareJid, const QString &methodName, int paramCount,
+                                   const QJSValue &callback);
 
 Q_SIGNALS:
     void statusChanged();

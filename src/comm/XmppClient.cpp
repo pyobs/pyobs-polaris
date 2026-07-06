@@ -8,7 +8,9 @@
 #include "../codec/VariantBridge.h"
 
 #include <QDebug>
+#include <QJSEngine>
 #include <QJsonDocument>
+#include <QQmlEngine>
 #include <QXmppConfiguration.h>
 #include <QXmppError.h>
 #include <QXmppPubSubManager.h>
@@ -157,6 +159,12 @@ StateSubscription *XmppClient::subscribeState(const QString &bareJid, const QStr
 
 void XmppClient::executeMethod(const QString &bareJid, const QString &methodName, int paramCount)
 {
+    executeMethod(bareJid, methodName, paramCount, QJSValue());
+}
+
+void XmppClient::executeMethod(const QString &bareJid, const QString &methodName, int paramCount,
+                               const QJSValue &callback)
+{
     const QString fullJid = bareJid + QStringLiteral("/pyobs");
     // All-null params, one FieldSchema slot each (its type is never
     // consulted: valueToXml() writes <nil/> for a null WireValue
@@ -164,7 +172,8 @@ void XmppClient::executeMethod(const QString &bareJid, const QString &methodName
     const QVector<codec::WireValue> params(paramCount);
     const QVector<codec::FieldSchema> paramSchemas(paramCount);
 
-    comm::executeMethod(m_client, fullJid, methodName, params, paramSchemas, [this, methodName](RpcResult result) {
+    comm::executeMethod(m_client, fullJid, methodName, params, paramSchemas,
+                        [this, methodName, callback](RpcResult result) {
         if (result.success) {
             m_lastRpcResult = result.value.isNull()
                 ? QStringLiteral("%1 -> success").arg(methodName)
@@ -180,6 +189,18 @@ void XmppClient::executeMethod(const QString &bareJid, const QString &methodName
         }
         qInfo().noquote() << "RPC" << m_lastRpcResult;
         Q_EMIT lastRpcResultChanged();
+
+        if (callback.isCallable()) {
+            QJSEngine *engine = qjsEngine(this);
+            if (engine) {
+                QJSValue resultObj = engine->newObject();
+                resultObj.setProperty(QStringLiteral("success"), result.success);
+                resultObj.setProperty(QStringLiteral("errorClass"), result.errorClass);
+                resultObj.setProperty(QStringLiteral("errorMessage"), result.errorMessage);
+                QJSValue callableCallback = callback;
+                callableCallback.call(QJSValueList { resultObj });
+            }
+        }
     });
 }
 
