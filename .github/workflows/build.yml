@@ -6,7 +6,17 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Matches the dev machine's OS exactly (also Ubuntu 26.04) rather than
+    # GitHub's "ubuntu-latest" label, which lags real Ubuntu releases by
+    # years (currently Ubuntu 24.04 / Qt 6.4.2 - over two years behind what
+    # this project requires: qt_standard_project_setup(REQUIRES 6.5) in
+    # CMakeLists.txt, and what's actually used in dev, 6.10.2). That gap
+    # already caused two build breaks (QDomDocument::ParseOption needs 6.8,
+    # QQmlApplicationEngine::loadFromModule needs 6.5). If ubuntu-26.04 ever
+    # stops being offered as a hosted runner, fall back to pinning a modern
+    # Qt6 explicitly (e.g. via jurplel/install-qt-action) rather than
+    # silently drifting back onto ubuntu-latest's much older apt Qt.
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +32,26 @@ jobs:
 
       - name: Detect Conan profile
         run: conan profile detect --force
+
+      # Conan's package cache: mostly future-proofing until a real Conan
+      # dependency (e.g. cfitsio) shows up - conanfile.txt has no requires
+      # yet, see conanfile.txt for why (qxmpp is deliberately not one).
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2
+          key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt') }}
+
+      # qxmpp is vendored via CMake FetchContent (see CMakeLists.txt), which
+      # means compiling ~100 of its source files from scratch on every CI
+      # run otherwise - by far the most expensive part of this build. Keyed
+      # on CMakeLists.txt (which pins qxmpp's GIT_TAG) so a version bump
+      # invalidates the cache automatically.
+      - name: Cache qxmpp FetchContent build
+        uses: actions/cache@v4
+        with:
+          path: build/Release/_deps
+          key: qxmpp-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
 
       - name: Conan install
         run: conan install . --build=missing
