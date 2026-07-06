@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ModuleListModel.h"
+#include "StateSubscription.h"
 
 #include <QObject>
 #include <QString>
@@ -9,6 +10,14 @@
 #include <qqmlintegration.h>
 
 namespace comm {
+
+// StateSubscription.h is a full include, not a forward declaration: moc
+// needs the complete type for subscribeState()'s Q_INVOKABLE return type
+// (Qt6's constexpr metaobject codegen requires it - a forward declaration
+// only "worked" once by accident, because CMake's combined
+// mocs_compilation.cpp happened to pull in StateSubscription.h from another
+// file's moc output first; that ordering isn't guaranteed).
+class StateSubscriptionManager;
 
 // Thin QML-facing wrapper around QXmppClient. `status` mirrors
 // pyobs-web-client's useXmpp.ts XmppStatus type exactly: same four states,
@@ -49,6 +58,15 @@ public:
     // presence-driven discovery share the exact same code path.
     Q_INVOKABLE void fetchModuleInfo(const QString &bareJid, const QString &fullJid);
 
+    // Ref-counted PubSub state subscription - mirrors useXmpp.ts's
+    // subscribeState() exactly (see StateSubscriptionManager). `parent` is
+    // required (not defaulted to nullptr) deliberately: parenting the
+    // returned StateSubscription to a real QML Item ties its destruction to
+    // normal, deterministic Qt object-tree cleanup rather than relying on
+    // JS garbage-collection timing for the resulting server unsubscribe.
+    Q_INVOKABLE comm::StateSubscription *subscribeState(const QString &bareJid, const QString &interfaceName,
+                                                        int version, QObject *parent);
+
 Q_SIGNALS:
     void statusChanged();
     void insecureSkipTlsVerificationChanged();
@@ -73,6 +91,10 @@ private:
 
     QXmppClient m_client;
     ModuleListModel *m_modules;
+    // Owned by m_client (added via addNewExtension, same pattern as its
+    // BasicExtensions) - not by XmppClient itself, hence a raw non-owning
+    // pointer here.
+    StateSubscriptionManager *m_stateSubscriptions;
     Status m_status = Status::Disconnected;
     QString m_errorMessage;
     // Set for the duration of one connection attempt: once errorOccurred()

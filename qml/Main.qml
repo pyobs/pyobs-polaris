@@ -84,9 +84,11 @@ ApplicationWindow {
         }
     }
 
-    // Bare JID + name list, populated automatically via presence + disco#info
-    // (comm::XmppClient::handlePresence / probeRosterPresence) - no
-    // interfaces/capabilities shown yet, that's Phase 4.
+    // Module list, populated automatically via presence + disco#info
+    // (comm::XmppClient::handlePresence / probeRosterPresence, Phase 3).
+    // Expanding a row subscribes (Phase 4) to every interface that has a
+    // state block and renders it generically via KeyValueCard - zero
+    // interface-specific code, matches ModuleStateCard.vue's role.
     ListView {
         anchors.top: loginColumn.bottom
         anchors.left: parent.left
@@ -95,9 +97,63 @@ ApplicationWindow {
         anchors.margins: 12
         clip: true
         model: xmppClient.modules
-        delegate: ItemDelegate {
+        delegate: ColumnLayout {
+            id: moduleDelegate
             width: ListView.view.width
-            text: model.name + "  (" + model.jid + ")"
+            spacing: 0
+
+            required property string jid
+            required property string name
+            required property var statefulInterfaces
+
+            ItemDelegate {
+                Layout.fillWidth: true
+                text: moduleDelegate.name + "  (" + moduleDelegate.jid + ")"
+                onClicked: moduleDelegate.expanded = !moduleDelegate.expanded
+            }
+
+            property bool expanded: false
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: 16
+                visible: moduleDelegate.expanded
+
+                // Gating the Repeater's model on `expanded` (rather than
+                // just the child items' visibility) means subscribeState()
+                // only runs while a row is actually expanded, and the
+                // resulting StateSubscriptions - parented to each
+                // interfaceBlock below - are destroyed (unsubscribing
+                // automatically, see StateSubscription's destructor) the
+                // moment the row collapses, not just hidden.
+                Repeater {
+                    model: moduleDelegate.expanded ? moduleDelegate.statefulInterfaces : []
+
+                    delegate: ColumnLayout {
+                        id: interfaceBlock
+                        Layout.fillWidth: true
+
+                        required property var modelData
+
+                        // Evaluated once at delegate creation, not a live
+                        // binding: subscribeState()'s arguments never change
+                        // for this delegate's lifetime.
+                        property var subscription: xmppClient.subscribeState(
+                            moduleDelegate.jid, modelData.name, modelData.version, interfaceBlock)
+
+                        Label {
+                            text: interfaceBlock.modelData.name
+                            font.bold: true
+                        }
+
+                        KeyValueCard {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 8
+                            value: interfaceBlock.subscription ? interfaceBlock.subscription.value : undefined
+                        }
+                    }
+                }
+            }
         }
     }
 }

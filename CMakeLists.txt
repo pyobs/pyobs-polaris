@@ -36,6 +36,10 @@ qt_add_executable(pyobs-gui++
     src/comm/ModuleListModel.cpp
     src/comm/Discovery.h
     src/comm/Discovery.cpp
+    src/comm/StateSubscription.h
+    src/comm/StateSubscription.cpp
+    src/comm/StateSubscriptionManager.h
+    src/comm/StateSubscriptionManager.cpp
     src/codec/WireValue.h
     src/codec/Decode.h
     src/codec/Decode.cpp
@@ -44,6 +48,8 @@ qt_add_executable(pyobs-gui++
     src/codec/InterfaceSchema.h
     src/codec/SchemaParse.h
     src/codec/SchemaParse.cpp
+    src/codec/VariantBridge.h
+    src/codec/VariantBridge.cpp
 )
 
 qt_add_qml_module(pyobs-gui++
@@ -51,6 +57,7 @@ qt_add_qml_module(pyobs-gui++
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/widgets/KeyValueCard.qml
 )
 
 target_link_libraries(pyobs-gui++ PRIVATE

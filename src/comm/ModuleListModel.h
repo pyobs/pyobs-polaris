@@ -23,6 +23,12 @@ public:
     enum Role {
         JidRole = Qt::UserRole + 1,
         NameRole,
+        // QVariantList of {"name":..., "version":...} entries, one per
+        // interface that has a state block - Phase 4's KeyValueCard-per-
+        // interface UI needs this to know what to call subscribeState()
+        // for. Interfaces without a state block are omitted, not just
+        // empty-stated, since there's nothing to render for them.
+        StatefulInterfacesRole,
     };
     Q_ENUM(Role)
 

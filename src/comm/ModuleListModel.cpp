@@ -1,5 +1,8 @@
 #include "ModuleListModel.h"
 
+#include <QVariantList>
+#include <QVariantMap>
+
 namespace comm {
 
 ModuleListModel::ModuleListModel(QObject *parent)
@@ -26,6 +29,19 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         return info.jid;
     case NameRole:
         return info.name;
+    case StatefulInterfacesRole: {
+        QVariantList result;
+        for (auto it = info.interfaces.constBegin(); it != info.interfaces.constEnd(); ++it) {
+            if (!it.value().state) {
+                continue;
+            }
+            QVariantMap entry;
+            entry.insert(QStringLiteral("name"), it.value().name);
+            entry.insert(QStringLiteral("version"), it.value().version);
+            result.push_back(entry);
+        }
+        return result;
+    }
     default:
         return {};
     }
@@ -36,6 +52,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
     return {
         { JidRole, "jid" },
         { NameRole, "name" },
+        { StatefulInterfacesRole, "statefulInterfaces" },
     };
 }
 

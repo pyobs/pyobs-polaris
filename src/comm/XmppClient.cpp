@@ -1,9 +1,11 @@
 #include "XmppClient.h"
 
 #include "Discovery.h"
+#include "StateSubscriptionManager.h"
 
 #include <QXmppConfiguration.h>
 #include <QXmppError.h>
+#include <QXmppPubSubManager.h>
 #include <QXmppRosterManager.h>
 #include <QXmppUtils.h>
 
@@ -17,7 +19,14 @@ XmppClient::XmppClient(QObject *parent)
     : QObject(parent)
     , m_client(QXmppClient::BasicExtensions, this)
     , m_modules(new ModuleListModel(this))
+    , m_stateSubscriptions(m_client.addNewExtension<StateSubscriptionManager>())
 {
+    // Not part of BasicExtensions - StateSubscriptionManager's
+    // subscribeToNode()/unsubscribeFromNode()/requestItems() calls all go
+    // through this. Must be added before any subscribeState() call, or
+    // client()->findExtension<QXmppPubSubManager>() returns null.
+    m_client.addNewExtension<QXmppPubSubManager>();
+
     connect(&m_client, &QXmppClient::connected, this, [this] {
         setStatus(Status::Connected);
     });
@@ -125,6 +134,12 @@ void XmppClient::handlePresence(const QXmppPresence &presence)
     } else {
         fetchModuleInfo(bareJid, from);
     }
+}
+
+StateSubscription *XmppClient::subscribeState(const QString &bareJid, const QString &interfaceName, int version,
+                                              QObject *parent)
+{
+    return m_stateSubscriptions->subscribe(bareJid, interfaceName, version, parent);
 }
 
 void XmppClient::probeRosterPresence()

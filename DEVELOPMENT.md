@@ -262,6 +262,45 @@ interface's state as a plain key-value list, zero interface-specific code.
 between `idle`/`exposing`) show up in the QML UI without a restart or manual
 refresh, for a module you did not write any interface-specific code for.
 
+Implementation notes:
+- `comm::StateSubscriptionManager` is a `QXmppClientExtension` +
+  `QXmppPubSubEventHandler` (registered via
+  `QXmppClient::addNewExtension`, alongside a `QXmppPubSubManager` -
+  **not** part of `BasicExtensions`, has to be added explicitly, see
+  `XmppClient`'s constructor). Owns the ref-counted node/watcher map;
+  `comm::StateSubscription` is the QML-facing RAII handle (`{ value,
+  unsubscribe }`, mirroring `useXmpp.ts`'s return shape via C++ object
+  lifetime instead of a caller-remembered cleanup call).
+- `codec::toQVariant` bridges a decoded `WireValue` to `QVariant` for QML:
+  a `WireDict` becomes an order-preserving `QVariantList` of
+  `{"key":..., "value":...}` entries (never a `QVariantMap` - that would
+  re-sort fields alphabetically, undoing Phase 1.5's entire reason for
+  `WireValue` not being `QVariant`-based to begin with).
+- The double-subscribe/single-unsubscribe ref-counting test
+  (`tst_statesubscription`) is a black-box test against the manager's
+  public interface only (`subscribe()`/`StateSubscription::unsubscribe()`/
+  `handlePubSubEvent()` with a synthesized `<message>` stanza) - no
+  internal accessors needed, and it directly caught a real bug before any
+  live testing: `StateSubscriptionManager` never actually added a
+  `QXmppPubSubManager` extension, so `findExtension<QXmppPubSubManager>()`
+  returned null and the first real `subscribe()` call segfaulted.
+- Also caught (by a full from-scratch rebuild, not incremental): `XmppClient.h`
+  forward-declared `StateSubscription` for `subscribeState()`'s return type,
+  which only compiled by accident because CMake's combined
+  `mocs_compilation.cpp` happened to pull in `StateSubscription.h` from
+  another file's moc output first. Fixed by fully including
+  `StateSubscription.h` - moc's constexpr metaobject codegen needs the
+  complete type for any `Q_INVOKABLE`/`Q_PROPERTY` using it, and that must
+  not depend on other files' include order.
+
+Verified live: subscribed to a running `roof` module's `IMotion` state
+(status `idle`), then triggered a real `park()` RPC call via pyobs-core's
+own `XmppComm`/`proxy()` (Phase 5 isn't built yet, so this used pyobs's own
+Python client rather than this project's), and watched the exact same
+generic C++ subscription path used by `KeyValueCard.qml` receive
+`idle → parking → parked` live, with no restart - for `IMotion`/`IRoof`,
+an interface this project has zero custom code for.
+
 ---
 
 ## Phase 5 — RPC execution
