@@ -1,0 +1,27 @@
+import QmlProject 1.1
+
+Project {
+    mainFile: "qml/Main.qml"
+
+    QmlFiles {
+        directory: "qml"
+    }
+
+    JavaScriptFiles {
+        directory: "qml"
+    }
+
+    ImageFiles {
+        directory: "qml"
+    }
+
+    // Resolves `import pyobs.gui` (comm::XmppClient's QML_ELEMENT type):
+    // requires the CMake project to have been built at least once, and
+    // rebuilt whenever a QML_ELEMENT class changes - this is generated
+    // output, not source, see build/Release/pyobs/gui/qmldir.
+    importPaths: [ "build/Release" ]
+
+    qt6Project: true
+    qdsVersion: "4.8"
+    quickVersion: "6.5"
+}
