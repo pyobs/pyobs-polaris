@@ -1,8 +1,11 @@
 #pragma once
 
+#include "ModuleListModel.h"
+
 #include <QObject>
 #include <QString>
 #include <QXmppClient.h>
+#include <QXmppPresence.h>
 #include <qqmlintegration.h>
 
 namespace comm {
@@ -19,12 +22,14 @@ class XmppClient : public QObject
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY statusChanged)
     Q_PROPERTY(bool insecureSkipTlsVerification READ insecureSkipTlsVerification
                    WRITE setInsecureSkipTlsVerification NOTIFY insecureSkipTlsVerificationChanged)
+    Q_PROPERTY(comm::ModuleListModel *modules READ modules CONSTANT)
 
 public:
     explicit XmppClient(QObject *parent = nullptr);
 
     QString status() const;
     QString errorMessage() const;
+    ModuleListModel *modules() const { return m_modules; }
 
     // Off by default. Skips TLS certificate validation entirely for this
     // client - only ever meant for a self-signed/local dev ejabberd instance.
@@ -37,11 +42,11 @@ public:
     Q_INVOKABLE void connectToServer(const QString &jid, const QString &password);
     Q_INVOKABLE void disconnectFromServer();
 
-    // Phase 2: no presence-driven auto-discovery yet, so this is called
-    // manually (e.g. a debug button in Main.qml) to prove the disco#info
-    // round trip and schema parse are correct. Logs the parsed result via
-    // qInfo() rather than surfacing it to QML - ModuleInfo isn't
-    // QML-bindable until Phase 4 wires it into an actual module list.
+    // Since Phase 3, this both logs the parsed result via qInfo() (kept from
+    // Phase 2's debug button, still handy) and upserts it into `modules` -
+    // it's also what handlePresence() calls internally on every non-
+    // "unavailable" presence, so Main.qml's manual debug button and live
+    // presence-driven discovery share the exact same code path.
     Q_INVOKABLE void fetchModuleInfo(const QString &bareJid, const QString &fullJid);
 
 Q_SIGNALS:
@@ -53,7 +58,21 @@ private:
 
     void setStatus(Status status, const QString &message = {});
 
+    // pyobs modules always connect with resource "pyobs" (matches
+    // PYOBS_RESOURCE in useXmpp.ts); anything else is ignored. Unavailable
+    // presence removes the module from `m_modules`, anything else triggers
+    // fetchModuleInfo() to (re-)populate it.
+    void handlePresence(const QXmppPresence &presence);
+
+    // Without this, a client that connects *after* modules are already
+    // online never learns about them - live presence pushes only fire for
+    // state *changes*, not the already-online state at connect time. Called
+    // once per roster fetch (QXmppRosterManager::rosterReceived(), which
+    // QXmppClient triggers automatically after connecting).
+    void probeRosterPresence();
+
     QXmppClient m_client;
+    ModuleListModel *m_modules;
     Status m_status = Status::Disconnected;
     QString m_errorMessage;
     // Set for the duration of one connection attempt: once errorOccurred()

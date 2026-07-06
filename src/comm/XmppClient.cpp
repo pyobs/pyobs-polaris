@@ -4,12 +4,19 @@
 
 #include <QXmppConfiguration.h>
 #include <QXmppError.h>
+#include <QXmppRosterManager.h>
+#include <QXmppUtils.h>
 
 namespace comm {
+
+namespace {
+constexpr auto kPyobsResource = "pyobs";
+}
 
 XmppClient::XmppClient(QObject *parent)
     : QObject(parent)
     , m_client(QXmppClient::BasicExtensions, this)
+    , m_modules(new ModuleListModel(this))
 {
     connect(&m_client, &QXmppClient::connected, this, [this] {
         setStatus(Status::Connected);
@@ -24,6 +31,15 @@ XmppClient::XmppClient(QObject *parent)
     connect(&m_client, &QXmppClient::errorOccurred, this, [this](const QXmppError &error) {
         setStatus(Status::Error, error.description);
     });
+
+    connect(&m_client, &QXmppClient::presenceReceived, this, &XmppClient::handlePresence);
+
+    // QXmppClient requests the roster automatically right after connected()
+    // fires; QXmppRosterManager::rosterReceived() is our cue to probe it -
+    // BasicExtensions (passed to m_client's constructor above) already
+    // added the roster manager, so it exists by now.
+    connect(m_client.findExtension<QXmppRosterManager>(), &QXmppRosterManager::rosterReceived, this,
+            &XmppClient::probeRosterPresence);
 }
 
 QString XmppClient::status() const
@@ -82,13 +98,46 @@ void XmppClient::connectToServer(const QString &jid, const QString &password)
 void XmppClient::disconnectFromServer()
 {
     m_client.disconnectFromServer();
+    m_modules->clear();
 }
 
 void XmppClient::fetchModuleInfo(const QString &bareJid, const QString &fullJid)
 {
-    comm::fetchModuleInfo(m_client, bareJid, fullJid, [](ModuleInfo info) {
+    comm::fetchModuleInfo(m_client, bareJid, fullJid, [this](ModuleInfo info) {
         logModuleInfo(info);
+        m_modules->upsert(info);
     });
+}
+
+void XmppClient::handlePresence(const QXmppPresence &presence)
+{
+    const QString from = presence.from();
+    if (from.isEmpty()) {
+        return;
+    }
+    if (QXmppUtils::jidToResource(from) != QLatin1String(kPyobsResource)) {
+        return;
+    }
+
+    const QString bareJid = QXmppUtils::jidToBareJid(from);
+    if (presence.type() == QXmppPresence::Unavailable) {
+        m_modules->remove(bareJid);
+    } else {
+        fetchModuleInfo(bareJid, from);
+    }
+}
+
+void XmppClient::probeRosterPresence()
+{
+    auto *roster = m_client.findExtension<QXmppRosterManager>();
+    if (!roster) {
+        return;
+    }
+    for (const QString &bareJid : roster->getRosterBareJids()) {
+        QXmppPresence probe(QXmppPresence::Probe);
+        probe.setTo(bareJid);
+        m_client.sendPacket(probe);
+    }
 }
 
 void XmppClient::setStatus(Status status, const QString &message)

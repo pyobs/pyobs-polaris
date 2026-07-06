@@ -214,6 +214,23 @@ appears. Stop it → it disappears. Restart the *client* while the module is
 already running → it still appears (proves the roster probe works, not
 just live presence pushes).
 
+Verified live, all three cases, in one continuous session against the real
+ejabberd: connected fresh while `telescope` was already running (appeared
+via the roster probe, no live presence involved); started a second module
+(`roof`, `pyobs.modules.roof.DummyRoof`) while already connected (appeared
+via a live presence push, `ModuleListModel::upsert` firing `rowsInserted`);
+killed it (a graceful SIGTERM shutdown - pyobs's `application.py` disconnects
+cleanly, sending `unavailable` presence, which ejabberd forwards) and
+watched it disappear (`rowsRemoved`). One thing worth knowing for whoever
+debugs presence next: test harnesses that die without an explicit
+`disconnectFromServer()` (e.g. a plain `kill` on the test process itself,
+not the module) leave stale XMPP sessions that ejabberd doesn't clean up
+immediately - these show up as extra `presenceReceived` events from
+unrelated resources of the *same* bare JID and can make manual testing
+look flakier than the actual code is. Always fully quit prior test
+sessions (not just the pyobs module under test) before drawing conclusions
+from a presence test.
+
 ---
 
 ## Phase 4 — generic state subscription + rendering

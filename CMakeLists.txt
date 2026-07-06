@@ -32,6 +32,8 @@ qt_add_executable(pyobs-gui++
     src/comm/XmppClient.cpp
     src/comm/XmppClient.h
     src/comm/ModuleInfo.h
+    src/comm/ModuleListModel.h
+    src/comm/ModuleListModel.cpp
     src/comm/Discovery.h
     src/comm/Discovery.cpp
     src/codec/WireValue.h
