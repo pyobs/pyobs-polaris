@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QJsonObject>
 #include <QString>
+#include <QVariantList>
 #include <QVector>
 #include <qqmlintegration.h>
 
@@ -54,6 +55,17 @@ public:
 
     // Matches useXmpp.ts's clearEvents().
     Q_INVOKABLE void clear();
+
+    // A plain-JS-array snapshot of every currently-held event of a given
+    // type (each entry a {type, module, timestamp, uuid, data} object) -
+    // LogsView.qml's equivalent of LoggingView.vue's `events.value.filter(e
+    // => e.type === 'LogEvent')`. QAbstractListModel doesn't give QML/JS
+    // generic random-access iteration for free (only Repeater/ListView-style
+    // delegate binding does), so this exists specifically so a plain QML JS
+    // computed property (module filter dropdown, etc.) has something to
+    // work with - recomputed on demand, not cached, since 500 entries max
+    // is cheap to rescan.
+    Q_INVOKABLE QVariantList entriesOfType(const QString &type) const;
 
 private:
     static constexpr int kMaxEvents = 500;

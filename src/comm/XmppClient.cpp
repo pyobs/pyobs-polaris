@@ -98,6 +98,7 @@ void XmppClient::setInsecureSkipTlsVerification(bool value)
 void XmppClient::connectToServer(const QString &jid, const QString &password)
 {
     m_hadError = false;
+    m_jid = jid;
     setStatus(Status::Connecting);
 
     QXmppConfiguration config;

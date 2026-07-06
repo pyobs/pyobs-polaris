@@ -4,6 +4,7 @@
 
 #include "../codec/Decode.h"
 
+#include <QDateTime>
 #include <QDomElement>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -71,10 +72,26 @@ bool EventManager::handlePubSubEvent(const QDomElement &element, const QString &
     }
     const QJsonObject obj = doc.object();
 
+    const double timestamp = obj.value(QStringLiteral("timestamp")).toDouble();
+
+    // Matches xmppcomm.py's own _handle_event() exactly: discard anything
+    // older than 30 seconds - pyobs-core's own documented reason ("avoid
+    // resent events after a reconnect") is real, not hypothetical: a fresh
+    // subscribe to a PEP node makes ejabberd immediately replay its last
+    // published item as a catch-up delivery, confirmed live (see
+    // DEVELOPMENT.md) - and that catch-up delivery's `from` is the shared
+    // pubsub component's own JID, not the original publisher's, making
+    // `module` below unrecoverable for it anyway. A live, freshly-pushed
+    // event (arriving after the subscription handshake is done) always
+    // carries the correct publisher JID.
+    if (QDateTime::currentSecsSinceEpoch() - static_cast<qint64>(timestamp) > 30) {
+        return true; // handled (it's a real pyobs event node), just not logged
+    }
+
     PyobsEvent event;
     event.type = obj.value(QStringLiteral("type")).toString(nodeName);
     event.module = QXmppUtils::jidToUser(element.attribute(QStringLiteral("from")));
-    event.timestamp = obj.value(QStringLiteral("timestamp")).toDouble();
+    event.timestamp = timestamp;
     event.uuid = obj.value(QStringLiteral("uuid")).toString();
     event.data = obj.value(QStringLiteral("data")).toObject();
 

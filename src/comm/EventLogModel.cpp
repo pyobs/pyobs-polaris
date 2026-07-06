@@ -63,6 +63,24 @@ void EventLogModel::append(const PyobsEvent &event)
     endInsertRows();
 }
 
+QVariantList EventLogModel::entriesOfType(const QString &type) const
+{
+    QVariantList result;
+    for (const PyobsEvent &event : m_events) {
+        if (event.type != type) {
+            continue;
+        }
+        QVariantMap entry;
+        entry.insert(QStringLiteral("type"), event.type);
+        entry.insert(QStringLiteral("module"), event.module);
+        entry.insert(QStringLiteral("timestamp"), event.timestamp);
+        entry.insert(QStringLiteral("uuid"), event.uuid);
+        entry.insert(QStringLiteral("data"), event.data.toVariantMap());
+        result.append(entry);
+    }
+    return result;
+}
+
 void EventLogModel::clear()
 {
     if (m_events.isEmpty()) {

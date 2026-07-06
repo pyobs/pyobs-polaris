@@ -477,6 +477,96 @@ before considering this phase fully closed.
 
 ---
 
+## Phase 7.5 — app shell: login window + sidebar navigation
+
+**Goal:** replace the single flat window every prior phase piled onto with
+a real app shell, matching `pyobs-web-client`'s actual structure: a
+separate login screen, then a main window with a left sidebar (Dashboard /
+Shell / Logs) and a content area showing whichever page is selected - not
+in the original phase plan, added on direct request once Phases 0-7 had
+enough substance to actually need organizing.
+
+- `App.vue`/`AppLayout.vue`/`LoginView.vue` read directly (not assumed from
+  memory of "a login page and a main page"): confirms the real nav entries
+  are Dashboard, Shell, Logging, Settings, plus a conditional Roof entry
+  (only `IRoof` modules present) - only Dashboard/Shell/Logs were asked
+  for, so Settings (VFS endpoint config - a feature this project has no
+  equivalent of at all) and a separate Roof nav entry were deliberately
+  left out; `RoofWidget` instead stays embedded at the top of Dashboard,
+  same as it already was.
+- Two literal top-level `ApplicationWindow`s (`LoginWindow.qml`,
+  `MainWindow.qml`), not one page's body swapping - matches normal desktop
+  conventions better than the web client's single-page router-view swap.
+  `Main.qml` is now a non-visual bootstrap `Item` owning the single
+  `XmppClient` instance (must survive the login → main handoff, since it
+  holds the live connection) with `visible` on each window bound to
+  `xmppClient.status`.
+- `MainWindow.qml`'s sidebar + `StackLayout` is the `RouterView` equivalent
+  - `qml/views/DashboardView.qml` (the existing generic module list +
+    `RoofWidget`, moved as-is), `qml/views/LogsView.qml`, and
+    `qml/views/ShellView.qml` (new).
+- `LogsView.qml` ports `LoggingView.vue` - **and reading it caught a real
+  fidelity gap in Phase 6's original "Events" section**: `LoggingView.vue`
+  filters to `type === 'LogEvent'` specifically, with a per-module filter
+  dropdown and level-colored rows - Phase 6's port showed every event type
+  generically instead. Fixed here. `EventLogModel` gained
+  `entriesOfType(type) const` (a plain-JS-array snapshot) since
+  `QAbstractListModel` gives QML/JS no generic random-access iteration for
+  free - only `Repeater`/`ListView` delegate binding does - and a module
+  filter dropdown needs to iterate/aggregate arbitrarily, not just render
+  one row per event.
+- `ShellView.qml` ports `ShellView.vue`'s module → method → execute → log
+  flow. **Deliberately not ported**: type-aware parameter widgets
+  (bool/enum/number/string, built from each param's real `WireType`) -
+  `ModuleListModel`'s `commands` role only exposes `{interface, name,
+  paramCount}` (Phase 5), not full per-param schemas. Every command still
+  executes exactly like Phases 5/7's existing entry points: every param
+  null. Real parameter entry is a reasonable follow-up, not attempted here.
+
+**A second, more significant finding, caught by live-testing the new
+`ShellView`/`LogsView` plumbing end-to-end** (not by inspection): the
+`from` attribute on a PubSub notification is **not reliably the
+publishing module's JID**. Subscribing to a module's event node makes
+ejabberd immediately replay its last published item as a catch-up
+delivery (confirmed live, repeatable) - and that catch-up delivery's
+`from` is the shared pubsub component (`pubsub.<domain>`), not the
+original publisher, even when the replayed item is only seconds old. Only
+a live, freshly-pushed notification (arriving after the subscribe
+handshake has already completed) correctly carries the publisher's own
+bare JID. This is exactly the scenario `pyobs-core`'s own reference client
+already guards against - `xmppcomm.py`'s `_handle_event()` discards
+anything where `time.time() - event.timestamp > 30`, with the comment "we
+do this do avoid resent events after a reconnect". `EventManager::
+handlePubSubEvent` now applies the identical 30-second staleness filter,
+matching the reference implementation's own documented reasoning rather
+than inventing a new one. Covered by `tst_eventmanager`'s
+`ignoresStaleEvents()`; the pre-existing `decodesAndAppendsAnEvent()` test
+had to be fixed too - it used a fixed old Unix timestamp, which this new
+filter now correctly (and had to be updated to use a fresh one instead).
+
+**Acceptance:** login window shown first; connecting swaps to the main
+window with a working sidebar; Dashboard/Shell/Logs all functional against
+real live modules.
+
+Verified live: reused the Phase 7 `QQmlApplicationEngine`-harness
+technique (loading the real compiled `pyobs.gui` QML module standalone,
+via its generated `qmldir` with the `prefer :/qt/qml/...` line stripped so
+it resolves to on-disk `.qml` sources instead of a qrc this harness
+doesn't have) against a live `roof`/`telescope` pair: `xmppClient.jid`
+populated correctly on connect; `EventLogModel::entriesOfType("LogEvent")`
+returned the wrong (empty) `module` for stale catch-up events before the
+staleness-filter fix, and the correct one (`"roof"`) for a live event
+triggered by `IRoof.init()` after the fix. Window-visibility toggling
+(`LoginWindow`/`MainWindow` swap) could not be confirmed via this harness
+- a control test showed even a trivial hardcoded `visible: true` window
+reads back `false` through a synchronous `QObject::property()` check under
+`QT_QPA_PLATFORM=offscreen`, confirming this is an artifact of that
+platform/technique rather than a real bug (the binding itself is
+simple, standard QML) - but it means an actual visual check on a real
+display is still outstanding.
+
+---
+
 ## Phase 8 — WebAssembly build
 
 **Goal:** the same client, browser-deployable, per the earlier WASM

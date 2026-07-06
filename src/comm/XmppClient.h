@@ -32,6 +32,7 @@ class XmppClient : public QObject
     QML_ELEMENT
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY statusChanged)
+    Q_PROPERTY(QString jid READ jid NOTIFY statusChanged)
     Q_PROPERTY(bool insecureSkipTlsVerification READ insecureSkipTlsVerification
                    WRITE setInsecureSkipTlsVerification NOTIFY insecureSkipTlsVerificationChanged)
     Q_PROPERTY(comm::ModuleListModel *modules READ modules CONSTANT)
@@ -43,6 +44,11 @@ public:
 
     QString status() const;
     QString errorMessage() const;
+    // The JID last passed to connectToServer() - matches AppLayout.vue's
+    // sidebar footer, which shows the signed-in JID next to "sign out".
+    // Tied to statusChanged rather than its own signal since it only ever
+    // changes together with a new connection attempt.
+    QString jid() const { return m_jid; }
     ModuleListModel *modules() const { return m_modules; }
     EventLogModel *events() const { return m_events; }
     QString lastRpcResult() const { return m_lastRpcResult; }
@@ -134,6 +140,7 @@ private:
     bool m_hadError = false;
     bool m_insecureSkipTlsVerification = false;
     QString m_lastRpcResult;
+    QString m_jid;
 };
 
 }

@@ -65,6 +65,11 @@ qt_add_qml_module(pyobs-gui++
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/LoginWindow.qml
+        qml/MainWindow.qml
+        qml/views/DashboardView.qml
+        qml/views/ShellView.qml
+        qml/views/LogsView.qml
         qml/widgets/KeyValueCard.qml
         qml/widgets/RoofWidget.qml
 )
