@@ -31,6 +31,9 @@ qt_add_executable(pyobs-gui++
     src/main.cpp
     src/comm/XmppClient.cpp
     src/comm/XmppClient.h
+    src/codec/WireValue.h
+    src/codec/Decode.h
+    src/codec/Decode.cpp
 )
 
 qt_add_qml_module(pyobs-gui++
@@ -58,3 +61,6 @@ target_include_directories(pyobs-gui++ PRIVATE ${qxmpp_BINARY_DIR}/src)
 # path directly - add each new one here as later phases add QML_ELEMENT types
 # outside src/comm.
 target_include_directories(pyobs-gui++ PRIVATE src/comm)
+
+enable_testing()
+add_subdirectory(tests)

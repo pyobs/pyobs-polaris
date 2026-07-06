@@ -33,3 +33,7 @@ jobs:
 
       - name: Build
         run: cmake --build --preset conan-release
+
+      - name: Test
+        run: ctest --output-on-failure
+        working-directory: build/Release

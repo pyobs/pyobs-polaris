@@ -115,20 +115,29 @@ against a local ejabberd with both a correct and a wrong password, using
 **Goal:** port `pyobs-codec.ts`'s decode half — `xmlToValue` — to C++. No
 discovery integration yet, just the codec, unit-tested standalone.
 
-- `codec/WireValue`: a `std::variant`-based (or `QVariant`-based — decide
-  once, document why, don't mix) sum type mirroring the TS `unknown` return
-  of `xmlToValue`: null, bool, int, double, string, list, dict, or a
-  dataclass-shaped record (name→field map).
+- `codec/WireValue`: **`std::variant`-based**, not `QVariant` — decided and
+  documented in `WireValue.h`. Reason: `dict`/dataclass fields need to
+  preserve wire/declaration order (`pyobs-web-client`'s `KeyValueCard.vue`
+  relies on `Object.entries()` preserving JS insertion order when
+  rendering), and `QVariantMap` is a `QMap` that sorts by key — no
+  order-preserving string-keyed container ships as a `QVariant` type, so
+  `dict`/dataclass both decode into a plain ordered
+  `std::vector<std::pair<QString, WireValue>>` variant alternative instead.
+  Mirrors the TS `unknown` return of `xmlToValue`: null, bool, int, double,
+  string, list, or that ordered dict/dataclass-record.
 - `codec::xmlToValue(QDomElement)` ports the switch in `pyobs-codec.ts`
   line-for-line in spirit: `nil`/`boolean`/`int`/`double`/`string`/`items`/
   `tuple`/`dict`, default case = dataclass root (one child per field, each
   wrapping one more self-tagged value).
-- Unit tests (Qt Test or Catch2 — pick one now, it's the project's test
-  framework for everything downstream): scalar decode, nested list/dict,
-  a synthetic dataclass-shaped fixture. Build these fixtures by hand from
-  the wire vocabulary in `pyobs-codec.ts`'s header comment — don't guess
-  the tag names, copy them exactly (`nil`, `boolean`, `int`, `double`,
-  `string`, `items`, `tuple`, `dict`, `entry`/`key`/`val`).
+- Unit tests: **Qt Test**, not Catch2 — it's the project's test framework
+  for everything downstream. Reason: ships with the system Qt6 install
+  already (no extra Conan/FetchContent dependency), and later phases
+  (Phase 4's subscribe ref-counting) will want `QSignalSpy`-based
+  assertions Qt Test is built for. Covers scalar decode, nested list/dict,
+  a synthetic dataclass-shaped fixture, built by hand from the wire
+  vocabulary in `pyobs-codec.ts`'s header comment (`nil`, `boolean`, `int`,
+  `double`, `string`, `items`, `tuple`, `dict`, `entry`/`key`/`val`) —
+  copied exactly, not guessed. Lives in `tests/`, wired into `ctest` and CI.
 
 **Acceptance:** unit tests green, no XMPP connection required to run them —
 this phase should be testable in isolation from Phase 1.

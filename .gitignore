@@ -3,3 +3,4 @@ CMakeUserPresets.json
 .qtcreator/
 *.qtds
 *.user
+.idea/
