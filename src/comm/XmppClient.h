@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EventLogModel.h"
 #include "ModuleListModel.h"
 #include "StateSubscription.h"
 
@@ -18,6 +19,7 @@ namespace comm {
 // mocs_compilation.cpp happened to pull in StateSubscription.h from another
 // file's moc output first; that ordering isn't guaranteed).
 class StateSubscriptionManager;
+class EventManager;
 
 // Thin QML-facing wrapper around QXmppClient. `status` mirrors
 // pyobs-web-client's useXmpp.ts XmppStatus type exactly: same four states,
@@ -32,6 +34,7 @@ class XmppClient : public QObject
     Q_PROPERTY(bool insecureSkipTlsVerification READ insecureSkipTlsVerification
                    WRITE setInsecureSkipTlsVerification NOTIFY insecureSkipTlsVerificationChanged)
     Q_PROPERTY(comm::ModuleListModel *modules READ modules CONSTANT)
+    Q_PROPERTY(comm::EventLogModel *events READ events CONSTANT)
     Q_PROPERTY(QString lastRpcResult READ lastRpcResult NOTIFY lastRpcResultChanged)
 
 public:
@@ -40,6 +43,7 @@ public:
     QString status() const;
     QString errorMessage() const;
     ModuleListModel *modules() const { return m_modules; }
+    EventLogModel *events() const { return m_events; }
     QString lastRpcResult() const { return m_lastRpcResult; }
 
     // Off by default. Skips TLS certificate validation entirely for this
@@ -103,10 +107,12 @@ private:
 
     QXmppClient m_client;
     ModuleListModel *m_modules;
+    EventLogModel *m_events;
     // Owned by m_client (added via addNewExtension, same pattern as its
-    // BasicExtensions) - not by XmppClient itself, hence a raw non-owning
-    // pointer here.
+    // BasicExtensions) - not by XmppClient itself, hence raw non-owning
+    // pointers here.
     StateSubscriptionManager *m_stateSubscriptions;
+    EventManager *m_eventManager;
     Status m_status = Status::Disconnected;
     QString m_errorMessage;
     // Set for the duration of one connection attempt: once errorOccurred()

@@ -377,6 +377,42 @@ message, not a generic transport error.
 
 **Acceptance:** trigger a real event on the server, see it appear live.
 
+Implementation notes:
+- Events are **plain JSON on the wire**, not the self-tagged `WireValue`
+  vocabulary state/RPC use - confirmed against `pyobs-core`'s actual
+  `Event.to_json()`/`send_event()` (not just the TS port from memory):
+  the PubSub item payload is `<event xmlns="pyobs:event">{escaped JSON
+  text}</event>`, decoded with `QJsonDocument::fromJson`, not
+  `codec::xmlToValue`. `type`/`timestamp`/`uuid`/`data` come straight from
+  the JSON; `module` is derived client-side from the notification's `from`
+  JID, same as the TS port.
+- `comm::EventManager` reuses `QXmppPubSubManager::subscribeToNode()`
+  directly (Phase 4's manager did too) - it's fully generic over which
+  JID hosts the node, so pointing it at the module's own bare JID (PEP)
+  instead of a `pubsub.<domain>` service needed no new plumbing, just a
+  different `serviceJid` argument.
+- `EventLogModel`'s `data` field is a plain `QVariantMap` (sorted), not an
+  order-preserving structure like `codec::WireDict` - checked
+  `LoggingView.vue` first: it only ever looks up named fields
+  (`data['level']`, `data['message']`), never iterates `data` generically,
+  so there's no wire-order fidelity to preserve here, unlike Phase 4's
+  state rendering.
+- No ref-counting/retry-with-backoff for event subscriptions, unlike
+  Phase 4's state subscriptions: there's exactly one central event log for
+  the whole app rather than per-widget watchers, and `subscribeToEvents()`
+  is deliberately un-deduped (matches `useXmpp.ts`'s own
+  `fetchModuleInfo`-triggered subscribe, re-sent every time discovery
+  resolves for a module - harmless, since re-subscribing an already-
+  subscribed JID to a node is a server-side no-op).
+
+Verified live against a running `roof` module: called `IRoof.init()`
+(reusing Phase 5's own `executeMethod`) and watched real events arrive
+through the generic event path in real time - `MotionStatusChangedEvent`
+(`initializing` then `idle`), two `LogEvent`s with full field decoding
+(`filename`/`function`/`level`/`line`/`message`/`sender`/`time`), and a
+`RoofOpenedEvent` (correctly decoding its empty `{}` payload) - all for a
+module this project has zero event-specific C++ code for.
+
 ---
 
 ## Phase 7 — first custom widget: `IRoof`

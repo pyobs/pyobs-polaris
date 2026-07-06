@@ -96,95 +96,129 @@ ApplicationWindow {
         }
     }
 
-    // Module list, populated automatically via presence + disco#info
-    // (comm::XmppClient::handlePresence / probeRosterPresence, Phase 3).
-    // Expanding a row subscribes (Phase 4) to every interface that has a
-    // state block and renders it generically via KeyValueCard - zero
-    // interface-specific code, matches ModuleStateCard.vue's role.
-    ListView {
+    ColumnLayout {
         anchors.top: loginColumn.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 12
-        clip: true
-        model: xmppClient.modules
-        delegate: ColumnLayout {
-            id: moduleDelegate
-            width: ListView.view.width
-            spacing: 0
+        spacing: 8
 
-            required property string jid
-            required property string name
-            required property var statefulInterfaces
-            required property var commands
+        // Module list, populated automatically via presence + disco#info
+        // (comm::XmppClient::handlePresence / probeRosterPresence, Phase 3).
+        // Expanding a row subscribes (Phase 4) to every interface that has a
+        // state block and renders it generically via KeyValueCard - zero
+        // interface-specific code, matches ModuleStateCard.vue's role.
+        ListView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            model: xmppClient.modules
+            delegate: ColumnLayout {
+                id: moduleDelegate
+                width: ListView.view.width
+                spacing: 0
 
-            ItemDelegate {
-                Layout.fillWidth: true
-                text: moduleDelegate.name + "  (" + moduleDelegate.jid + ")"
-                onClicked: moduleDelegate.expanded = !moduleDelegate.expanded
-            }
+                required property string jid
+                required property string name
+                required property var statefulInterfaces
+                required property var commands
 
-            property bool expanded: false
+                ItemDelegate {
+                    Layout.fillWidth: true
+                    text: moduleDelegate.name + "  (" + moduleDelegate.jid + ")"
+                    onClicked: moduleDelegate.expanded = !moduleDelegate.expanded
+                }
 
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.leftMargin: 16
-                visible: moduleDelegate.expanded
+                property bool expanded: false
 
-                // Gating the Repeater's model on `expanded` (rather than
-                // just the child items' visibility) means subscribeState()
-                // only runs while a row is actually expanded, and the
-                // resulting StateSubscriptions - parented to each
-                // interfaceBlock below - are destroyed (unsubscribing
-                // automatically, see StateSubscription's destructor) the
-                // moment the row collapses, not just hidden.
-                Repeater {
-                    model: moduleDelegate.expanded ? moduleDelegate.statefulInterfaces : []
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 16
+                    visible: moduleDelegate.expanded
 
-                    delegate: ColumnLayout {
-                        id: interfaceBlock
+                    // Gating the Repeater's model on `expanded` (rather than
+                    // just the child items' visibility) means subscribeState()
+                    // only runs while a row is actually expanded, and the
+                    // resulting StateSubscriptions - parented to each
+                    // interfaceBlock below - are destroyed (unsubscribing
+                    // automatically, see StateSubscription's destructor) the
+                    // moment the row collapses, not just hidden.
+                    Repeater {
+                        model: moduleDelegate.expanded ? moduleDelegate.statefulInterfaces : []
+
+                        delegate: ColumnLayout {
+                            id: interfaceBlock
+                            Layout.fillWidth: true
+
+                            required property var modelData
+
+                            // Evaluated once at delegate creation, not a live
+                            // binding: subscribeState()'s arguments never change
+                            // for this delegate's lifetime.
+                            property var subscription: xmppClient.subscribeState(
+                                moduleDelegate.jid, modelData.name, modelData.version, interfaceBlock)
+
+                            Label {
+                                text: interfaceBlock.modelData.name
+                                font.bold: true
+                            }
+
+                            KeyValueCard {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: 8
+                                value: interfaceBlock.subscription ? interfaceBlock.subscription.value : undefined
+                            }
+                        }
+                    }
+
+                    // Phase 5 debug entry point: every param goes through as
+                    // null (see comm::XmppClient::executeMethod) - fine for
+                    // every real IRoof/IMotion command, whose params are all
+                    // declared optional. Result/fault goes to xmppClient's
+                    // lastRpcResult label above, not per-row here.
+                    Flow {
                         Layout.fillWidth: true
 
-                        required property var modelData
+                        Repeater {
+                            model: moduleDelegate.expanded ? moduleDelegate.commands : []
 
-                        // Evaluated once at delegate creation, not a live
-                        // binding: subscribeState()'s arguments never change
-                        // for this delegate's lifetime.
-                        property var subscription: xmppClient.subscribeState(
-                            moduleDelegate.jid, modelData.name, modelData.version, interfaceBlock)
-
-                        Label {
-                            text: interfaceBlock.modelData.name
-                            font.bold: true
-                        }
-
-                        KeyValueCard {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: 8
-                            value: interfaceBlock.subscription ? interfaceBlock.subscription.value : undefined
+                            delegate: Button {
+                                required property var modelData
+                                text: modelData.interface + "." + modelData.name
+                                onClicked: xmppClient.executeMethod(moduleDelegate.jid, modelData.name, modelData.paramCount)
+                            }
                         }
                     }
                 }
+            }
+        }
 
-                // Phase 5 debug entry point: every param goes through as
-                // null (see comm::XmppClient::executeMethod) - fine for
-                // every real IRoof/IMotion command, whose params are all
-                // declared optional. Result/fault goes to xmppClient's
-                // lastRpcResult label above, not per-row here.
-                Flow {
-                    Layout.fillWidth: true
+        Label {
+            text: "Events"
+            font.bold: true
+        }
 
-                    Repeater {
-                        model: moduleDelegate.expanded ? moduleDelegate.commands : []
+        // Simple scrolling event log (Phase 6) - every event type a subscribed
+        // module publishes, not just LogEvent (matching DEVELOPMENT.md's
+        // "live LogEvent/domain events" wording: LogEvent is just the running
+        // example, not the only thing shown). Auto-scrolls to the newest event.
+        ListView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 140
+            clip: true
+            model: xmppClient.events
+            onCountChanged: positionViewAtEnd()
 
-                        delegate: Button {
-                            required property var modelData
-                            text: modelData.interface + "." + modelData.name
-                            onClicked: xmppClient.executeMethod(moduleDelegate.jid, modelData.name, modelData.paramCount)
-                        }
-                    }
-                }
+            delegate: ItemDelegate {
+                width: ListView.view.width
+
+                required property string type
+                required property string module
+                required property var data
+
+                text: "[" + module + "] " + type + ": "
+                      + (data && data.message !== undefined ? data.message : JSON.stringify(data))
             }
         }
     }

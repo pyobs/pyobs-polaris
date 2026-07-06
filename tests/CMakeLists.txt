@@ -64,3 +64,22 @@ target_include_directories(tst_encode PRIVATE ${CMAKE_SOURCE_DIR}/src/codec)
 target_link_libraries(tst_encode PRIVATE Qt6::Test Qt6::Xml)
 
 add_test(NAME tst_encode COMMAND tst_encode)
+
+add_executable(tst_eventmanager
+    comm/tst_eventmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/comm/EventLogModel.h
+    ${CMAKE_SOURCE_DIR}/src/comm/EventLogModel.cpp
+    ${CMAKE_SOURCE_DIR}/src/comm/EventManager.h
+    ${CMAKE_SOURCE_DIR}/src/comm/EventManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/Decode.h
+    ${CMAKE_SOURCE_DIR}/src/codec/Decode.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/WireValue.h
+)
+target_include_directories(tst_eventmanager PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/comm
+    ${CMAKE_SOURCE_DIR}/src/codec
+    ${qxmpp_BINARY_DIR}/src
+)
+target_link_libraries(tst_eventmanager PRIVATE Qt6::Test Qt6::Xml Qt6::Network Qt6::Qml QXmppQt6)
+
+add_test(NAME tst_eventmanager COMMAND tst_eventmanager)

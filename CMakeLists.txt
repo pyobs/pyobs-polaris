@@ -42,6 +42,10 @@ qt_add_executable(pyobs-gui++
     src/comm/StateSubscriptionManager.cpp
     src/comm/Rpc.h
     src/comm/Rpc.cpp
+    src/comm/EventLogModel.h
+    src/comm/EventLogModel.cpp
+    src/comm/EventManager.h
+    src/comm/EventManager.cpp
     src/codec/WireValue.h
     src/codec/Decode.h
     src/codec/Decode.cpp

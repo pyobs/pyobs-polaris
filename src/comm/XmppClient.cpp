@@ -1,6 +1,7 @@
 #include "XmppClient.h"
 
 #include "Discovery.h"
+#include "EventManager.h"
 #include "Rpc.h"
 #include "StateSubscriptionManager.h"
 
@@ -24,7 +25,9 @@ XmppClient::XmppClient(QObject *parent)
     : QObject(parent)
     , m_client(QXmppClient::BasicExtensions, this)
     , m_modules(new ModuleListModel(this))
+    , m_events(new EventLogModel(this))
     , m_stateSubscriptions(m_client.addNewExtension<StateSubscriptionManager>())
+    , m_eventManager(m_client.addNewExtension<EventManager>(m_events))
 {
     // Not part of BasicExtensions - StateSubscriptionManager's
     // subscribeToNode()/unsubscribeFromNode()/requestItems() calls all go
@@ -113,6 +116,7 @@ void XmppClient::disconnectFromServer()
 {
     m_client.disconnectFromServer();
     m_modules->clear();
+    m_events->clear();
 }
 
 void XmppClient::fetchModuleInfo(const QString &bareJid, const QString &fullJid)
@@ -120,6 +124,10 @@ void XmppClient::fetchModuleInfo(const QString &bareJid, const QString &fullJid)
     comm::fetchModuleInfo(m_client, bareJid, fullJid, [this](ModuleInfo info) {
         logModuleInfo(info);
         m_modules->upsert(info);
+        // Un-deduped on purpose, matches useXmpp.ts's own fetchModuleInfo:
+        // re-subscribing to an already-subscribed node from the same JID
+        // is a harmless no-op server-side.
+        m_eventManager->subscribeToEvents(info.jid, info.events);
     });
 }
 
