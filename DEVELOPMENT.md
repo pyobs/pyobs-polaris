@@ -4,7 +4,7 @@ A clean-room C++/QML client for pyobs 2.0, modeled directly on
 **pyobs-web-client**: no dependency on pyobs-core, everything built from
 presence + disco#info discovered live over the wire (QXmpp instead of
 Strophe.js). Generic rendering by default; hand-written QML widgets opt in
-per-interface where a custom UI earns its place (starting with `ICamera`).
+per-interface where a custom UI earns its place (starting with `IRoof`).
 
 Each phase below should be its own PR/commit, buildable and runnable on its
 own before moving to the next. Do not start a phase until the previous one's
@@ -345,32 +345,37 @@ just "some XMPP error."
 
 ---
 
-## Phase 7 — first custom widget: `ICamera`
+## Phase 7 — first custom widget: `IRoof`
 
 **Goal:** prove the "generic by default, custom where it earns its place"
-pattern from `RoofView.vue`, for the interface that actually needs it.
+pattern from `RoofView.vue` itself — this is that exact widget, ported to
+QML. `IRoof` over `ICamera`: `ICamera` needs exposure controls, a binning
+selector, and eventually live image preview (VFS path resolution, its own
+hard problem) — a lot of surface area for what this phase is actually
+trying to prove. `IRoof` needs none of that: it's IMotion (already fully
+generic since Phase 4) plus three buttons, so the phase stays focused on
+the generic/custom boundary itself rather than camera-specific chrome.
+Note `IRoof` itself (see the Python interface) declares no commands or
+state of its own at all — everything actually on the wire (`init`,
+`park`, `stop_motion`, the `status`/`devices`/`time` state) comes from
+`IMotion`, which `IRoof` extends purely as a semantic marker. Confirm this
+against a live module's disco#info reply before writing any QML anyway —
+don't assume from memory of the Python interface definition, since
+`RoofOpenedEvent`/`RoofClosingEvent` (Phase 6) are module-specific extras
+`IRoof` doesn't declare either, and confirming what's actually on the wire
+today is the whole point of this project's verification discipline.
+- `widgets/RoofWidget.qml`: filters the module list for `IRoof`, embeds
+  `KeyValueCard` (Phase 4) for the module's `IMotion` state, and adds
+  hand-designed chrome on top — "Open" (`init`), "Close" (`park`), "Stop"
+  (`stop_motion`) buttons wired through `executeMethod` (Phase 5), each
+  disabled while a command for that module is in flight, matching
+  `RoofView.vue`'s per-jid `running`/`errors` tracking.
 
-- Before writing any QML: read `ICamera`'s actual current `state`/`command`
-  schema off a live module's disco#info reply — don't assume its shape from
-  memory of the Python interface definition. Confirm what's actually being
-  published on the wire today, since this is exactly the kind of protocol
-  detail that drifts during the 2.0 migration.
-- `widgets/CameraWidget.qml`: filters the module list for `ICamera`,
-  embeds the generic state card (Phase 4) for whatever `ICamera.state`
-  actually contains, and adds hand-designed chrome on top — exposure
-  controls, a binning selector built from the interface's `enum` block
-  (Phase 2's `enums` map), an abort button wired through `executeMethod`
-  (Phase 5).
-- Explicitly **not** in this phase: live image preview. That depends on
-  resolving VFS paths to fetchable URLs, which pyobs-web-client treats as
-  its own separate, harder problem (see its `DEVELOPMENT.md`, VFS endpoint
-  config) — don't fold it into this phase just because it's the obvious
-  next thing a camera widget would want.
-
-**Acceptance:** the widget shows live `ICamera` state via the generic
-plumbing and can successfully issue at least one real command
-(e.g. abort) against a live camera module — verified live, same bar as
-every prior phase.
+**Acceptance:** the widget shows live `IMotion` state via the generic
+plumbing and can successfully issue at least one real command (e.g. "Open"
+→ `init`) against a live `roof` module, observing the same live
+`idle → parking/initializing → parked/idle` transition Phase 4 already
+proved — verified live, same bar as every prior phase.
 
 ---
 
