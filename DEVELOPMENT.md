@@ -1,4 +1,4 @@
-# pyobs-qml-client — build plan
+# pyobs-gui++ — build plan
 
 A clean-room C++/QML client for pyobs 2.0, modeled directly on
 **pyobs-web-client**: no dependency on pyobs-core, everything built from

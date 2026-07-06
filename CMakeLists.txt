@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(pyobs-qml-client LANGUAGES CXX)
+project(pyobs-gui++ LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,18 +27,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(qxmpp)
 
-qt_add_executable(pyobs-qml-client
+qt_add_executable(pyobs-gui++
     src/main.cpp
 )
 
-qt_add_qml_module(pyobs-qml-client
+qt_add_qml_module(pyobs-gui++
     URI pyobs.gui
     VERSION 1.0
     QML_FILES
         qml/Main.qml
 )
 
-target_link_libraries(pyobs-qml-client PRIVATE
+target_link_libraries(pyobs-gui++ PRIVATE
     Qt6::Quick
     Qt6::Xml
     Qt6::Network

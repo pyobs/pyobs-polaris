@@ -5,10 +5,10 @@ Window {
     width: 640
     height: 480
     visible: true
-    title: "pyobs-qml-client"
+    title: "pyobs-gui++"
 
     Text {
         anchors.centerIn: parent
-        text: "pyobs-qml-client"
+        text: "pyobs-gui++"
     }
 }
