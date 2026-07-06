@@ -1,5 +1,7 @@
 #include "XmppClient.h"
 
+#include "Discovery.h"
+
 #include <QXmppConfiguration.h>
 #include <QXmppError.h>
 
@@ -80,6 +82,13 @@ void XmppClient::connectToServer(const QString &jid, const QString &password)
 void XmppClient::disconnectFromServer()
 {
     m_client.disconnectFromServer();
+}
+
+void XmppClient::fetchModuleInfo(const QString &bareJid, const QString &fullJid)
+{
+    comm::fetchModuleInfo(m_client, bareJid, fullJid, [](ModuleInfo info) {
+        logModuleInfo(info);
+    });
 }
 
 void XmppClient::setStatus(Status status, const QString &message)

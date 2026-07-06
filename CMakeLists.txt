@@ -31,9 +31,17 @@ qt_add_executable(pyobs-gui++
     src/main.cpp
     src/comm/XmppClient.cpp
     src/comm/XmppClient.h
+    src/comm/ModuleInfo.h
+    src/comm/Discovery.h
+    src/comm/Discovery.cpp
     src/codec/WireValue.h
     src/codec/Decode.h
     src/codec/Decode.cpp
+    src/codec/WireType.h
+    src/codec/WireType.cpp
+    src/codec/InterfaceSchema.h
+    src/codec/SchemaParse.h
+    src/codec/SchemaParse.cpp
 )
 
 qt_add_qml_module(pyobs-gui++

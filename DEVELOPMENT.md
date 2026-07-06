@@ -162,7 +162,7 @@ matching `fetchModuleInfo()`'s job exactly.
   `capabilities` under `urn:pyobs:capabilities:*`), populate `ModuleInfo`.
 - No presence-driven auto-discovery yet — call `fetchModuleInfo` manually
   (e.g. a hardcoded test JID, or a debug button) to prove the parse is
-  correct before wiring it to presence in Phase 4.
+  correct before wiring it to presence in Phase 3.
 
 **Acceptance:** run against a real module (e.g. a `SimCamera` instance —
 stable, low-stakes, matches the order already used for the QXmpp Comm
@@ -170,6 +170,21 @@ skeleton in earlier design discussion); print/log the parsed
 `InterfaceSchema` and manually diff it against the actual disco#info XML
 captured with a packet sniff or `pyobs-web-client`'s own dev tools network
 tab, to catch any parsing drift before it's silently wrong.
+
+Verified live against a real running module (`DummyTelescope`, exposing 12
+interfaces incl. `IMotion`/`ITelescope` with an 11-value `MotionStatus`
+enum, 4 events, 3 capabilities blocks) by dumping the raw `<iq>`/`<query>`
+XML alongside the parsed `ModuleInfo` and diffing by eye: every interface,
+command, parameter (including `optional<...>`, `array<struct<...>>`,
+`enum(...)`, `unit` attributes), state field, event field, enum value list,
+and capability value (including an empty `<dict/>` and an ordered string
+list) matched exactly. One deliberate divergence from wire order: `enums`/
+`commands` are `QMap`s (sorted by key) since they're looked up by name, not
+iterated for display order — confirmed this only affects debug-log
+presentation order, not correctness, but worth knowing if a future phase's
+UI ever wants to preserve declaration order for these two maps specifically
+(unlike `codec::WireDict`, where preserving wire order is the entire
+point — see Phase 1.5).
 
 ---
 

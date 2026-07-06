@@ -62,5 +62,22 @@ ApplicationWindow {
             checked: xmppClient.insecureSkipTlsVerification
             onToggled: xmppClient.insecureSkipTlsVerification = checked
         }
+
+        // Phase 2 debug-only entry point: no presence-driven discovery yet
+        // (that's Phase 3), so disco#info has to be triggered by hand to
+        // prove the schema parse is correct. Result goes to the console
+        // (qInfo(), see comm::logModuleInfo), not this UI.
+        TextField {
+            id: discoveryJidField
+            Layout.preferredWidth: 280
+            placeholderText: "Module bare JID (e.g. telescope@localhost)"
+        }
+
+        Button {
+            Layout.alignment: Qt.AlignHCenter
+            text: "Fetch module info (debug, see console)"
+            enabled: xmppClient.status === "connected" && discoveryJidField.text.length > 0
+            onClicked: xmppClient.fetchModuleInfo(discoveryJidField.text, discoveryJidField.text + "/pyobs")
+        }
     }
 }

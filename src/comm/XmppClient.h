@@ -37,6 +37,13 @@ public:
     Q_INVOKABLE void connectToServer(const QString &jid, const QString &password);
     Q_INVOKABLE void disconnectFromServer();
 
+    // Phase 2: no presence-driven auto-discovery yet, so this is called
+    // manually (e.g. a debug button in Main.qml) to prove the disco#info
+    // round trip and schema parse are correct. Logs the parsed result via
+    // qInfo() rather than surfacing it to QML - ModuleInfo isn't
+    // QML-bindable until Phase 4 wires it into an actual module list.
+    Q_INVOKABLE void fetchModuleInfo(const QString &bareJid, const QString &fullJid);
+
 Q_SIGNALS:
     void statusChanged();
     void insecureSkipTlsVerificationChanged();

@@ -15,3 +15,18 @@ target_include_directories(tst_wirevalue PRIVATE ${CMAKE_SOURCE_DIR}/src/codec)
 target_link_libraries(tst_wirevalue PRIVATE Qt6::Test Qt6::Xml)
 
 add_test(NAME tst_wirevalue COMMAND tst_wirevalue)
+
+add_executable(tst_schema
+    codec/tst_schema.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/WireType.h
+    ${CMAKE_SOURCE_DIR}/src/codec/WireType.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/InterfaceSchema.h
+    ${CMAKE_SOURCE_DIR}/src/codec/SchemaParse.h
+    ${CMAKE_SOURCE_DIR}/src/codec/SchemaParse.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/Decode.h
+    ${CMAKE_SOURCE_DIR}/src/codec/Decode.cpp
+)
+target_include_directories(tst_schema PRIVATE ${CMAKE_SOURCE_DIR}/src/codec)
+target_link_libraries(tst_schema PRIVATE Qt6::Test Qt6::Xml)
+
+add_test(NAME tst_schema COMMAND tst_schema)
