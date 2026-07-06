@@ -1,14 +1,20 @@
 import QtQuick
-import QtQuick.Window
 import QtQuick.Controls
+import QtQuick.Controls.Material
 import QtQuick.Layouts
 import pyobs.gui
 
-Window {
+ApplicationWindow {
     width: 640
     height: 480
     visible: true
     title: "pyobs-gui++"
+
+    // Explicit, not ambient: relying on the system palette is what caused
+    // light-on-light/dark-on-dark contrast bugs here in the first place
+    // (Controls picked up the desktop's dark theme while the plain Window
+    // background stayed hardcoded white). Force dark mode deliberately.
+    Material.theme: Material.Dark
 
     XmppClient {
         id: xmppClient
