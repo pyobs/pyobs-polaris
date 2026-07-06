@@ -6,6 +6,11 @@ on:
 
 jobs:
   build:
+    # contents: write is only actually exercised on a tag push (the release
+    # step below is gated on that) - harmless for ordinary branch/PR runs,
+    # which never reach that step.
+    permissions:
+      contents: write
     # Matches the dev machine's OS exactly (also Ubuntu 26.04) rather than
     # GitHub's "ubuntu-latest" label, which lags real Ubuntu releases by
     # years (currently Ubuntu 24.04 / Qt 6.4.2 - over two years behind what
@@ -67,3 +72,65 @@ jobs:
       - name: Test
         run: ctest --output-on-failure
         working-directory: build/Release
+
+      # Only on a version tag push. The plain build/Release/pyobs-gui++
+      # binary is not redistributable as-is: it links libQXmppQt6.so.5 via
+      # an absolute RUNPATH into this job's own ephemeral build directory
+      # (CMake's normal, correct behavior for an uninstalled build-tree
+      # binary) - copying just the executable elsewhere would fail with
+      # "cannot open shared object file" the moment it's run. patchelf
+      # rewrites the RUNPATH to $ORIGIN so a copy of the .so placed
+      # alongside the binary (as this tarball does) is found instead,
+      # wherever it's eventually extracted.
+      - name: Package release artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          sudo apt-get install -y patchelf
+          mkdir -p dist
+          cp build/Release/pyobs-gui++ dist/
+          cp -P build/Release/_deps/qxmpp-build/src/libQXmppQt6.so* dist/
+          patchelf --set-rpath '$ORIGIN' dist/pyobs-gui++
+          tar -czf pyobs-gui++-linux-x86_64.tar.gz -C dist .
+
+      # System Qt6 itself (Qt6Core/Gui/Qml/Quick/Network/Xml and the
+      # QtQuick.Controls/.Material/.Layouts QML plugins) is deliberately
+      # NOT bundled - this project always links against the system
+      # install (see CMakeLists.txt's qt_standard_project_setup), so
+      # running this binary still requires Qt 6.5+ installed on the
+      # target machine. Documented in the release notes below rather than
+      # solved here - full self-contained deployment (linuxdeployqt-style)
+      # is a bigger undertaking than this step, and Phase 8's WebAssembly
+      # build is a more likely real answer to "run this anywhere" anyway.
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            pyobs-gui++-linux-x86_64.tar.gz \
+            --title "${{ github.ref_name }}" \
+            --notes "$(cat <<'EOF'
+          First tagged release of pyobs-gui++, a clean-room C++/QML client for pyobs 2.0. Every phase up to this tag was verified live against a real ejabberd server and real pyobs modules - see DEVELOPMENT.md for the full phase-by-phase history.
+
+          **What's in this release:**
+          - XMPP connect/disconnect with live status
+          - disco#info-driven module/interface/schema discovery
+          - Presence-driven live module list
+          - Generic PubSub state subscription + rendering (any interface, zero interface-specific code)
+          - Generic RPC command execution
+          - Live domain event log via PEP
+          - First hand-designed widget: RoofWidget for IRoof modules
+
+          **Runtime requirements (Linux x86_64):**
+          - Qt 6.5+ installed on the system (built and tested against Qt 6.10.2 from Ubuntu 26.04's apt packages): `libQt6Core`, `libQt6Gui`, `libQt6Qml`, `libQt6Quick`, `libQt6Network`, `libQt6Xml`, plus the QtQuick.Controls / QtQuick.Controls.Material / QtQuick.Layouts QML modules
+          - The bundled `libQXmppQt6.so.5` (vendored, QXmpp v1.10.2) must stay alongside the `pyobs-gui++` binary - already laid out correctly in this tarball
+
+          **Usage:**
+          ```
+          tar -xzf pyobs-gui++-linux-x86_64.tar.gz
+          ./pyobs-gui++
+          ```
+
+          Built directly by this repository's CI (ubuntu-26.04, Qt 6.10.2) from this tag.
+          EOF
+          )"
