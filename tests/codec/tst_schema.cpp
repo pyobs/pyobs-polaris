@@ -9,14 +9,10 @@ namespace {
 
 // Namespace processing must be on: parseInterfaceSchema/parseEventSchema
 // read element.namespaceURI(), which QDom only populates when asked to.
-// Uses the older bool overload (not QDomDocument::ParseOption, added in Qt
-// 6.8) since CI's ubuntu-latest still ships an older Qt6 - deprecated on
-// 6.8+ but that's just a warning, not a build failure, and this needs to
-// build across both.
 QDomElement parseElement(const QString &xml)
 {
     QDomDocument doc;
-    doc.setContent(xml, true);
+    doc.setContent(xml, QDomDocument::ParseOption::UseNamespaceProcessing);
     return doc.documentElement();
 }
 
