@@ -38,7 +38,57 @@ same module list.
 
 ---
 
-## Loose ends from Phases 7 / 7.5
+## Configuration file
+
+**Goal:** a config file in the system's default location for
+configuration (platform-appropriate — e.g. `QSettings`'s native backend,
+or XDG config dir on Linux), not tied to any one feature. Start with the
+mechanism only; add actual options to it as features that need persisted
+settings are introduced (e.g. last-used JID, default server, TLS-skip
+default), rather than speculatively designing a schema now.
+
+---
+
+## Remembered logins / one-click reconnect
+
+**Goal:** remember previous logins (JID, maybe password) so reconnecting
+is one click instead of retyping credentials every launch. Natural fit on
+top of the config file above.
+
+Open question to actually decide when this is picked up, not before:
+whether to store the password at all. Phase 1 (`DEVELOPMENT.md`)
+deliberately kept credentials in-memory only and never persisted them,
+matching `useXmpp.ts`'s explicit choice not to use `sessionStorage`/
+`localStorage` for this. If passwords do get remembered, that means secure
+OS-provided storage (e.g. a system keyring/credential manager via
+something like `QtKeychain`), never plaintext in the config file -
+remembering just the JID (and prompting for password each time) is the
+lower-risk fallback if that's not worth the added dependency.
+
+---
+
+## Real parameterized command execution in Shell
+
+**Goal:** `ShellView.qml`'s module → method → execute → log flow should
+let you actually fill in command parameters and run them, the same way
+`pyobs-web-client`'s `ShellView.vue` does — not just the current
+all-null-params execution every entry point in this project uses so far
+(see Phase 5/7.5 in `DEVELOPMENT.md`). Port `ShellView.vue`'s actual
+parameter-entry behavior (per-`WireType` widgets: bool/enum/number/string)
+rather than reinventing the UI from scratch.
+
+- `ModuleListModel`'s `commands` role currently only exposes
+  `{interface, name, paramCount}` (Phase 5) — needs to expose full
+  `CommandSchema`s (param names/types/optionality) for real widgets to be
+  built from.
+- `codec::valueToXml` (Phase 5) already handles schema-aware encoding for
+  non-null values; this is mostly new QML-side parameter UI plus wiring
+  real values through `executeMethod` instead of `WireValue::null()` for
+  every param.
+
+---
+
+## Loose ends from Phase 7
 
 Not blocking, but worth closing out:
 
@@ -48,9 +98,10 @@ Not blocking, but worth closing out:
   mid-session). Worth a manual look, now that a window reliably appears
   to look at (see the Phase 7.5 window-visibility fix in
   `DEVELOPMENT.md`).
-- `ShellView.qml`'s command execution is still all-null params, same as
-  every other entry point in this project so far — real, type-aware
-  per-parameter widgets (bool/enum/number/string, built from each param's
-  actual `WireType`) would need `ModuleListModel`'s `commands` role to
-  expose full `CommandSchema`s, not just `{interface, name, paramCount}`
-  (see Phase 5 in `DEVELOPMENT.md`). A reasonable next increment.
+- `RoofWidget` doesn't identify which module it belongs to on screen — it
+  just shows up on the Dashboard unlabeled whenever an `IRoof` module is
+  present, which reads as unclear if you don't already know it's the roof
+  widget (came up as "what is this 'Roof' on the dashboard?" - a real
+  first-impression question). Give it a visible heading/label (e.g. the
+  module's JID or name) instead of relying on the reader already knowing
+  what it is.
