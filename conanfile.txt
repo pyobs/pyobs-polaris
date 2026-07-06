@@ -1,0 +1,16 @@
+[requires]
+# qxmpp is intentionally NOT here: ConanCenter's qxmpp recipe pulls in
+# qt/[>=6] as a build dependency, which would build the whole of Qt from
+# source via Conan and conflict with the system Qt6 this project links
+# against for Quick/QML. qxmpp is vendored instead via CMake FetchContent
+# in CMakeLists.txt, pinned to a git tag, built against system Qt6.
+#
+# Conan remains the dependency manager for everything else (e.g. cfitsio
+# for FITS handling, plotting libs) as those phases come up.
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[layout]
+cmake_layout

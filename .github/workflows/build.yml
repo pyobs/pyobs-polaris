@@ -1,0 +1,35 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6 dev packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qt6-base-dev qt6-base-dev-tools \
+            qt6-declarative-dev qt6-declarative-dev-tools
+
+      - name: Install Conan
+        run: pipx install conan
+
+      - name: Detect Conan profile
+        run: conan profile detect --force
+
+      - name: Conan install
+        run: conan install . --build=missing
+
+      - name: Configure
+        run: >
+          cmake --preset conan-release
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build --preset conan-release
