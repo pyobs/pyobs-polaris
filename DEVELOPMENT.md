@@ -23,6 +23,117 @@ just once at the start):
 - `pyobs-web-client/src/views/RoofView.vue` — the pattern for a
   custom, interface-specific widget built on top of the generic plumbing
 
+Not vendored as a submodule or otherwise fetched by this repo — clone it
+separately, next to this repo:
+`git clone git@github.com:/pyobs/pyobs-web-client.git`.
+
+---
+
+## Environment setup (fresh clone / new machine)
+
+### Prerequisites
+
+- Linux (developed and CI'd on Ubuntu 26.04 specifically; adjust package
+  names for other distros — see `.github/workflows/build.yml`'s own
+  comment on why `ubuntu-latest` doesn't work: it currently resolves to
+  Ubuntu 24.04, whose Qt6 apt packages are 2+ years behind what this
+  project requires).
+- **Qt 6.5+** system packages (this project always links against the
+  *system* Qt6 install — never bundled/vendored, see Phase 0's
+  conanfile.txt rationale). On Ubuntu/apt:
+  ```bash
+  sudo apt-get install -y \
+    qt6-base-dev qt6-base-dev-tools \
+    qt6-declarative-dev qt6-declarative-dev-tools
+  ```
+- **CMake 3.21+** and a **C++20** compiler.
+- **Conan 2.x.** Most modern distros block a plain `pip install` for the
+  system Python (PEP 668, "externally managed environment") — install via
+  `pipx install conan` instead, then run `conan profile detect --force`
+  once.
+- `patchelf` is only needed for cutting a release (see "Releases" below),
+  not for day-to-day building.
+
+### Build
+
+```bash
+git clone git@github.com:pyobs/pyobs-gui-.git pyobs-gui++
+cd pyobs-gui++
+
+# Generates CMakeUserPresets.json (gitignored) - do this before the
+# cmake --preset step below, or that preset won't exist yet.
+conan install . --build=missing
+
+cmake --preset conan-release -DCMAKE_BUILD_TYPE=Release
+cmake --build --preset conan-release
+ctest --output-on-failure --test-dir build/Release
+```
+
+The first configure also fetches and builds `qxmpp` from source (~100
+files, pinned via `GIT_TAG` in `CMakeLists.txt`, through CMake
+`FetchContent`) — this is the slow part of a clean build (several
+minutes), and deliberately not a Conan dependency (see `CMakeLists.txt`'s
+own comment: ConanCenter's `qxmpp` recipe would rebuild the whole of Qt
+from source instead).
+
+Run it: `./build/Release/pyobs-gui++`
+
+### Live-verification test fixtures
+
+Every phase's acceptance criterion in this document means *verified
+against a real ejabberd server and real running pyobs modules*, not just
+"unit tests pass" — reproducing that setup is necessary to actually
+continue this project's work, not optional. To set it up on a new
+machine:
+
+1. **An XMPP server** supporting XEP-0030 (disco#info), XEP-0060
+   (PubSub), XEP-0163 (PEP), and XEP-0009 (RPC). Developed and tested
+   against ejabberd; any compliant server should work. A self-signed dev
+   cert is fine — this client has an explicit "skip TLS certificate
+   verification" checkbox for exactly that case.
+2. **A `pyobs-core` 2.0 install**, in its own venv (`pip install
+   pyobs-core`) — this project has zero Python dependency itself,
+   pyobs-core is only needed to have real modules to test against. Run at
+   least one `DummyRoof` and one `DummyTelescope`:
+   ```yaml
+   # comm.shared.yaml - shared by every module config
+   comm_cfg: &comm
+     class: pyobs.comm.xmpp.XmppComm
+     domain: localhost         # match wherever your XMPP server is
+     use_tls: True
+     ignore_cert_errors: True  # self-signed dev cert
+   ```
+   ```yaml
+   # roof.yaml
+   {include comm.shared.yaml}
+   class: pyobs.modules.roof.DummyRoof
+   comm:
+     <<: *comm
+     user: roof
+     password: <pick one, register it on the XMPP server>
+   ```
+   Same pattern for `telescope.yaml` with `class:
+   pyobs.modules.telescope.DummyTelescope`. Start each with `pyobs
+   path/to/roof.yaml` from the pyobs-core venv.
+3. **Register XMPP accounts**: one per module (`roof@<domain>`,
+   `telescope@<domain>`, matching each config's `user:`), plus one more
+   for the GUI client itself to log in as (any registered account works —
+   doesn't need to be a module account).
+4. **A headless C++ test-harness technique** was used throughout this
+   project to verify wire behavior without needing a GUI/display: manually
+   run `moc` on the relevant headers, compile a standalone
+   `QCoreApplication`- (or, for testing actual QML, `QGuiApplication` +
+   `QQmlApplicationEngine`-) based program linking directly against the
+   already-built `libQXmppQt6.so` (under
+   `build/Release/_deps/qxmpp-build/src/`), and run it against the real
+   server. For testing real `.qml` files this way (not just C++), point
+   `QQmlEngine::addImportPath()` at a copy of the generated
+   `build/Release/pyobs/gui/` directory with the `prefer :/qt/qml/...`
+   line stripped from its `qmldir` first — that line otherwise forces
+   qrc-embedded-resource resolution, which a hand-built standalone test
+   binary doesn't have compiled in, and the load silently fails with no
+   warnings at all.
+
 ---
 
 ## Phase 0 — project bootstrap
@@ -607,3 +718,42 @@ same module list.
   predict), fix the doc, don't just fix the code — this file should always
   describe the actual current plan, not the plan as imagined before anyone
   looked at real disco#info output.
+
+### Current status
+
+Phases 0 through 7.5 are done, committed, and pushed to `main`. **Phase 8
+(WebAssembly) is next and hasn't been started.** Known loose ends from
+Phases 7/7.5 — not blocking, but worth closing out before treating those
+phases as fully done:
+
+- No real visual/interactive check of `RoofWidget` or the
+  `LoginWindow`/`MainWindow` split has been done on an actual display —
+  only headless/offscreen verification (see Phase 7/7.5's own notes on
+  why: repeated loss of X11 access mid-session). Worth a manual look.
+- `ShellView.qml`'s command execution is still all-null params, same as
+  every other entry point in this project so far — real, type-aware
+  per-parameter widgets (reading each param's actual `WireType` from disco
+  #info) would need `ModuleListModel`'s `commands` role to expose full
+  `CommandSchema`s, not just `{interface, name, paramCount}` (see Phase
+  5). A reasonable next increment, not started.
+
+### Releases
+
+Push a `vX.Y.Z` tag and CI does the rest: builds, runs tests, packages a
+redistributable tarball (binary + the vendored `libQXmppQt6.so.5`, RUNPATH
+patched with `patchelf` so it's actually runnable once extracted — see
+`.github/workflows/build.yml`'s own comments), and creates the GitHub
+release with that tarball attached, via `gh` (pre-installed on
+GitHub-hosted runners, authenticated with the automatic `GITHUB_TOKEN`).
+No manual artifact-building or uploading needed. `v0.1.0` is the first
+example of this. System Qt6 itself is deliberately never bundled — the
+release notes call this out as a runtime requirement instead.
+
+### Repository
+
+`git@github.com:pyobs/pyobs-gui-.git` (trailing hyphen is deliberate, not
+a typo — renamed from `pyobs-qml-client` during Phase 0). Currently
+reports as private to unauthenticated GitHub API reads, which also means
+CI run status and release contents can't be checked from a plain
+unauthenticated `curl` — needs either the `gh` CLI with a token, or
+checking directly on github.com.
