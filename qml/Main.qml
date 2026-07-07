@@ -39,9 +39,14 @@ QtObject {
         id: appSettings
     }
 
+    property var _accounts: SavedAccountsModel {
+        id: accountsModel
+    }
+
     property var _loginWindow: LoginWindow {
         xmppClient: xmppClient
         appSettings: appSettings
+        accountsModel: accountsModel
         visible: xmppClient.status !== "connected"
     }
 

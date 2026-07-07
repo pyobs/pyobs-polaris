@@ -61,7 +61,18 @@ public:
     bool insecureSkipTlsVerification() const;
     void setInsecureSkipTlsVerification(bool value);
 
-    Q_INVOKABLE void connectToServer(const QString &jid, const QString &password);
+    // host/port are an optional explicit override, skipping DNS SRV lookup
+    // and QXmpp's default connection-order fallback (legacy TLS on 5223,
+    // then STARTTLS on 5222) entirely - QXmppConfiguration connects
+    // straight to host:port once host is non-empty. Needed for servers
+    // with no SRV records where 5223 is closed/filtered rather than
+    // actively refused: QXmpp then has to wait out a full TCP connect
+    // timeout (a minute or more) before falling through to the working
+    // port, which otherwise looks indistinguishable from actually being
+    // stuck. port defaults to 0, meaning "use QXmppConfiguration's own
+    // default (5222)".
+    Q_INVOKABLE void connectToServer(const QString &jid, const QString &password, const QString &host = QString(),
+                                     int port = 0);
     Q_INVOKABLE void disconnectFromServer();
 
     // Since Phase 3, this both logs the parsed result via qInfo() (kept from

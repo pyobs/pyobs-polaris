@@ -90,7 +90,17 @@ add_executable(tst_appsettings
     ${CMAKE_SOURCE_DIR}/src/config/AppSettings.cpp
 )
 target_include_directories(tst_appsettings PRIVATE ${CMAKE_SOURCE_DIR}/src/config)
-target_link_libraries(tst_appsettings PRIVATE Qt6::Test Qt6::Core Qt6::Qml qt6keychain)
+target_link_libraries(tst_appsettings PRIVATE Qt6::Test Qt6::Core Qt6::Qml)
+
+add_test(NAME tst_appsettings COMMAND tst_appsettings)
+
+add_executable(tst_savedaccountsmodel
+    config/tst_savedaccountsmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/config/SavedAccountsModel.h
+    ${CMAKE_SOURCE_DIR}/src/config/SavedAccountsModel.cpp
+)
+target_include_directories(tst_savedaccountsmodel PRIVATE ${CMAKE_SOURCE_DIR}/src/config)
+target_link_libraries(tst_savedaccountsmodel PRIVATE Qt6::Test Qt6::Core Qt6::Qml qt6keychain)
 
 # Exercises the real OS keychain (skips itself via QSKIP if no backend is
 # available - see initTestCase()) rather than mocking QtKeychain, matching
@@ -100,4 +110,4 @@ target_link_libraries(tst_appsettings PRIVATE Qt6::Test Qt6::Core Qt6::Qml qt6ke
 # run, confirm a headless keyring (e.g. gnome-keyring with --unlock, or
 # dbus-run-session) is available first rather than assuming this passes
 # there unmodified.
-add_test(NAME tst_appsettings COMMAND tst_appsettings)
+add_test(NAME tst_savedaccountsmodel COMMAND tst_savedaccountsmodel)

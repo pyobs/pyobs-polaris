@@ -57,6 +57,8 @@ qt_add_executable(pyobs-gui++
     src/comm/XmppClient.h
     src/config/AppSettings.h
     src/config/AppSettings.cpp
+    src/config/SavedAccountsModel.h
+    src/config/SavedAccountsModel.cpp
     src/comm/ModuleInfo.h
     src/comm/ModuleListModel.h
     src/comm/ModuleListModel.cpp

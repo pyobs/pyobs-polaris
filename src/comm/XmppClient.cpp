@@ -95,7 +95,7 @@ void XmppClient::setInsecureSkipTlsVerification(bool value)
     Q_EMIT insecureSkipTlsVerificationChanged();
 }
 
-void XmppClient::connectToServer(const QString &jid, const QString &password)
+void XmppClient::connectToServer(const QString &jid, const QString &password, const QString &host, int port)
 {
     m_hadError = false;
     m_jid = jid;
@@ -110,6 +110,12 @@ void XmppClient::connectToServer(const QString &jid, const QString &password)
     config.setAutoReconnectionEnabled(false);
     if (m_insecureSkipTlsVerification) {
         config.setIgnoreSslErrors(true);
+    }
+    if (!host.isEmpty()) {
+        config.setHost(host);
+        if (port > 0) {
+            config.setPort(port);
+        }
     }
 
     m_client.connectToServer(config);
