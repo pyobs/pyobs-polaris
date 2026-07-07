@@ -5,7 +5,9 @@
 #include "../codec/Decode.h"
 #include "../codec/VariantBridge.h"
 
+#include <QDebug>
 #include <QDomElement>
+#include <QTextStream>
 #include <QTimer>
 #include <QXmppClient.h>
 #include <QXmppPubSubManager.h>
@@ -63,6 +65,8 @@ StateSubscription *StateSubscriptionManager::subscribe(const QString &bareJid, c
 
     if (!entry.subscribing) {
         entry.subscribing = true;
+        qInfo().noquote() << "state subscribe: node" << node << "at" << entry.pubsubService << "as"
+                           << client()->configuration().jidBare();
         subscribeWithRetry(entry.pubsubService, client()->configuration().jidBare(), node, kSubscribeRetries);
     }
 
@@ -93,13 +97,20 @@ void StateSubscriptionManager::subscribeWithRetry(const QString &pubsubService, 
     auto *pubsub = client()->findExtension<QXmppPubSubManager>();
     pubsub->subscribeToNode(pubsubService, node, subscriberJid)
         .then(this, [this, pubsubService, subscriberJid, node, attemptsLeft](QXmppPubSubManager::Result &&result) {
-            if (std::holds_alternative<QXmppError>(result) && attemptsLeft > 1) {
-                // Publisher's node may not exist yet at subscribe time -
-                // wait and retry, matches STATE_SUBSCRIBE_RETRY_WAIT_MS.
-                QTimer::singleShot(kSubscribeRetryWaitMs, this, [this, pubsubService, subscriberJid, node, attemptsLeft] {
-                    subscribeWithRetry(pubsubService, subscriberJid, node, attemptsLeft - 1);
-                });
-                return;
+            if (std::holds_alternative<QXmppError>(result)) {
+                qInfo().noquote() << "state subscribe to" << node << "at" << pubsubService << "failed:"
+                                   << std::get<QXmppError>(result).description << "(" << attemptsLeft - 1
+                                   << "retries left)";
+                if (attemptsLeft > 1) {
+                    // Publisher's node may not exist yet at subscribe time -
+                    // wait and retry, matches STATE_SUBSCRIBE_RETRY_WAIT_MS.
+                    QTimer::singleShot(kSubscribeRetryWaitMs, this, [this, pubsubService, subscriberJid, node, attemptsLeft] {
+                        subscribeWithRetry(pubsubService, subscriberJid, node, attemptsLeft - 1);
+                    });
+                    return;
+                }
+            } else {
+                qInfo().noquote() << "state subscribe to" << node << "at" << pubsubService << "succeeded";
             }
             // Either succeeded, or retries exhausted - either way, fetch the
             // current value now to close the race between a live push and
@@ -114,9 +125,13 @@ void StateSubscriptionManager::fetchCurrentValue(const QString &pubsubService, c
     pubsub->requestItems<WireValueItem>(pubsubService, node)
         .then(this, [this, node](QXmppPubSubManager::ItemsResult<WireValueItem> &&result) {
             if (auto *items = std::get_if<QXmppPubSubManager::Items<WireValueItem>>(&result)) {
+                qInfo().noquote() << "state fetch-current for" << node << "returned" << items->items.size() << "item(s)";
                 if (!items->items.isEmpty()) {
                     dispatchValue(node, items->items.constFirst().value);
                 }
+            } else {
+                qInfo().noquote() << "state fetch-current for" << node << "failed:"
+                                   << std::get<QXmppError>(result).description;
             }
             // else: no current value published yet - matches useXmpp.ts's catch{} no-op.
         });
@@ -130,6 +145,8 @@ void StateSubscriptionManager::dispatchValue(const QString &node, codec::WireVal
     }
     it->value = value;
     const QVariant variant = codec::toQVariant(it->value);
+    qInfo().noquote() << "state dispatch for" << node << "->" << variant << "to" << it->watchers.size()
+                       << "watcher(s)";
     for (StateSubscription *watcher : it->watchers) {
         watcher->notifyValueChanged(variant);
     }
@@ -149,9 +166,16 @@ bool StateSubscriptionManager::handlePubSubEvent(const QDomElement &element, con
     const QDomElement itemEl = itemsEl.isNull() ? QDomElement() : firstChildByLocalTag(itemsEl, QStringLiteral("item"));
     const QDomElement payload = itemEl.isNull() ? QDomElement() : itemEl.firstChildElement();
     if (payload.isNull()) {
+        qInfo().noquote() << "state event for" << nodeName << "from" << pubSubService
+                           << "has no payload - raw stanza follows";
+        QString raw;
+        QTextStream stream(&raw);
+        element.save(stream, 0);
+        qInfo().noquote() << raw;
         return false;
     }
 
+    qInfo().noquote() << "state event for" << nodeName << "dispatched a live value";
     dispatchValue(nodeName, codec::xmlToValue(payload));
     return true;
 }

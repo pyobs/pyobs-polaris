@@ -19,6 +19,8 @@ ColumnLayout {
 
     spacing: 2
 
+    onValueChanged: console.log("KeyValueCard.value changed:", JSON.stringify(value), "isArray:", Array.isArray(value))
+
     function formatValue(v) {
         if (v === null || v === undefined) {
             return "—" // em dash, matches KeyValueCard.vue's "—" for null/undefined

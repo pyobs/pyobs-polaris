@@ -592,6 +592,13 @@ share one component now only to be untangled later.
 
 ## Notes for whoever (human or Claude Code) picks this up next
 
+- **Active investigation, mid-debugging as of this commit:** the Roof
+  page's `IMotion` state card is stuck on "(no value yet)" even after a
+  real state change - see `TODO.md`'s "IN PROGRESS" section at the top
+  for the full trail (what's confirmed working via temporary `qInfo()`/
+  `console.log()` diagnostics already in the tree, what's still
+  unconfirmed, and the exact next repro step). Read that before touching
+  `StateSubscriptionManager`, `RoofView.qml`, or `KeyValueCard.qml`.
 - Re-clone/re-check the current branch state before resuming — don't
   assume the working tree matches whatever was last discussed in chat.
 - Every acceptance criterion in this project's history means "verified
