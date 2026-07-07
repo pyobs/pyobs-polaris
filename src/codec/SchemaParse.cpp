@@ -78,7 +78,7 @@ std::optional<VersionedFeature> parseVersionedFeature(FeatureKind kind, const QS
     if (!ok) {
         return std::nullopt;
     }
-    return VersionedFeature { rest.left(idx), version };
+    return { rest.left(idx), version };
 }
 
 InterfaceSchema parseInterfaceSchema(const QDomElement &element)
