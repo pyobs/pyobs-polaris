@@ -136,6 +136,22 @@ source (not assumed):**
   confirmed again here) and shows a popup table of name / param
   signature / doc while typing.
 
+**Not `QCompleter` - checked, and it doesn't fit this project**:
+`QCompleter` lives in `QtWidgets` (`Q_WIDGETS_EXPORT`, confirmed directly
+against the installed Qt6 headers), not exposed to QML at all, and this
+project links only `Qt6::Quick`/`Qt6::Xml`/`Qt6::Network` today - no
+`Qt6::Widgets` anywhere in `CMakeLists.txt`. Pulling in the whole
+Widgets module for one non-visual utility class would be a real,
+architecturally inconsistent new dependency for a project that's
+otherwise pure QML end to end. `ComboBox { editable: true }` (the
+closest built-in QML equivalent) doesn't fit either - it only filters a
+flat list of full strings, not a live multi-column name/signature popup.
+Build this as a plain QML-native popup instead: a `Popup` anchored under
+the command `TextField`, containing a `ListView` bound to a filtered JS
+array recomputed on `TextField.onTextChanged` - the same "plain array +
+`filter()`" idiom `LogsView.qml`/`EventsView.qml` already use repeatedly,
+not a new pattern, and no new Qt module.
+
 **Confirmed gap vs. the Python reference, not fixable from the wire
 alone**: pyobs-gui's completion popup's third column is the command's
 Python docstring first line (`inspect.getmembers`/`member.__doc__`) -
