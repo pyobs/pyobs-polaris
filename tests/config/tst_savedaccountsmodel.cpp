@@ -19,6 +19,7 @@ private slots:
     void addAccountAppendsRowWithGeneratedId();
     void updateAccountChangesJidAndLabelOnly();
     void hostAndPortOverridePersist();
+    void insecureSkipTlsPersists();
     void removeAccountDropsTheRow();
     void accountByIdReturnsEmptyMapWhenNotFound();
     void persistsAcrossInstances();
@@ -38,6 +39,7 @@ QVariantMap rowAt(const SavedAccountsModel &model, int row)
         {"hasStoredPassword", model.data(idx, SavedAccountsModel::HasStoredPasswordRole)},
         {"host", model.data(idx, SavedAccountsModel::HostRole)},
         {"port", model.data(idx, SavedAccountsModel::PortRole)},
+        {"insecureSkipTls", model.data(idx, SavedAccountsModel::InsecureSkipTlsRole)},
     };
 }
 } // namespace
@@ -70,6 +72,7 @@ void TestSavedAccountsModel::addAccountAppendsRowWithGeneratedId()
     QCOMPARE(row.value("hasStoredPassword").toBool(), false);
     QCOMPARE(row.value("host").toString(), QString());
     QCOMPARE(row.value("port").toInt(), 0);
+    QCOMPARE(row.value("insecureSkipTls").toBool(), false);
 }
 
 void TestSavedAccountsModel::updateAccountChangesJidAndLabelOnly()
@@ -113,6 +116,26 @@ void TestSavedAccountsModel::hostAndPortOverridePersist()
     const QVariantMap reloadedRow = rowAt(reloaded, 0);
     QCOMPARE(reloadedRow.value("host").toString(), QStringLiteral("monet.saao.ac.za"));
     QCOMPARE(reloadedRow.value("port").toInt(), 5222);
+}
+
+void TestSavedAccountsModel::insecureSkipTlsPersists()
+{
+    SavedAccountsModel model;
+    const QString id = model.addAccount(QStringLiteral("admin@localhost"), QStringLiteral("Dev"), QString(), 0,
+                                        true);
+
+    QVariantMap row = rowAt(model, 0);
+    QCOMPARE(row.value("insecureSkipTls").toBool(), true);
+
+    // Turning it back off via updateAccount must actually clear it.
+    model.updateAccount(id, QStringLiteral("admin@localhost"), QStringLiteral("Dev"), QString(), 0, false);
+    row = rowAt(model, 0);
+    QCOMPARE(row.value("insecureSkipTls").toBool(), false);
+
+    // Persists across instances, same as host/port.
+    model.updateAccount(id, QStringLiteral("admin@localhost"), QStringLiteral("Dev"), QString(), 0, true);
+    SavedAccountsModel reloaded;
+    QCOMPARE(rowAt(reloaded, 0).value("insecureSkipTls").toBool(), true);
 }
 
 void TestSavedAccountsModel::removeAccountDropsTheRow()

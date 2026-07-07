@@ -55,9 +55,14 @@ public:
 
     // Off by default. Skips TLS certificate validation entirely for this
     // client - only ever meant for a self-signed/local dev ejabberd instance.
-    // Deliberately explicit and opt-in per session (never persisted, not an
-    // ambient env var) so it's visible in the UI whenever it's in effect,
-    // never silently on.
+    // XmppClient itself never persists this or reads it from an ambient env
+    // var - it only ever changes via an explicit UI toggle, so it's always
+    // visible whenever it's in effect, never silently on. LoginWindow.qml
+    // does remember it per *saved account* (SavedAccountsModel's own
+    // InsecureSkipTlsRole, an explicit opt-in saved alongside that account's
+    // host/port override) and applies it back here on selecting that
+    // account - a brand-new/unselected connection still always starts from
+    // this property's off-by-default value.
     bool insecureSkipTlsVerification() const;
     void setInsecureSkipTlsVerification(bool value);
 

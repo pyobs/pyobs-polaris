@@ -175,8 +175,11 @@ git tag, built directly against system Qt6.
 — WebSocket transport is deferred until a browser build actually needs it
 (see `TODO.md`). TLS stays strict (`TLSEnabled`, full certificate
 validation) by default; `insecureSkipTlsVerification` is an explicit,
-off-by-default, non-persisted opt-in surfaced as a clearly-labeled login
-checkbox, for self-signed dev certs only.
+off-by-default opt-in surfaced as a clearly-labeled login checkbox, for
+self-signed dev certs only - `XmppClient` itself never persists it or
+reads it from an ambient env var (see the "Configuration file + saved
+accounts" section below for how a *saved account* remembers its own
+choice).
 
 ### Phase 1.5 — value/XML codec (schema-less decode)
 
@@ -344,10 +347,20 @@ single-login version is gone, not kept alongside this.
   next launch) - add more here as app-wide (not per-account) needs come
   up.
 - `config::SavedAccountsModel` (`QAbstractListModel`, `QML_ELEMENT`) is
-  the actual saved-account list: `id`/`jid`/`label`/`hasStoredPassword`
-  roles, persisted as a `QSettings` array (`beginReadArray`/
-  `beginWriteArray`, key `"accounts"`, rewritten in full on every
-  add/update/remove - never a bottleneck at this scale). **Each account's
+  the actual saved-account list: `id`/`jid`/`label`/`hasStoredPassword`/
+  `host`/`port`/`insecureSkipTls` roles, persisted as a `QSettings` array
+  (`beginReadArray`/`beginWriteArray`, key `"accounts"`, rewritten in full
+  on every add/update/remove - never a bottleneck at this scale).
+  `insecureSkipTls` (added after a report that "Save changes" silently
+  dropped the login window's "Skip TLS" checkbox) is a deliberate
+  exception to `XmppClient::insecureSkipTlsVerification`'s own
+  never-persisted default (see Phase 1): a *saved account* is itself an
+  explicit, visible, user-created record, so `LoginWindow.qml` reads this
+  role back into `xmppClient.insecureSkipTlsVerification` in
+  `selectAccount()` and writes it back out from that same live property
+  when "Save as new account"/"Save changes" is clicked - a brand new,
+  unselected connection is unaffected and still starts from `false`
+  either way. **Each account's
   `id` is a generated `QUuid`, independent of its `jid`/`label`, and is
   what the keychain entry is actually keyed on** - editing an account's
   jid must never orphan its stored password, which keying on the jid

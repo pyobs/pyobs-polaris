@@ -54,6 +54,7 @@ ApplicationWindow {
             serverOverrideCheckBox.checked = false
             hostField.text = ""
             portField.text = ""
+            root.xmppClient.insecureSkipTlsVerification = false
             return
         }
 
@@ -64,6 +65,7 @@ ApplicationWindow {
         serverOverrideCheckBox.checked = account.host.length > 0
         hostField.text = account.host
         portField.text = account.port > 0 ? String(account.port) : ""
+        root.xmppClient.insecureSkipTlsVerification = account.insecureSkipTls
         if (account.hasStoredPassword) {
             root.accountsModel.loadPassword(id)
         }
@@ -321,11 +323,12 @@ ApplicationWindow {
                         let id = root.selectedAccountId
                         const host = root.overrideHost()
                         const port = root.overridePort()
+                        const insecureSkipTls = root.xmppClient.insecureSkipTlsVerification
                         if (id.length === 0) {
-                            id = root.accountsModel.addAccount(jidField.text, labelField.text, host, port)
+                            id = root.accountsModel.addAccount(jidField.text, labelField.text, host, port, insecureSkipTls)
                             root.selectedAccountId = id
                         } else {
-                            root.accountsModel.updateAccount(id, jidField.text, labelField.text, host, port)
+                            root.accountsModel.updateAccount(id, jidField.text, labelField.text, host, port, insecureSkipTls)
                         }
 
                         const account = root.accountsModel.accountById(id)

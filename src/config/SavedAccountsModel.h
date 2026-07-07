@@ -39,6 +39,16 @@ public:
         // normal SRV-based discovery".
         HostRole,
         PortRole,
+        // Per-account remembered "skip TLS certificate verification"
+        // choice. Unlike XmppClient::insecureSkipTlsVerification's own
+        // session-only default (see its doc comment - deliberately never
+        // ambient/ persisted, so a real server never silently ends up with
+        // TLS verification off), a *saved account* is an explicit, visible
+        // opt-in on its own: the account itself is a stored, user-created
+        // record naming a specific dev server, so remembering this choice
+        // for it is no less visible than remembering its host/port
+        // override next to it.
+        InsecureSkipTlsRole,
     };
     Q_ENUM(Role)
 
@@ -49,22 +59,23 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     // {"jid":..., "label":..., "hasStoredPassword":..., "host":...,
-    // "port":...} for the account with this id, or an empty map if no
-    // such account exists - lets QML code outside a delegate's own
-    // context (e.g. after an async passwordReady(id, ...) signal) look an
-    // account back up by id alone.
+    // "port":..., "insecureSkipTls":...} for the account with this id, or
+    // an empty map if no such account exists - lets QML code outside a
+    // delegate's own context (e.g. after an async passwordReady(id, ...)
+    // signal) look an account back up by id alone.
     Q_INVOKABLE QVariantMap accountById(const QString &id) const;
 
     // Adds a new saved account (no password stored yet) and returns its
     // generated id. host/port default to no override - see HostRole/PortRole.
+    // insecureSkipTls defaults to off, matching XmppClient's own default.
     Q_INVOKABLE QString addAccount(const QString &jid, const QString &label, const QString &host = QString(),
-                                   int port = 0);
+                                   int port = 0, bool insecureSkipTls = false);
 
-    // Updates jid/label/host/port for an existing account. No-op if id
-    // isn't found. Never touches whether a password is stored - see
-    // storePassword()/clearStoredPassword() for that.
+    // Updates jid/label/host/port/insecureSkipTls for an existing account.
+    // No-op if id isn't found. Never touches whether a password is stored
+    // - see storePassword()/clearStoredPassword() for that.
     Q_INVOKABLE void updateAccount(const QString &id, const QString &jid, const QString &label,
-                                   const QString &host = QString(), int port = 0);
+                                   const QString &host = QString(), int port = 0, bool insecureSkipTls = false);
 
     // Removes the account and starts an async keychain delete for it
     // (regardless of hasStoredPassword, in case that flag is ever stale -
@@ -106,6 +117,7 @@ private:
         bool hasStoredPassword = false;
         QString host;
         int port = 0;
+        bool insecureSkipTls = false;
     };
 
     void load();

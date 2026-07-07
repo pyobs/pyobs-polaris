@@ -49,6 +49,8 @@ QVariant SavedAccountsModel::data(const QModelIndex &index, int role) const
         return account.host;
     case PortRole:
         return account.port;
+    case InsecureSkipTlsRole:
+        return account.insecureSkipTls;
     default:
         return {};
     }
@@ -63,6 +65,7 @@ QHash<int, QByteArray> SavedAccountsModel::roleNames() const
         {HasStoredPasswordRole, "hasStoredPassword"},
         {HostRole, "host"},
         {PortRole, "port"},
+        {InsecureSkipTlsRole, "insecureSkipTls"},
     };
 }
 
@@ -80,10 +83,12 @@ QVariantMap SavedAccountsModel::accountById(const QString &id) const
         {QStringLiteral("hasStoredPassword"), account.hasStoredPassword},
         {QStringLiteral("host"), account.host},
         {QStringLiteral("port"), account.port},
+        {QStringLiteral("insecureSkipTls"), account.insecureSkipTls},
     };
 }
 
-QString SavedAccountsModel::addAccount(const QString &jid, const QString &label, const QString &host, int port)
+QString SavedAccountsModel::addAccount(const QString &jid, const QString &label, const QString &host, int port,
+                                       bool insecureSkipTls)
 {
     Account account;
     account.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -91,6 +96,7 @@ QString SavedAccountsModel::addAccount(const QString &jid, const QString &label,
     account.label = label;
     account.host = host;
     account.port = port;
+    account.insecureSkipTls = insecureSkipTls;
 
     beginInsertRows(QModelIndex(), m_accounts.size(), m_accounts.size());
     m_accounts.append(account);
@@ -101,7 +107,7 @@ QString SavedAccountsModel::addAccount(const QString &jid, const QString &label,
 }
 
 void SavedAccountsModel::updateAccount(const QString &id, const QString &jid, const QString &label,
-                                       const QString &host, int port)
+                                       const QString &host, int port, bool insecureSkipTls)
 {
     const int idx = indexOfId(id);
     if (idx < 0) {
@@ -112,10 +118,11 @@ void SavedAccountsModel::updateAccount(const QString &id, const QString &jid, co
     m_accounts[idx].label = label;
     m_accounts[idx].host = host;
     m_accounts[idx].port = port;
+    m_accounts[idx].insecureSkipTls = insecureSkipTls;
     save();
 
     const QModelIndex modelIdx = index(idx);
-    Q_EMIT dataChanged(modelIdx, modelIdx, {JidRole, LabelRole, HostRole, PortRole});
+    Q_EMIT dataChanged(modelIdx, modelIdx, {JidRole, LabelRole, HostRole, PortRole, InsecureSkipTlsRole});
 }
 
 void SavedAccountsModel::removeAccount(const QString &id)
@@ -205,6 +212,7 @@ void SavedAccountsModel::load()
         account.hasStoredPassword = m_settings.value("hasStoredPassword", false).toBool();
         account.host = m_settings.value("host").toString();
         account.port = m_settings.value("port", 0).toInt();
+        account.insecureSkipTls = m_settings.value("insecureSkipTls", false).toBool();
         m_accounts.append(account);
     }
     m_settings.endArray();
@@ -221,6 +229,7 @@ void SavedAccountsModel::save()
         m_settings.setValue("hasStoredPassword", m_accounts.at(i).hasStoredPassword);
         m_settings.setValue("host", m_accounts.at(i).host);
         m_settings.setValue("port", m_accounts.at(i).port);
+        m_settings.setValue("insecureSkipTls", m_accounts.at(i).insecureSkipTls);
     }
     m_settings.endArray();
 }
