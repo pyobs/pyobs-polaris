@@ -38,35 +38,6 @@ same module list.
 
 ---
 
-## Configuration file
-
-**Goal:** a config file in the system's default location for
-configuration (platform-appropriate — e.g. `QSettings`'s native backend,
-or XDG config dir on Linux), not tied to any one feature. Start with the
-mechanism only; add actual options to it as features that need persisted
-settings are introduced (e.g. last-used JID, default server, TLS-skip
-default), rather than speculatively designing a schema now.
-
----
-
-## Remembered logins / one-click reconnect
-
-**Goal:** remember previous logins (JID, maybe password) so reconnecting
-is one click instead of retyping credentials every launch. Natural fit on
-top of the config file above.
-
-Open question to actually decide when this is picked up, not before:
-whether to store the password at all. Phase 1 (`DEVELOPMENT.md`)
-deliberately kept credentials in-memory only and never persisted them,
-matching `useXmpp.ts`'s explicit choice not to use `sessionStorage`/
-`localStorage` for this. If passwords do get remembered, that means secure
-OS-provided storage (e.g. a system keyring/credential manager via
-something like `QtKeychain`), never plaintext in the config file -
-remembering just the JID (and prompting for password each time) is the
-lower-risk fallback if that's not worth the added dependency.
-
----
-
 ## Real parameterized command execution in Shell
 
 **Goal:** `ShellView.qml`'s module → method → execute → log flow should

@@ -16,8 +16,62 @@ ApplicationWindow {
     Material.theme: Material.Dark
 
     required property var xmppClient
+    required property var appSettings
+
+    // Only set on a keychain failure (see the Connections below) - the
+    // "Remember me" checkbox promises the password goes into the system
+    // keychain, so a failure there (no backend running, access denied,
+    // ...) must be visible instead of just silently not remembering.
+    property string keychainNotice: ""
 
     onClosing: Qt.quit()
+
+    // Pre-fills the last remembered login (if any) and kicks off an async
+    // keychain read for its password - see appSettings' own doc comment
+    // for why the password never lives in the plain config file itself.
+    Component.onCompleted: {
+        if (appSettings.rememberLogin) {
+            jidField.text = appSettings.lastJid
+            rememberCheckBox.checked = true
+            appSettings.loadSavedPassword()
+        }
+    }
+
+    Connections {
+        target: appSettings
+        function onPasswordReady(password) {
+            passwordField.text = password
+        }
+        function onCredentialsSaveFailed() {
+            root.keychainNotice = "Could not save this login to the system keychain - it will not be remembered."
+        }
+        function onCredentialsForgetFailed() {
+            root.keychainNotice = "Could not remove the saved login from the system keychain."
+        }
+        function onCredentialsSaved() {
+            root.keychainNotice = ""
+        }
+        function onCredentialsForgotten() {
+            root.keychainNotice = ""
+        }
+    }
+
+    // Decides whether to remember or forget this login only once the
+    // connection actually succeeds - never on a failed attempt, and never
+    // just from typing/toggling the checkbox.
+    Connections {
+        target: xmppClient
+        function onStatusChanged() {
+            if (xmppClient.status !== "connected") {
+                return
+            }
+            if (rememberCheckBox.checked) {
+                appSettings.rememberCredentials(jidField.text, passwordField.text)
+            } else if (appSettings.rememberLogin) {
+                appSettings.forgetCredentials()
+            }
+        }
+    }
 
     ColumnLayout {
         anchors.centerIn: parent
@@ -48,6 +102,16 @@ ApplicationWindow {
             text: root.xmppClient.errorMessage
         }
 
+        Label {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.fillWidth: true
+            visible: root.keychainNotice.length > 0
+            color: "orange"
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
+            text: root.keychainNotice
+        }
+
         TextField {
             id: jidField
             Layout.fillWidth: true
@@ -67,6 +131,19 @@ ApplicationWindow {
             text: "Skip TLS certificate verification (insecure, dev only)"
             checked: root.xmppClient.insecureSkipTlsVerification
             onToggled: root.xmppClient.insecureSkipTlsVerification = checked
+
+            contentItem: Label {
+                text: parent.text
+                wrapMode: Text.WordWrap
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: parent.indicator.width + parent.spacing
+            }
+        }
+
+        CheckBox {
+            id: rememberCheckBox
+            Layout.fillWidth: true
+            text: "Remember this login (password stored in system keychain)"
 
             contentItem: Label {
                 text: parent.text

@@ -52,6 +52,12 @@ too, not just the code.
     qt6-base-dev qt6-base-dev-tools \
     qt6-declarative-dev qt6-declarative-dev-tools
   ```
+- **`libsecret-1-dev` and `pkg-config`**, for QtKeychain's Linux Secret
+  Service backend (vendored via FetchContent, same treatment as qxmpp -
+  see the config/remembered-logins summary below):
+  ```bash
+  sudo apt-get install -y libsecret-1-dev pkg-config
+  ```
 - **CMake 3.21+** and a **C++20** compiler.
 - **Conan 2.x.** Most modern distros block a plain `pip install` for the
   system Python (PEP 668, "externally managed environment") — install via
@@ -318,6 +324,65 @@ Two real gotchas found here:
   (`XmppClient { id: xmppClient }`); if `QtObject`'s lack of a default
   property means the child needs to live in some property, give that
   property a *different* name than the `id`.
+
+### Configuration file + remembered logins
+
+**Goal:** a config file in the system's default location, starting with
+just enough to remember a previous login (JID + password) so reconnecting
+is one click — see `TODO.md`'s original entries for both, now done.
+
+- `config::AppSettings` (QObject, `QML_ELEMENT`) wraps a plain `QSettings`
+  for `lastJid`/`rememberLogin` — resolves to the system default location
+  (e.g. `~/.config/pyobs/pyobs-gui++.conf` on Linux) purely from
+  `QCoreApplication::setOrganizationName()`/`setApplicationName()` in
+  `main.cpp`, which must run before any `QSettings` is constructed.
+- **The password itself never touches `QSettings`/the config file.**
+  `AppSettings` vendors **QtKeychain** (`frankosterfeld/qtkeychain`, tag
+  `0.17.0`) via CMake `FetchContent`, same treatment as qxmpp (Phase 0) —
+  `rememberCredentials()`/`loadSavedPassword()`/`forgetCredentials()` go
+  through `QKeychain::WritePasswordJob`/`ReadPasswordJob`/
+  `DeletePasswordJob` (async, `finished` signal), keyed on the JID under
+  service `"pyobs-gui++"`. On Linux this needs `libsecret-1-dev` +
+  `pkg-config` to build (see Prerequisites) and a running Secret Service
+  provider (gnome-keyring/KWallet) at runtime for it to actually persist
+  anything — `QKeychain::isAvailable()` is false without one, and
+  `WritePasswordJob`s fail cleanly rather than silently falling back to
+  plaintext (no `setInsecureFallback(true)` anywhere - not worth the risk
+  for a password).
+- **Transactional commit, not optimistic:** `rememberCredentials()` only
+  writes `lastJid`/`rememberLogin=true` to `QSettings` *after* the
+  keychain write succeeds (`credentialsSaved()`), never before. Tempting
+  to set both up front and just fire the keychain write alongside, but
+  that leaves a machine with no keychain backend at all in a broken
+  half-remembered state forever: `rememberLogin` stuck `true` with no
+  password ever actually stored, silently re-failing `loadSavedPassword()`
+  on every future launch. `LoginWindow.qml` surfaces
+  `credentialsSaveFailed()`/`credentialsForgetFailed()` as a visible
+  (orange) notice for the same reason — the checkbox promises secure
+  storage, so a failure there can't be silent.
+- `LoginWindow.qml`'s "Remember this login" checkbox is deliberately a
+  separate, unchecked-by-default control from "Skip TLS certificate
+  verification" — both are explicit, visible opt-ins, matching Phase 1's
+  existing rule for `insecureSkipTlsVerification`, just for a different
+  kind of risk (persisted secret vs. weakened transport security).
+  Remembering/forgetting only happens once `xmppClient.status` actually
+  reaches `"connected"` (via a `Connections { target: xmppClient }` block)
+  — never on a failed attempt, and never just from toggling the checkbox.
+- `qt6keychain` builds as a shared library (`BUILD_SHARED_LIBS` defaults
+  `ON` upstream) - like `libQXmppQt6.so.5`, it needs bundling alongside the
+  `pyobs-gui++` binary for releases (`.github/workflows/build.yml`'s
+  packaging step), not just at dev-build time.
+- Its own `autotest` subdirectory builds by default (gated on the CTest
+  convention variable `BUILD_TESTING`, set via its own `include(CTest)`)
+  — forced off in `CMakeLists.txt` since it's pure extra build time here;
+  this project's own `tests/` registers via plain `add_test()`
+  unconditionally, unaffected by that variable.
+- `tests/config/tst_appsettings.cpp` exercises the **real** OS keychain
+  (skipping itself via `QSKIP` if `QKeychain::isAvailable()` is false)
+  rather than mocking QtKeychain, matching this project's "verify against
+  the real thing" philosophy elsewhere — every test that writes a
+  keychain entry also deletes it again before finishing, so a run never
+  leaves test credentials behind in a developer's real keychain.
 
 ---
 

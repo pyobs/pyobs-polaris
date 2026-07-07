@@ -32,6 +32,13 @@ jobs:
             qt6-base-dev qt6-base-dev-tools \
             qt6-declarative-dev qt6-declarative-dev-tools
 
+      # libsecret-1-dev + pkg-config: required by QtKeychain (vendored via
+      # FetchContent below) to build its Linux Secret Service backend -
+      # see its own CMakeLists.txt's pkg_check_modules(LIBSECRET REQUIRED
+      # libsecret-1).
+      - name: Install QtKeychain build dependencies
+        run: sudo apt-get install -y libsecret-1-dev pkg-config
+
       - name: Install Conan
         run: pipx install conan
 
@@ -47,16 +54,17 @@ jobs:
           path: ~/.conan2
           key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt') }}
 
-      # qxmpp is vendored via CMake FetchContent (see CMakeLists.txt), which
-      # means compiling ~100 of its source files from scratch on every CI
-      # run otherwise - by far the most expensive part of this build. Keyed
-      # on CMakeLists.txt (which pins qxmpp's GIT_TAG) so a version bump
-      # invalidates the cache automatically.
-      - name: Cache qxmpp FetchContent build
+      # qxmpp and QtKeychain are both vendored via CMake FetchContent (see
+      # CMakeLists.txt), which means compiling ~100 of qxmpp's source files
+      # (plus QtKeychain's) from scratch on every CI run otherwise - by far
+      # the most expensive part of this build. Keyed on CMakeLists.txt
+      # (which pins both GIT_TAGs) so a version bump invalidates the cache
+      # automatically.
+      - name: Cache FetchContent-vendored dependency builds
         uses: actions/cache@v4
         with:
           path: build/Release/_deps
-          key: qxmpp-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+          key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
 
       - name: Conan install
         run: conan install . --build=missing
@@ -74,14 +82,14 @@ jobs:
         working-directory: build/Release
 
       # Only on a version tag push. The plain build/Release/pyobs-gui++
-      # binary is not redistributable as-is: it links libQXmppQt6.so.5 via
-      # an absolute RUNPATH into this job's own ephemeral build directory
-      # (CMake's normal, correct behavior for an uninstalled build-tree
-      # binary) - copying just the executable elsewhere would fail with
-      # "cannot open shared object file" the moment it's run. patchelf
-      # rewrites the RUNPATH to $ORIGIN so a copy of the .so placed
-      # alongside the binary (as this tarball does) is found instead,
-      # wherever it's eventually extracted.
+      # binary is not redistributable as-is: it links libQXmppQt6.so.5 and
+      # libqt6keychain.so.1 via an absolute RUNPATH into this job's own
+      # ephemeral build directory (CMake's normal, correct behavior for an
+      # uninstalled build-tree binary) - copying just the executable
+      # elsewhere would fail with "cannot open shared object file" the
+      # moment it's run. patchelf rewrites the RUNPATH to $ORIGIN so a copy
+      # of both .so's placed alongside the binary (as this tarball does) is
+      # found instead, wherever it's eventually extracted.
       - name: Package release artifact
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -89,6 +97,7 @@ jobs:
           mkdir -p dist
           cp build/Release/pyobs-gui++ dist/
           cp -P build/Release/_deps/qxmpp-build/src/libQXmppQt6.so* dist/
+          cp -P build/Release/bin/libqt6keychain.so* dist/
           patchelf --set-rpath '$ORIGIN' dist/pyobs-gui++
           tar -czf pyobs-gui++-linux-x86_64.tar.gz -C dist .
 
@@ -123,7 +132,8 @@ jobs:
 
           **Runtime requirements (Linux x86_64):**
           - Qt 6.5+ installed on the system (built and tested against Qt 6.10.2 from Ubuntu 26.04's apt packages): `libQt6Core`, `libQt6Gui`, `libQt6Qml`, `libQt6Quick`, `libQt6Network`, `libQt6Xml`, plus the QtQuick.Controls / QtQuick.Controls.Material / QtQuick.Layouts QML modules
-          - The bundled `libQXmppQt6.so.5` (vendored, QXmpp v1.10.2) must stay alongside the `pyobs-gui++` binary - already laid out correctly in this tarball
+          - The bundled `libQXmppQt6.so.5` (vendored, QXmpp v1.10.2) and `libqt6keychain.so.1` (vendored, QtKeychain v0.17.0) must stay alongside the `pyobs-gui++` binary - already laid out correctly in this tarball
+          - `libsecret-1-0` (usually already present on a KDE/GNOME desktop) plus a running Secret Service provider (e.g. gnome-keyring, KWallet) if you want "remember this login" to actually persist a password - the app works fine without one, that checkbox just won't have anywhere secure to store the password
 
           **Usage:**
           ```

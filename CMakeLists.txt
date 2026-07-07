@@ -27,10 +27,36 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(qxmpp)
 
+# QtKeychain: same treatment as qxmpp above (vendored via FetchContent,
+# pinned to a tag, built against system Qt6) purely for consistency - one
+# dependency-management story for "small C++/Qt library that needs to
+# link against this project's system Qt", not because its Conan recipe
+# has qxmpp's Qt-from-source problem (untested either way; not worth
+# re-litigating while FetchContent already works). Needs libsecret-1-dev
+# + pkg-config on Linux (its own CMakeLists.txt requires libsecret-1 via
+# pkg_check_modules) - see DEVELOPMENT.md's Prerequisites.
+set(BUILD_WITH_QT5 OFF CACHE BOOL "" FORCE)
+set(BUILD_TEST_APPLICATION OFF CACHE BOOL "" FORCE)
+set(BUILD_QTQUICK_DEMO OFF CACHE BOOL "" FORCE)
+set(BUILD_TRANSLATIONS OFF CACHE BOOL "" FORCE)
+# Its own autotest subdirectory is gated on this CTest convention variable
+# (set via its own `include(CTest)`, defaulting to ON) - forcing it off
+# here only skips *its* test suite, since this project's own tests/
+# registers via plain add_test() unconditionally, not through this.
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    qtkeychain
+    GIT_REPOSITORY https://github.com/frankosterfeld/qtkeychain.git
+    GIT_TAG 0.17.0
+)
+FetchContent_MakeAvailable(qtkeychain)
+
 qt_add_executable(pyobs-gui++
     src/main.cpp
     src/comm/XmppClient.cpp
     src/comm/XmppClient.h
+    src/config/AppSettings.h
+    src/config/AppSettings.cpp
     src/comm/ModuleInfo.h
     src/comm/ModuleListModel.h
     src/comm/ModuleListModel.cpp
@@ -79,6 +105,7 @@ target_link_libraries(pyobs-gui++ PRIVATE
     Qt6::Xml
     Qt6::Network
     QXmppQt6
+    qt6keychain
 )
 
 # QXmppQt6's target_include_directories only exposes qxmpp_export.h (from
@@ -91,7 +118,7 @@ target_include_directories(pyobs-gui++ PRIVATE ${qxmpp_BINARY_DIR}/src)
 # class), so every directory holding such a header needs to be on the include
 # path directly - add each new one here as later phases add QML_ELEMENT types
 # outside src/comm.
-target_include_directories(pyobs-gui++ PRIVATE src/comm)
+target_include_directories(pyobs-gui++ PRIVATE src/comm src/config)
 
 enable_testing()
 add_subdirectory(tests)
