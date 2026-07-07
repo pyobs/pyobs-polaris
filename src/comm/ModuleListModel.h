@@ -55,6 +55,17 @@ public:
     QVariant data(const QModelIndex &index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
+    // True if any connected module's disco#info-reported interfaces
+    // include this one (exact name, e.g. "IRoof") - lets a QML page gate
+    // its own sidebar visibility on "is there actually a module for me to
+    // show" without needing to iterate the model's rows itself (Qt gives
+    // QML no generic random-access iteration over a QAbstractListModel -
+    // see EventLogModel::entriesOfType() for the same kind of escape
+    // hatch). Recompute this in QML on rowsInserted/rowsRemoved/
+    // modelReset/dataChanged, not just once - it's a plain query, not a
+    // live-updating binding on its own.
+    Q_INVOKABLE bool hasInterface(const QString &interfaceName) const;
+
     // Adds a new module, or replaces the existing entry for the same bare
     // JID (a module re-announcing itself, or a fetchModuleInfo() reply
     // arriving for one already known from a live presence push).

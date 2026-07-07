@@ -16,6 +16,8 @@ private slots:
     void versionIsEmptyWithoutIModuleCapabilities();
     void updatePresenceUpdatesInPlaceAndReturnsTrue();
     void updatePresenceOnUnknownJidReturnsFalse();
+    void hasInterfaceFindsAMatchAmongMultipleModules();
+    void hasInterfaceIsFalseWhenNoModuleHasIt();
 };
 
 namespace {
@@ -83,6 +85,36 @@ void TestModuleListModel::updatePresenceOnUnknownJidReturnsFalse()
 {
     ModuleListModel model;
     QVERIFY(!model.updatePresence(QStringLiteral("roof@localhost"), QStringLiteral("error"), QString()));
+}
+
+void TestModuleListModel::hasInterfaceFindsAMatchAmongMultipleModules()
+{
+    ModuleInfo telescope = makeModule(QStringLiteral("telescope@localhost"));
+    telescope.interfaces.insert(QStringLiteral("ITelescope"), codec::InterfaceSchema { QStringLiteral("ITelescope") });
+
+    ModuleInfo roof = makeModule(QStringLiteral("roof@localhost"));
+    roof.interfaces.insert(QStringLiteral("IRoof"), codec::InterfaceSchema { QStringLiteral("IRoof") });
+
+    ModuleListModel model;
+    model.upsert(telescope);
+    model.upsert(roof);
+
+    QVERIFY(model.hasInterface(QStringLiteral("IRoof")));
+    QVERIFY(model.hasInterface(QStringLiteral("ITelescope")));
+}
+
+void TestModuleListModel::hasInterfaceIsFalseWhenNoModuleHasIt()
+{
+    ModuleInfo telescope = makeModule(QStringLiteral("telescope@localhost"));
+    telescope.interfaces.insert(QStringLiteral("ITelescope"), codec::InterfaceSchema { QStringLiteral("ITelescope") });
+
+    ModuleListModel model;
+    model.upsert(telescope);
+
+    QVERIFY(!model.hasInterface(QStringLiteral("IRoof")));
+
+    ModuleListModel empty;
+    QVERIFY(!empty.hasInterface(QStringLiteral("IRoof")));
 }
 
 QTEST_MAIN(TestModuleListModel)

@@ -132,6 +132,16 @@ void ModuleListModel::remove(const QString &bareJid)
     }
 }
 
+bool ModuleListModel::hasInterface(const QString &interfaceName) const
+{
+    for (const ModuleInfo &info : m_modules) {
+        if (info.interfaces.contains(interfaceName)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void ModuleListModel::clear()
 {
     if (m_modules.isEmpty()) {

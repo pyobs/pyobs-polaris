@@ -535,6 +535,25 @@ first two were gone - nothing else ever used it). `MainWindow.qml`'s
 `RoofWidget`) is gone too rather than left describing a widget that no
 longer exists.
 
+**Follow-up, next request:** roof control came back, but reshaped - as
+its own dedicated `qml/views/RoofView.qml` page (index 3) rather than
+folded back into a rebuilt Dashboard, and `qml/widgets/KeyValueCard.qml`
+came back with it (still the only consumer). The one new piece: the
+"Roof" sidebar entry is conditionally visible, shown only while at least
+one connected module implements `IRoof` - `ModuleListModel` gained a
+plain query, `Q_INVOKABLE bool hasInterface(const QString &)`, and
+`MainWindow.qml` recomputes a `hasRoofModule` property from it on every
+`rowsInserted`/`rowsRemoved`/`modelReset`/`dataChanged` (same
+recompute-on-signal shape as `LogsView.qml`'s own model-driven
+`refresh()`, since a `QAbstractListModel` gives QML no live-updating
+aggregate query for free). If the last `IRoof` module disconnects while
+its page is the active one, `MainWindow.qml` jumps back to Status rather
+than leaving the sidebar highlighting a now-hidden entry. Covered by
+`tests/comm/tst_modulelistmodel.cpp` (`hasInterface` true/false across
+multiple modules); the reactive sidebar-visibility/auto-switch behavior
+itself is QML-only and wasn't separately verified live this session (same
+X11-access constraints as the Status page's own note above).
+
 ---
 
 ## Notes for whoever (human or Claude Code) picks this up next
