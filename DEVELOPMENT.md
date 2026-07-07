@@ -554,6 +554,22 @@ multiple modules); the reactive sidebar-visibility/auto-switch behavior
 itself is QML-only and wasn't separately verified live this session (same
 X11-access constraints as the Status page's own note above).
 
+**Follow-up, sidebar layout ported from `AppLayout.vue`:** direct
+request to match the web client's nav look - an icon before each label,
+plus its "Tools"/"Modules" section grouping (Status standalone at top,
+Shell/Logs under "TOOLS", Roof under a conditionally-visible "MODULES").
+No bundled icon font/theme exists here (unlike the web client's
+Bootstrap Icons), so icons are plain Unicode glyphs picked to read the
+same at a glance: `●` (status dot, matching the health-badge dots
+already used on the Status page itself), `❯` (terminal prompt, Shell),
+`▤` (lined page, Logs), `⌂` (house, Roof). `MainWindow.qml` gained two
+inline `component`s (Qt 6.5+ syntax, scoped to that one file since
+nothing else needs them): `SidebarItem` (an `ItemDelegate` with a custom
+`contentItem` laying out icon + label) and `SidebarSectionLabel` (small
+uppercase muted header). The "MODULES" header's `visible` is bound to
+the same `hasRoofModule` the Roof entry itself already used, so the
+header and the entry appear/disappear together.
+
 ---
 
 ## Notes for whoever (human or Claude Code) picks this up next

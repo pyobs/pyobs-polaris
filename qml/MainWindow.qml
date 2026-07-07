@@ -5,10 +5,14 @@ import QtQuick.Layouts
 import pyobs.gui
 
 // Ports pyobs-web-client's AppLayout.vue: a left sidebar nav (Status,
-// Shell, Logs, plus a conditionally-visible Roof entry) plus a main
+// then a "Tools" group - Shell/Logs - then a conditionally-visible
+// "Modules" group for device-specific pages like Roof) plus a main
 // content area showing whichever page is selected - RouterView's
 // equivalent here is a plain StackLayout, since this project has no
-// separate routing concept.
+// separate routing concept. Icon glyphs are plain Unicode characters
+// (no bundled icon font/theme here, unlike the web client's Bootstrap
+// Icons), chosen to read the same at a glance: a status dot, a
+// terminal prompt, a lined page, a house.
 ApplicationWindow {
     id: root
     width: 900
@@ -16,6 +20,47 @@ ApplicationWindow {
     title: "pyobs-gui++"
 
     Material.theme: Material.Dark
+
+    // A sidebar entry: an icon glyph before the label, matching
+    // AppLayout.vue's `d-flex align-items-center gap-2` links. Kept as an
+    // inline component (Qt 6.5+) since it's only ever used within this
+    // one file's sidebar, not a general-purpose widget.
+    component SidebarItem: ItemDelegate {
+        id: sidebarItem
+        property string icon: ""
+
+        Layout.fillWidth: true
+
+        contentItem: RowLayout {
+            spacing: 8
+
+            Label {
+                Layout.preferredWidth: 18
+                horizontalAlignment: Text.AlignHCenter
+                text: sidebarItem.icon
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: sidebarItem.text
+                elide: Text.ElideRight
+            }
+        }
+    }
+
+    // Section header above a group of sidebar entries, matching
+    // AppLayout.vue's small uppercase muted "Tools"/"Modules" labels -
+    // callers pass the text already uppercased.
+    component SidebarSectionLabel: Label {
+        Layout.fillWidth: true
+        Layout.topMargin: 8
+        Layout.leftMargin: 12
+        Layout.bottomMargin: 2
+        color: "grey"
+        font.pixelSize: 10
+        font.bold: true
+        font.letterSpacing: 1
+    }
 
     required property var xmppClient
 
@@ -63,29 +108,36 @@ ApplicationWindow {
                 font.bold: true
             }
 
-            ItemDelegate {
-                Layout.fillWidth: true
+            SidebarItem {
+                icon: "●"
                 text: "Status"
                 highlighted: stack.currentIndex === 0
                 onClicked: stack.currentIndex = 0
             }
 
-            ItemDelegate {
-                Layout.fillWidth: true
+            SidebarSectionLabel { text: "TOOLS" }
+
+            SidebarItem {
+                icon: "❯"
                 text: "Shell"
                 highlighted: stack.currentIndex === 1
                 onClicked: stack.currentIndex = 1
             }
 
-            ItemDelegate {
-                Layout.fillWidth: true
+            SidebarItem {
+                icon: "▤"
                 text: "Logs"
                 highlighted: stack.currentIndex === 2
                 onClicked: stack.currentIndex = 2
             }
 
-            ItemDelegate {
-                Layout.fillWidth: true
+            SidebarSectionLabel {
+                text: "MODULES"
+                visible: root.hasRoofModule
+            }
+
+            SidebarItem {
+                icon: "⌂"
                 text: "Roof"
                 visible: root.hasRoofModule
                 highlighted: stack.currentIndex === 3
