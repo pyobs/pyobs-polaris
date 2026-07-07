@@ -10,6 +10,11 @@ shape from memory of the Python/TS side; verify against source and the
 real wire protocol. If an item's design turns out to need something not
 anticipated here, fix this doc, don't just fix the code.
 
+Ordered by estimated implementation complexity, simplest first — not by
+priority. Re-sort if a "simple" item turns out to need more than
+expected, or vice versa; this ordering is a judgment call made once, not
+a guarantee.
+
 ---
 
 ## New page: all incoming events
@@ -63,6 +68,27 @@ module). This project's event *discovery* is per-module via disco#info
 equivalent enumeration of "every possible event type" to build that combo
 from, and the actual ask here was a page that *shows* incoming events, not
 one that sends them.
+
+---
+
+## Real parameterized command execution in Shell
+
+**Goal:** `ShellView.qml`'s module → method → execute → log flow should
+let you actually fill in command parameters and run them, the same way
+`pyobs-web-client`'s `ShellView.vue` does — not just the current
+all-null-params execution every entry point in this project uses so far
+(see Phase 5/7.5 in `DEVELOPMENT.md`). Port `ShellView.vue`'s actual
+parameter-entry behavior (per-`WireType` widgets: bool/enum/number/string)
+rather than reinventing the UI from scratch.
+
+- `ModuleListModel`'s `commands` role currently only exposes
+  `{interface, name, paramCount}` (Phase 5) — needs to expose full
+  `CommandSchema`s (param names/types/optionality) for real widgets to be
+  built from.
+- `codec::valueToXml` (Phase 5) already handles schema-aware encoding for
+  non-null values; this is mostly new QML-side parameter UI plus wiring
+  real values through `executeMethod` instead of `WireValue::null()` for
+  every param.
 
 ---
 
@@ -202,14 +228,14 @@ simpler than the reference implementation rather than harder.
   constant) - simpler than the Python original's own hardcoded
   `AVERAGE_SENSOR_FIELDS` unit strings.
 
-**Fixture gap - the biggest one of any widget planned so far, flag this
-clearly before starting**: unlike every previous custom widget, there is
-**no `Dummy*` module implementing `IWeather`** anywhere in pyobs-core.
-The only implementation (`pyobs.modules.weather.Weather`) is a real
-HTTP client (`WeatherApi(url)`) for the separate `pyobs-weather` service
-- it has no self-contained simulated-data mode, `_get_readings()` always
-sources from a live `_api.get_current_status()` call. Live verification
-would need either standing up a throwaway fake HTTP server that mimics
+**Fixture gap - flag this clearly before starting**: unlike every
+previous custom widget, there is **no `Dummy*` module implementing
+`IWeather`** anywhere in pyobs-core. The only implementation
+(`pyobs.modules.weather.Weather`) is a real HTTP client (`WeatherApi
+(url)`) for the separate `pyobs-weather` service - it has no
+self-contained simulated-data mode, `_get_readings()` always sources from
+a live `_api.get_current_status()` call. Live verification would need
+either standing up a throwaway fake HTTP server that mimics
 `pyobs-weather`'s response shape (real extra infra, not just a fixture
 YAML), or accepting this widget ships without the "verified live" bar
 this project holds everything else to, covered only by schema-level
@@ -225,32 +251,6 @@ whether bad weather blocks observations) and formally supports them -
 interface after that widget was written), and the ask here was a page
 that *shows* the weather, not one that controls the module. Worth a
 follow-up once this ships.
-
----
-
-## Phase 8 — WebAssembly build
-
-**Goal:** the same client, browser-deployable.
-
-- Second Conan profile (Emscripten toolchain) alongside the native one —
-  don't retrofit the native CMake setup for this later; get the second
-  profile building (even just "hello world" Qt Quick in a canvas) before
-  porting any XMPP code, to isolate WASM-specific build pain from protocol
-  pain.
-- Networking: raw `QXmppClient::connectToServer` (the native TCP path)
-  does not work in a browser sandbox — this is where the WebSocket
-  transport actually becomes necessary, same reasoning as `useXmpp.ts`'s
-  `buildWsUrl()`/`wss://` handling.
-- Threading: decide single-threaded vs. multithreaded WASM now, since it
-  determines whether the deployment needs `Cross-Origin-Opener-Policy`/
-  `Cross-Origin-Embedder-Policy` headers (`SharedArrayBuffer` requirement)
-  — a hosting-environment constraint worth confirming works with wherever
-  this actually gets deployed (SAAO's infrastructure) before committing to
-  the multithreaded path.
-
-**Acceptance:** the built `.wasm`/`.js`/`.html` bundle, served statically,
-connects to the same ejabberd server the native build uses and renders the
-same module list.
 
 ---
 
@@ -318,6 +318,107 @@ explicitly in `DEVELOPMENT.md` rather than silently skip it.
 
 ---
 
+## Custom widget: `ICamera` (MVP — exposure control, no image display)
+
+**Goal:** `qml/views/CameraView.qml`, ported from pyobs-gui's
+`camerawidget.py` — exposure control and status for `ICamera` modules,
+gated in the sidebar the same way as the other custom widgets
+(`hasCameraModule`, `ModuleListModel::hasInterface("ICamera")`). This is
+the largest widget planned so far: `ICamera` itself is `IData + IExposure`
+(confirmed from source), but a real camera module combines it with up to
+seven more capability interfaces the Python reference widget shows/hides
+groups for individually. Split deliberately into this MVP (control only)
+and a follow-up below (actual image display) — the image-display half
+needs three genuinely new project-wide capabilities (VFS transport, FITS
+decode, an image-viewer widget), each large enough to deserve its own
+design pass rather than being smuggled into "the camera widget."
+
+**Exposure status/control** (`IExposure`/`IData`/`IAbortable`):
+- `IExposure` state (`ExposureStatus`: `IDLE`/`EXPOSING`/`READOUT`/
+  `ERROR`, `progress`, `exposure_time_left`) drives a progress bar +
+  status label, same subscribe-and-render shape as every other widget
+  (`update_gui()`'s `IDLE`/`EXPOSING`/`READOUT` branching in the Python
+  original).
+- Expose button calls `IData.grab_data(broadcast)` — a single-shot RPC
+  returning a filename string, no batch-exposure command exists on the
+  wire. The "take N exposures" loop (`spinCount`) is therefore client-side
+  only, same as the Python original: call `grab_data`, wait for it to
+  return, decrement, repeat — not a single RPC with a count param.
+- Abort (`IAbortable.abort()`, gated on the module actually implementing
+  it) — same "abort sequence" vs. "abort exposure" label distinction
+  `camerawidget.py::update_gui` already has (aborting mid-sequence zeroes
+  the client-side counter instead of calling `abort()`, only the last
+  exposure of a sequence actually sends the RPC).
+- Broadcast checkbox, with the same confirm-dialog nicety
+  (`broadcast_changed`'s "new images will not be processed/saved, are you
+  sure?" warning when unchecking) — cheap to keep, real safety value.
+
+**Capability-gated control groups**, each `visible` only if the module
+implements the interface (mirrors `groupWindowing`/`groupBinning`/
+`groupImageFormat`/`groupExpTime`/`groupGain`'s `setVisible()` calls in
+`camerawidget.py::open`):
+- `IImageType`: `ComboBox` of the `ImageType` enum (`BIAS`/`DARK`/
+  `OBJECT`/`SKYFLAT`/`FOCUS`/`ACQUISITION`/`GUIDING`), `set_image_type()`.
+  Keep the `BIAS` → zero-and-disable-exposure-time UX nicety
+  (`image_type_changed`).
+- `IExposureTime`: live-editable exposure-time control — directly reuses
+  `AutoGuidingView.qml`'s existing "only overwritten by a server push if
+  still showing the last value *this page* synced" idiom, not a new
+  pattern.
+- `IBinning`: `ComboBox` populated from capabilities (`f"{b.x}x{b.y}"`
+  strings, same as the Python original), `set_binning(x, y)` parsed back
+  out of the selected string.
+- `IWindow`: four fields (left/top/width/height) bounded by capabilities'
+  `full_frame_x/y/width/height` (adjusted by the current binning factor,
+  matching `set_full_frame()`'s own division), plus a "Full Frame" reset
+  button.
+- `IGain`: two fields (gain, offset).
+
+**Real fix vs. the reference, not a faithful port — confirmed by reading
+the actual code, not assumed**: `camerawidget.py`'s own `_window_changed`
+and `_gain_changed` handlers are dead stubs — `print("ok")` and nothing
+else. The "modified" visual indicator
+(`spinWindowLeft.init_modified(...).committed.connect(...)`) fires, but
+**`set_window()`/`set_gain()`/`set_offset()` are never actually called
+anywhere in that widget** — editing those fields in the real pyobs-gui
+app does nothing on the wire. This client should actually wire the RPC
+calls up correctly rather than reproduce that gap; noted here explicitly
+so it isn't mistaken for an oversight if the behavior looks different
+from the reference during review.
+
+- `IImageFormat`: `ComboBox` populated from capabilities
+  (`image_formats`), `set_image_format()`.
+
+**Sidebar** (`add_to_sidebar` equivalent, capability-gated same as
+`ITelescope`'s planned sidebar):
+- `ICooling` — new, small, direct port of `coolingwidget.py`
+  (checkbox + setpoint spin box + Apply → `set_cooling(enabled,
+  setpoint)`, status label showing current setpoint/power or "OFF").
+  Nothing shared with other widgets, worth building here.
+- `IFilters`/`ITemperatures` — **the same components already deferred
+  from the `ITelescope` MVP's own "out of scope" list** (see that item
+  above) apply here too, unchanged. Building either widget first covers
+  both; don't design these twice.
+- `FitsHeadersWidget` (the client-editable OBJECT/USER/custom-header
+  panel) — ignored for now, not planned. See the follow-up section below
+  for why it's a materially different problem from the rest of this
+  widget, if it comes back into scope later.
+
+**Fixture**: `fixtures/camera.yaml`, `class:
+pyobs.modules.camera.DummyCamera` (`BaseCamera, IWindow, IBinning,
+ICooling, IGain, IImageFormat` — `BaseCamera` itself already provides
+`ICamera`/`IExposureTime`/`IImageType`). Good coverage, but confirmed two
+real gaps from reading the class declaration, not just the method list:
+`abort()` exists on `BaseCamera` but its own docstring says "derived
+class must implement `IAbortable` for this" — `DummyCamera` doesn't
+declare it, so it won't appear in disco#info and the Abort button's
+gating won't be live-testable against this fixture. `IFilters` is
+likewise not declared. Same class of gap as `ITelescope`'s
+`IOffsetsAltAz` note — flag it, don't silently skip verifying what can be
+verified.
+
+---
+
 ## `ITelescope` follow-up: libnova, destination preview, solar-frame pointing
 
 **Goal:** unblock the coordinate-transform-dependent items deferred from
@@ -348,37 +449,72 @@ observer-location + Alt/Az↔RA/Dec transform plumbing.
 
 ---
 
-## Real parameterized command execution in Shell
+## `ICamera` follow-up: image display, VFS
 
-**Goal:** `ShellView.qml`'s module → method → execute → log flow should
-let you actually fill in command parameters and run them, the same way
-`pyobs-web-client`'s `ShellView.vue` does — not just the current
-all-null-params execution every entry point in this project uses so far
-(see Phase 5/7.5 in `DEVELOPMENT.md`). Port `ShellView.vue`'s actual
-parameter-entry behavior (per-`WireType` widgets: bool/enum/number/string)
-rather than reinventing the UI from scratch.
+**Goal:** the actual image-preview half of `camerawidget.py`
+(`DataDisplayWidget`) — deliberately split out of the MVP above because
+each piece needs a genuinely new project-wide capability, not a widget-
+local addition. `FitsHeadersWidget` (the client-editable header-injection
+sidebar panel) is intentionally **not** included in this follow-up either
+— ignored for now, on direct instruction, not merely deferred alongside
+the rest of this list. Its own bullet below is kept only as a record of
+why it's a materially different problem (the GUI would have to answer an
+incoming RPC, not just issue outgoing ones) whenever it does come back
+into scope.
 
-- `ModuleListModel`'s `commands` role currently only exposes
-  `{interface, name, paramCount}` (Phase 5) — needs to expose full
-  `CommandSchema`s (param names/types/optionality) for real widgets to be
-  built from.
-- `codec::valueToXml` (Phase 5) already handles schema-aware encoding for
-  non-null values; this is mostly new QML-side parameter UI plus wiring
-  real values through `executeMethod` instead of `WireValue::null()` for
-  every param.
+- **VFS (virtual file system) client transport.** `grab_data()` returns
+  only a filename reference — `DataDisplayWidget._on_new_data` fetches
+  the actual pixels via `self.vfs.read_fits(event.filename)`.
+  `pyobs.vfs` is a pluggable multi-backend abstraction (confirmed via
+  source: `file`/`http`/`sftp`/`smb`/`ssh`/`archive`/`mem`/`temp`/
+  `buffered` backends all exist) configured server-side — which backend
+  a real deployment actually uses isn't discoverable from disco#info the
+  way everything else in this project has been so far, so this needs its
+  own design pass (probably starting with just the `http` backend, the
+  most broadly deployable one, not all of them at once).
+- **FITS decode.** This project's own Phase 0 notes already anticipated
+  `cfitsio` as a future Conan dependency for exactly this reason (see
+  `DEVELOPMENT.md`) — nothing else in this project has needed it yet.
+- **An actual astronomical image display widget** (stretch/zoom/pan,
+  `QFitsWidget`'s equivalent) — a genuinely new, non-trivial UI
+  component, not an extension of `PlotItem` (which draws scatter/line
+  plots of numeric points, not 2D pixel data).
+- **`FitsHeadersWidget` — ignored for now (see intro above), record only:**
+  it inverts this project's client-only role. `get_fits_headers()` is
+  called *on the GUI* by the exposing module (via `IFitsHeaderBefore`-
+  style callback registration) to collect user-entered OBJECT/USER/
+  custom headers *before* an exposure completes - meaning the GUI itself
+  has to answer an incoming RPC, not just issue outgoing ones. Every
+  single thing this client does today is request/subscribe-only;
+  becoming an RPC responder is a first, and would deserve its own design
+  discussion whenever/if this comes back into scope.
+- `DataDisplayWidget`'s `ISpectrograph` branch (matplotlib spectrum plot
+  instead of image display) is a different device family entirely -
+  explicitly out of scope here, worth a separate widget/TODO item of its
+  own if ever needed, not folded into `ICamera`'s.
 
 ---
 
-## Real filtering on the Logs page
+## Phase 8 — WebAssembly build
 
-**Goal:** `LogsView.qml` gains real filtering (per-module checkboxes,
-level filter, etc. — see `pyobs-gui`'s `mainwindow.py`'s `listClients`
-checkbox list feeding `LogModelProxy` for the shape to port), beyond its
-current single "All modules"/one-module `ComboBox`.
+**Goal:** the same client, browser-deployable.
 
-- `qml/widgets/LogFooter.qml` (the persistent bottom-of-window log tail,
-  see `DEVELOPMENT.md`) is a **deliberate duplicate** of `LogsView.qml`'s
-  current unfiltered rendering, not a shared component - once this lands,
-  the two are expected to diverge (the footer stays a simple unfiltered
-  tail; the Logs page gets the real filter UI), not be reconciled back
-  into one.
+- Second Conan profile (Emscripten toolchain) alongside the native one —
+  don't retrofit the native CMake setup for this later; get the second
+  profile building (even just "hello world" Qt Quick in a canvas) before
+  porting any XMPP code, to isolate WASM-specific build pain from protocol
+  pain.
+- Networking: raw `QXmppClient::connectToServer` (the native TCP path)
+  does not work in a browser sandbox — this is where the WebSocket
+  transport actually becomes necessary, same reasoning as `useXmpp.ts`'s
+  `buildWsUrl()`/`wss://` handling.
+- Threading: decide single-threaded vs. multithreaded WASM now, since it
+  determines whether the deployment needs `Cross-Origin-Opener-Policy`/
+  `Cross-Origin-Embedder-Policy` headers (`SharedArrayBuffer` requirement)
+  — a hosting-environment constraint worth confirming works with wherever
+  this actually gets deployed (SAAO's infrastructure) before committing to
+  the multithreaded path.
+
+**Acceptance:** the built `.wasm`/`.js`/`.html` bundle, served statically,
+connects to the same ejabberd server the native build uses and renders the
+same module list.
