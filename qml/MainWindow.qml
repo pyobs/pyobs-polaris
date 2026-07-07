@@ -27,7 +27,7 @@ ApplicationWindow {
     // one file's sidebar, not a general-purpose widget.
     component SidebarItem: ItemDelegate {
         id: sidebarItem
-        property string icon: ""
+        property string iconGlyph: ""
 
         Layout.fillWidth: true
 
@@ -37,7 +37,7 @@ ApplicationWindow {
             Label {
                 Layout.preferredWidth: 18
                 horizontalAlignment: Text.AlignHCenter
-                text: sidebarItem.icon
+                text: sidebarItem.iconGlyph
             }
 
             Label {
@@ -118,7 +118,7 @@ ApplicationWindow {
                 }
 
                 SidebarItem {
-                    icon: "●"
+                    iconGlyph: "●"
                     text: "Status"
                     highlighted: stack.currentIndex === 0
                     onClicked: stack.currentIndex = 0
@@ -127,14 +127,14 @@ ApplicationWindow {
                 SidebarSectionLabel { text: "TOOLS" }
 
                 SidebarItem {
-                    icon: "❯"
+                    iconGlyph: "❯"
                     text: "Shell"
                     highlighted: stack.currentIndex === 1
                     onClicked: stack.currentIndex = 1
                 }
 
                 SidebarItem {
-                    icon: "▤"
+                    iconGlyph: "▤"
                     text: "Logs"
                     highlighted: stack.currentIndex === 2
                     onClicked: stack.currentIndex = 2
@@ -146,7 +146,7 @@ ApplicationWindow {
                 }
 
                 SidebarItem {
-                    icon: "⌂"
+                    iconGlyph: "⌂"
                     text: "Roof"
                     visible: root.hasRoofModule
                     highlighted: stack.currentIndex === 3
