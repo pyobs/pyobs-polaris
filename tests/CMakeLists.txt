@@ -3,7 +3,7 @@
 # QSignalSpy-based assertions (e.g. Phase 4's subscribe ref-counting) that
 # Qt Test is built for. This is the project's test framework for everything
 # downstream - see DEVELOPMENT.md Phase 1.5.
-find_package(Qt6 REQUIRED COMPONENTS Test Qml)
+find_package(Qt6 REQUIRED COMPONENTS Test Qml Quick)
 
 add_executable(tst_wirevalue
     codec/tst_wirevalue.cpp
@@ -112,6 +112,17 @@ target_include_directories(tst_modulelistmodel PRIVATE
 target_link_libraries(tst_modulelistmodel PRIVATE Qt6::Test Qt6::Qml)
 
 add_test(NAME tst_modulelistmodel COMMAND tst_modulelistmodel)
+
+add_executable(tst_plotitem
+    plot/tst_plotitem.cpp
+    ${CMAKE_SOURCE_DIR}/src/plot/PlotItem.h
+    ${CMAKE_SOURCE_DIR}/src/plot/PlotItem.cpp
+)
+target_include_directories(tst_plotitem PRIVATE ${CMAKE_SOURCE_DIR}/src/plot)
+target_link_libraries(tst_plotitem PRIVATE Qt6::Test Qt6::Quick Qt6::Qml)
+
+add_test(NAME tst_plotitem COMMAND tst_plotitem)
+set_tests_properties(tst_plotitem PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 add_executable(tst_appsettings
     config/tst_appsettings.cpp

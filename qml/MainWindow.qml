@@ -64,17 +64,19 @@ ApplicationWindow {
 
     required property var xmppClient
 
-    // Gates the "Roof"/"Auto Focus" sidebar entries - only relevant while
-    // a connected module actually implements the interface.
-    // ModuleListModel::hasInterface() is a plain query, not a live
-    // binding, so it's explicitly recomputed on every model change rather
-    // than evaluated once.
+    // Gates the "Roof"/"Auto Focus"/"Acquisition" sidebar entries - only
+    // relevant while a connected module actually implements the
+    // interface. ModuleListModel::hasInterface() is a plain query, not a
+    // live binding, so it's explicitly recomputed on every model change
+    // rather than evaluated once.
     property bool hasRoofModule: xmppClient.modules.hasInterface("IRoof")
     property bool hasAutoFocusModule: xmppClient.modules.hasInterface("IAutoFocus")
+    property bool hasAcquisitionModule: xmppClient.modules.hasInterface("IAcquisition")
 
     function refreshModuleGating() {
         root.hasRoofModule = root.xmppClient.modules.hasInterface("IRoof")
         root.hasAutoFocusModule = root.xmppClient.modules.hasInterface("IAutoFocus")
+        root.hasAcquisitionModule = root.xmppClient.modules.hasInterface("IAcquisition")
     }
 
     Connections {
@@ -85,9 +87,9 @@ ApplicationWindow {
         function onDataChanged() { root.refreshModuleGating() }
     }
 
-    // The last IRoof/IAutoFocus module can disconnect while its page is
-    // open - jump back to Status rather than leaving the sidebar
-    // highlighting a now-hidden entry.
+    // The last IRoof/IAutoFocus/IAcquisition module can disconnect while
+    // its page is open - jump back to Status rather than leaving the
+    // sidebar highlighting a now-hidden entry.
     onHasRoofModuleChanged: {
         if (!hasRoofModule && stack.currentIndex === 3) {
             stack.currentIndex = 0
@@ -95,6 +97,11 @@ ApplicationWindow {
     }
     onHasAutoFocusModuleChanged: {
         if (!hasAutoFocusModule && stack.currentIndex === 4) {
+            stack.currentIndex = 0
+        }
+    }
+    onHasAcquisitionModuleChanged: {
+        if (!hasAcquisitionModule && stack.currentIndex === 5) {
             stack.currentIndex = 0
         }
     }
@@ -150,7 +157,7 @@ ApplicationWindow {
 
                 SidebarSectionLabel {
                     text: "MODULES"
-                    visible: root.hasRoofModule || root.hasAutoFocusModule
+                    visible: root.hasRoofModule || root.hasAutoFocusModule || root.hasAcquisitionModule
                 }
 
                 SidebarItem {
@@ -167,6 +174,14 @@ ApplicationWindow {
                     visible: root.hasAutoFocusModule
                     highlighted: stack.currentIndex === 4
                     onClicked: stack.currentIndex = 4
+                }
+
+                SidebarItem {
+                    iconGlyph: "⊕"
+                    text: "Acquisition"
+                    visible: root.hasAcquisitionModule
+                    highlighted: stack.currentIndex === 5
+                    onClicked: stack.currentIndex = 5
                 }
 
                 Item { Layout.fillHeight: true }
@@ -222,6 +237,11 @@ ApplicationWindow {
                 }
 
                 AutoFocusView {
+                    Layout.margins: 16
+                    xmppClient: root.xmppClient
+                }
+
+                AcquisitionView {
                     Layout.margins: 16
                     xmppClient: root.xmppClient
                 }

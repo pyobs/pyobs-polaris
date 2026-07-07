@@ -75,48 +75,54 @@ current single "All modules"/one-module `ComboBox`.
 
 ---
 
-## Custom widgets for `IAcquisition`, `IAutoGuiding`
+## Custom widget for `IAutoGuiding`
 
-`IAutoFocus`'s own widget (`AutoFocusView.qml`) is done - see
-`DEVELOPMENT.md`'s "Custom widget: `IAutoFocus`" section for the design
-decisions (plotting library choice, `PlotItem`, real-parameter RPC calls,
-the `FocusFoundEvent` JID-format gotcha) and reuse all of it here, not
-just the pattern described below.
+`IAutoFocus`'s (`AutoFocusView.qml`) and `IAcquisition`'s
+(`AcquisitionView.qml`) own widgets are both done - see `DEVELOPMENT.md`'s
+"Custom widget: `IAutoFocus`" and "Custom widget: `IAcquisition`"
+sections for the design decisions (plotting library choice, `PlotItem`
+and its full property surface, real-parameter RPC calls, the
+`FocusFoundEvent` JID-format gotcha, the RowLayout side-by-side-plots
+gotcha) and reuse all of it here, not just the pattern described below.
 
-**Goal:** dedicated pages for these two remaining interfaces, the same
-pattern as `RoofView.qml`/`IRoof` (Phase 7) and `AutoFocusView.qml`/
-`IAutoFocus` - a sidebar entry conditionally visible only while a
-connected module implements the interface (`ModuleListModel::
-hasInterface`), reachable as its own page rather than folded into a
-generic view. Port `pyobs-gui`'s (the Python/PySide6 client) existing
-widgets for the actual behavior/layout to match, not reinvent:
+**Goal:** a dedicated page for this last interface, the same pattern as
+`RoofView.qml`/`IRoof`, `AutoFocusView.qml`/`IAutoFocus`, and
+`AcquisitionView.qml`/`IAcquisition` - a sidebar entry conditionally
+visible only while a connected module implements `IAutoGuiding`
+(`ModuleListModel::hasInterface`), reachable as its own page. Port
+`pyobs-gui`'s (the Python/PySide6 client) `pyobs_gui/autoguidingwidget.py`
+(`AutoGuidingWidget`) for the actual behavior/layout to match, not
+reinvent: subscribes `IRunning`+`IExposureTime`+`IAutoGuiding` state;
+"Start"/"Stop" buttons plus a live-editable exposure-time spin box; two
+plots (offset magnitude over a bounded sample history, and the 2D offset
+scatter, latest-sample only - no "start" marker, unlike
+`AcquisitionView.qml`'s trajectory plot, since a rolling history has no
+meaningful fixed first point).
 
-- `pyobs_gui/acquisitionwidget.py` (`AcquisitionWidget`) — subscribes
-  `IRunning`+`IAcquisition` state; "Acquire"/"Abort" buttons; result
-  labels (RA/Dec/Alt/Az + offset); two plots (distance-to-target per
-  attempt, and the 2D offset trajectory).
-- `pyobs_gui/autoguidingwidget.py` (`AutoGuidingWidget`) — subscribes
-  `IRunning`+`IExposureTime`+`IAutoGuiding` state; "Start"/"Stop" buttons
-  plus a live-editable exposure-time spin box; two plots (offset
-  magnitude over a bounded sample history, and the 2D offset scatter).
+`PlotItem` (`src/plot/PlotItem.h/.cpp`) already grew everything
+`AcquisitionView.qml` needed (`showLine`, `equalAspect`,
+`originCrosshair`, `showStartMarker`/`showLatestMarker`,
+`xFieldIndex`/`yFieldIndex`, `xTicksAsIntegers`) and this widget's two
+plots map onto the exact same feature set (just `showStartMarker: false`
+for the offset scatter) - **no further PlotItem changes expected**,
+unlike the jump from `IAutoFocus` to `IAcquisition`. If AutoGuiding's own
+live verification turns up something PlotItem genuinely can't do, treat
+that as a real surprise worth its own writeup, not an assumed gap.
 
-`PlotItem` (`src/plot/PlotItem.h/.cpp`) only supports one scatter series
-plus one vertical reference line today - deliberately minimal, built for
-`AutoFocusView.qml` alone (see `DEVELOPMENT.md`). These two widgets need
-more and should extend it rather than duplicate a second plot item:
-- A connecting line between points, not just markers (both widgets plot a
-  progression - distance-per-attempt, offset-magnitude-per-sample - not
-  an unordered scatter).
-- A second, differently-styled series for the 2D trajectory/offset plots
-  (start marker, latest marker, connecting line, equal-aspect scaling -
-  `ax.set_aspect("equal", adjustable="datalim")` in both Python widgets,
-  no equivalent here yet).
-- `acquisitionwidget.py`/`autoguidingwidget.py`'s 2D plots use plain
-  gray `axhline(0)`/`axvline(0)` origin crosshairs with no legend, a
-  visually different concept from `AutoFocusView.qml`'s single
-  highlighted-with-a-label reference line - don't force both through the
-  same `referenceX`/`referenceLabel` properties if they don't actually
-  fit; a second, purpose-named property pair is fine.
+- Stack the two plots vertically in the page, not side by side in a
+  shared `RowLayout` - seemed like the obvious choice for parity with
+  `autoguidingwidget.py`'s `plt.subplots(1, 2)` layout, but
+  `AcquisitionView.qml` hit a real, reproducible `RowLayout` bug doing
+  exactly this (see `DEVELOPMENT.md`): two `Layout.fillWidth: true`
+  children of a `RowLayout`, nested inside a `Repeater` delegate inside a
+  `ColumnLayout` `StackLayout` page, did not split space evenly - one
+  child claimed nearly all the width, confirmed with plain debug-colored
+  `Rectangle`s standing in for `PlotItem`, so it wasn't a `PlotItem`-
+  specific cause. Vertical stacking via plain `ColumnLayout`
+  `Layout.fillWidth` (what every other page already does successfully)
+  sidesteps it entirely - don't re-attempt the side-by-side layout here
+  without first understanding *why* `RowLayout` broke, or it'll cost
+  another multi-hour live-debugging detour.
 - `autoguidingwidget.py`'s bounded sample history (`_HISTORY_LENGTH =
   50`, a `deque`) is itself only a *client-side* display cap over what's
   likely a continuous append-only wire state - confirm against the real
@@ -124,3 +130,7 @@ more and should extend it rather than duplicate a second plot item:
   itself server-side) before deciding whether `PlotItem` needs its own
   bounded-history trimming or whether the QML side should do it before
   ever handing points to `PlotItem`.
+- Wrap the page in a `ScrollView` from the start (see
+  `AcquisitionView.qml`) rather than a plain `ColumnLayout` - two stacked
+  220px-tall plots plus buttons/labels reliably exceeds a typical window
+  height, and content silently clips at the bottom without one.

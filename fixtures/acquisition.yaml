@@ -1,0 +1,14 @@
+{include _comm.yaml}
+
+# Test fixture for AcquisitionView.qml's IAcquisition/IRunning widget (see
+# TODO.md) - same shape as fixtures/autofocus.yaml. Run with:
+#   pyobs fixtures/acquisition.yaml
+# against the same dev ejabberd server the other fixtures use (see
+# DEVELOPMENT.md's "Live-verification test fixtures").
+class: pyobs.modules.pointing.DummyAcquisition
+name: DummyAcquisition
+
+comm:
+  <<: *comm
+  user: acquisition
+  password: pyobs
