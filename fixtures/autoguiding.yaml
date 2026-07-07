@@ -1,0 +1,15 @@
+{include _comm.yaml}
+
+# Test fixture for AutoGuidingView.qml's IRunning/IExposureTime/
+# IAutoGuiding widget (see TODO.md) - same shape as
+# fixtures/acquisition.yaml. Run with:
+#   pyobs fixtures/autoguiding.yaml
+# against the same dev ejabberd server the other fixtures use (see
+# DEVELOPMENT.md's "Live-verification test fixtures").
+class: pyobs.modules.pointing.DummyAutoGuiding
+name: DummyAutoGuiding
+
+comm:
+  <<: *comm
+  user: autoguiding
+  password: pyobs

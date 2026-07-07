@@ -103,6 +103,7 @@ qt_add_qml_module(pyobs-gui++
         qml/views/RoofView.qml
         qml/views/AutoFocusView.qml
         qml/views/AcquisitionView.qml
+        qml/views/AutoGuidingView.qml
         qml/widgets/KeyValueCard.qml
         qml/widgets/LogFooter.qml
 )
