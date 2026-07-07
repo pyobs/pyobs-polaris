@@ -37,29 +37,23 @@ as the other custom widgets (`MainWindow.qml`'s `hasModeModule`,
   `IMode` capabilities — same "add the role once something actually
   renders it" discipline `ModuleListModel.h`'s own header comment already
   states, not a generic capabilities-dump role.
-- **Wire-order gotcha, worth flagging explicitly before building this**:
-  `set_mode(mode: str, group: int = 0)`'s `group` param is a **positional
-  index** into the capabilities dict's key order (confirmed against both
-  `modewidget.py::set_mode` — `self._mode_groups = list(caps.modes.keys())`
-  then `proxy.set_mode(new_value, group_index)` — and the reference
-  `DummyMode` module's own `_group_name(group)`, `list(self._mode_options
-  .keys())[group]`), not the group name itself. `codec::WireValue`'s dict
-  alternative already preserves wire order for exactly this class of
-  reason (Phase 1.5) — `ModeGroupsRole`'s `QVariantList` must preserve
-  that same order so a group's position always matches what the module
-  expects.
-- **Track groups by name internally, resolve to index only at the RPC
-  call site** — not by threading the raw position through the UI/delegate
-  code. `ModeView.qml`'s per-group loop, current-mode lookup
-  (`ModeState.modes` is itself keyed by name, not position), etc. should
-  all key off the group *name*, matching how the wire actually identifies
-  a group everywhere except this one param. Only the `executeMethod`
-  call itself does `groupNames.indexOf(name)` against the same
-  order-preserved `ModeGroupsRole` list to get the position `set_mode`
-  needs — this can't avoid depending on wire order (the protocol itself
-  is positional here, not something this client controls), but it
-  contains that fragility to one call site instead of spreading "position
-  is meaning" through bindings.
+- **Wire-order gotcha resolved upstream, no longer applies**: `set_mode`'s
+  `group` param used to be a positional index into the capabilities
+  dict's key order (the gotcha originally flagged here). Direct upstream
+  change to pyobs-core: `IMode.set_mode(mode: str, group: str = "", ...)`
+  now takes the **group name itself**, confirmed against the current
+  source (`IMode.py`, and `DummyMode.set_mode` - which also confirms the
+  default `group=""` means "the first group", `next(iter(self
+  ._mode_options.keys()))`, and raises `ValueError` for an unknown group
+  name). `ModeGroupsRole`'s `QVariantList` no longer needs to preserve
+  wire order for *correctness* - a group's position in that list is
+  never sent anywhere now, only its name is. (A stable *display* order
+  is still nice to have, just no longer load-bearing.)
+- Groups are tracked by name throughout, with nothing to resolve at the
+  RPC call site either - `ModeView.qml`'s per-group loop, current-mode
+  lookup (`ModeState.modes` is itself keyed by name), and the `set_mode`
+  call all use the same group name string directly. No index anywhere in
+  this widget now.
 - Live current mode per group comes from `IMode` state
   (`ModeState.modes: dict[str, str]`, group name → current mode),
   subscribed the same way every other widget subscribes state, read via
@@ -69,14 +63,14 @@ as the other custom widgets (`MainWindow.qml`'s `hasModeModule`,
   live-editable-`SpinBox` idiom — only overwritten by a fresh state push
   if it still shows the last value *this page itself* synced from the
   server (so an in-progress user pick isn't clobbered), sends
-  `set_mode(mode, groupNames.indexOf(group))` on `activated` via the
-  real-param `executeMethod` overload (built for `IAutoFocus`, reused
-  since). This is the **first string-typed real RPC param** this project
-  sends (`IAutoFocus`/`IAutoGuiding`'s real params were all numeric) —
-  worth confirming `VariantBridge::fromQVariant` actually round-trips
-  `WireType::String` correctly against a live fixture before assuming it
-  "just works" from reading the code, matching this project's
-  verify-against-the-wire discipline.
+  `set_mode(mode, group)` on `activated` via the real-param
+  `executeMethod` overload (built for `IAutoFocus`, reused since) - both
+  params are strings now, this project's first real RPC call with more
+  than one string-typed param, worth confirming
+  `VariantBridge::fromQVariant` round-trips `WireType::String` correctly
+  for both against a live fixture before assuming it "just works" from
+  reading the code, matching this project's verify-against-the-wire
+  discipline.
 - `ComboBox`es disabled until `IMotion` state reaches the same
   "initialized" set (`SLEWING`/`TRACKING`/`IDLE`/`POSITIONED`) every other
   motion-gated widget already checks (`modewidget.py::update_gui`'s
