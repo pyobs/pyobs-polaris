@@ -17,27 +17,6 @@ a guarantee.
 
 ---
 
-## Real parameterized command execution in Shell
-
-**Goal:** `ShellView.qml`'s module → method → execute → log flow should
-let you actually fill in command parameters and run them, the same way
-`pyobs-web-client`'s `ShellView.vue` does — not just the current
-all-null-params execution every entry point in this project uses so far
-(see Phase 5/7.5 in `DEVELOPMENT.md`). Port `ShellView.vue`'s actual
-parameter-entry behavior (per-`WireType` widgets: bool/enum/number/string)
-rather than reinventing the UI from scratch.
-
-- `ModuleListModel`'s `commands` role currently only exposes
-  `{interface, name, paramCount}` (Phase 5) — needs to expose full
-  `CommandSchema`s (param names/types/optionality) for real widgets to be
-  built from.
-- `codec::valueToXml` (Phase 5) already handles schema-aware encoding for
-  non-null values; this is mostly new QML-side parameter UI plus wiring
-  real values through `executeMethod` instead of `WireValue::null()` for
-  every param.
-
----
-
 ## Custom widget: `IMode`
 
 **Goal:** `qml/views/ModeView.qml`, ported from pyobs-gui's
@@ -118,6 +97,86 @@ that still send `ModeChangedEvent`", with `IMode` state subscription as
 the actual primary path already; this project subscribes state
 everywhere else already and has no reason to special-case one legacy
 event fallback here.
+
+---
+
+## Real parameterized command execution in Shell
+
+**Moved down one slot from its original "simplest" position**: its plan
+changed (see below) in a way that adds real scope - a hand-rolled parser
+and a new-to-this-project autocomplete popup UI, not just wiring
+existing parts together the way `IMode` does. Re-sort, per this doc's
+own intro, rather than leave a now-inaccurate complexity ranking.
+
+**Plan changed, on direct instruction**: not a port of `pyobs-web-client`'s
+`ShellView.vue` (per-`WireType` parameter widgets: bool/enum/number/string
+fields you fill in, then click Execute) anymore - instead, port
+pyobs-gui's actual `ShellWidget`/`CommandInputWidget`/
+`pyobs.utils.shellcommand.ShellCommand`: a single-line command prompt
+(`module.command(arg1, arg2, ...)` syntax, typed and executed like a
+shell, not clicked through module/method pickers) with autocomplete and
+command history. `ShellView.qml`'s current module-picker-then-method-
+picker-then-click UI is replaced entirely, not extended.
+
+**Ported from the Python reference, confirmed against its actual
+source (not assumed):**
+- `CommandInputWidget` (a `QLineEdit` subclass): Enter executes and
+  clears the field, Up/Down cycle a local command history array (not
+  persisted across sessions) - `commandExecuted.emit(cmd)` on Enter maps
+  to a QML `TextField`'s `Keys.onReturnPressed`/`Keys.onUpPressed`/
+  `Keys.onDownPressed`, no C++ needed for this part.
+- `ShellCommand.parse()` (`pyobs/utils/shellcommand.py`, read directly,
+  not inferred): a small hand-rolled tokenizer-based grammar -
+  `module.command(` then zero or more positional args, each either a
+  `NUMBER` (optional unary `-`) or a quoted `STRING`, comma-separated,
+  closing `)`. **Positional only** - no named params, no bool/enum
+  literals as a distinct token type (a bare `true`/`ACQUISITION` would
+  need to arrive as a quoted string and get coerced against the target
+  `FieldSchema.type` at encode time, same as every other real-param path
+  in this project already does via `VariantBridge::fromQVariant`).
+- Autocomplete: pyobs-gui's `CommandModel` (a `QAbstractTableModel` feeding
+  a `QCompleter` in `PopupCompletion` mode) enumerates every
+  `module.command` pair across all connected modules/interfaces
+  (deduped by name - same "first interface declaring a command wins"
+  convention this project's own dispatch-by-name-alone already uses,
+  confirmed again here) and shows a popup table of name / param
+  signature / doc while typing.
+
+**Confirmed gap vs. the Python reference, not fixable from the wire
+alone**: pyobs-gui's completion popup's third column is the command's
+Python docstring first line (`inspect.getmembers`/`member.__doc__`) -
+this project's `codec::CommandSchema`/`FieldSchema` (checked directly:
+`{name, type, unit}`, no doc/description field anywhere in
+`InterfaceSchema.h`) has no equivalent on the wire at all. disco#info
+was never going to carry Python docstrings - the completion popup here
+can only ever show `module.command(param: type, ...)` (built from
+`FieldSchema.name`/`.type`, with `WireType::Kind::Optional` distinguishing
+required from optional params - already representable, just not yet
+QML-exposed), never a description. Not a bug to chase, a real ceiling.
+
+**Also confirmed**: `ShellCommand.execute()`'s `proxy.execute(command,
+*params)` is just `pyobs.comm.proxy.Proxy`'s own generic "call this
+method by name with positional args" convenience wrapper (read directly
+- `Proxy.execute()` forwards to the same per-method RPC dispatch every
+other proxy call already uses), not a distinct wire-level "generic
+execute" RPC. Confirms this doesn't need new C++ - the existing
+real-param `executeMethod(jid, methodName, QVariantList, callback)`
+overload (built for `IAutoFocus`, reused by `IMode`/`ITelescope`'s plans)
+is the correct target, once parsed args are matched positionally against
+the command's `CommandSchema.params` and encoded via
+`VariantBridge::fromQVariant` per param.
+
+**Still needed, carried over from the original plan** (this is *more*
+load-bearing now, not less): `ModuleListModel`'s `commands` role only
+exposes `{interface, name, paramCount}` (Phase 5) - needs full
+`CommandSchema`s (param name/type/optionality) both to render meaningful
+autocomplete signatures and to know each positional arg's target
+`WireType` for encoding.
+
+**Result log**: keep `ShellView.qml`'s existing scrolling, green/success-
+red/error-colored log rendering below the prompt - already matches
+`ShellCommandResponse.color` (`lime`/`red`) exactly, nothing to change
+there.
 
 ---
 
