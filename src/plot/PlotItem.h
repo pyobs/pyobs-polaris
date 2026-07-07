@@ -42,6 +42,15 @@ class PlotItem : public QQuickPaintedItem
     Q_PROPERTY(QVariant points READ points WRITE setPoints NOTIFY pointsChanged)
     Q_PROPERTY(int xFieldIndex READ xFieldIndex WRITE setXFieldIndex NOTIFY xFieldIndexChanged)
     Q_PROPERTY(int yFieldIndex READ yFieldIndex WRITE setYFieldIndex NOTIFY yFieldIndexChanged)
+    // Multiplies each selected field's raw wire value before plotting -
+    // e.g. AcquisitionAttempt's offset_lon/offset_lat arrive in degrees,
+    // but AcquisitionView.qml plots them in arcsec (xScale/yScale: 3600),
+    // matching autoguidingwidget.py's own convention. Applied in C++
+    // (reparsePoints()), not via a QML-side per-point transform, for the
+    // same reason the whole points/{x,y}FieldIndex design avoids ever
+    // reshaping a C++-crossed array in QML/JS - see the class comment.
+    Q_PROPERTY(double xScale READ xScale WRITE setXScale NOTIFY xScaleChanged)
+    Q_PROPERTY(double yScale READ yScale WRITE setYScale NOTIFY yScaleChanged)
     Q_PROPERTY(QString xLabel READ xLabel WRITE setXLabel NOTIFY xLabelChanged)
     Q_PROPERTY(QString yLabel READ yLabel WRITE setYLabel NOTIFY yLabelChanged)
     // Connects consecutive points with a line, in `points` order - off by
@@ -102,6 +111,12 @@ public:
     int yFieldIndex() const { return m_yFieldIndex; }
     void setYFieldIndex(int index);
 
+    double xScale() const { return m_xScale; }
+    void setXScale(double scale);
+
+    double yScale() const { return m_yScale; }
+    void setYScale(double scale);
+
     QString xLabel() const { return m_xLabel; }
     void setXLabel(const QString &label);
 
@@ -144,6 +159,8 @@ Q_SIGNALS:
     void pointsChanged();
     void xFieldIndexChanged();
     void yFieldIndexChanged();
+    void xScaleChanged();
+    void yScaleChanged();
     void xLabelChanged();
     void yLabelChanged();
     void showLineChanged();
@@ -162,6 +179,8 @@ private:
     QVector<QPointF> m_points;
     int m_xFieldIndex = 0;
     int m_yFieldIndex = 1;
+    double m_xScale = 1.0;
+    double m_yScale = 1.0;
     QString m_xLabel;
     QString m_yLabel;
     bool m_showLine = false;

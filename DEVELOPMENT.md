@@ -810,22 +810,55 @@ iteration, not by reasoning about the QML alone:
   `ColumnLayout` `StackLayout` page), not a child-type problem, but the
   exact root cause inside `RowLayout`'s stretch-distribution algorithm
   was never actually identified.
-- **Resolution: stopped trying to fix `RowLayout` and stacked the two
-  plots vertically instead**, via the same plain `ColumnLayout`
+- **First resolution: stopped trying to fix `RowLayout` and stacked the
+  two plots vertically instead**, via the same plain `ColumnLayout`
   `Layout.fillWidth: true`-per-item mechanism every other page in this
   project (including `AutoFocusView.qml`'s own single plot) already uses
-  successfully. This trades exact visual parity with
-  `acquisitionwidget.py`'s side-by-side layout for a layout mechanism
-  with an actual track record in this codebase - the right call given
-  how much time chasing the `RowLayout` bug itself had already cost, and
-  worth remembering *before* attempting a side-by-side plot layout again
-  (`TODO.md`'s `IAutoGuiding` entry points back here explicitly).
+  successfully - shipped and committed as a working, if visually
+  different from `acquisitionwidget.py`, layout.
 - Stacking two 220px-tall plots vertically pushed the page's total
   content height past a typical window's visible area - the result
   fields/buttons below the plots silently clipped at the window's bottom
   edge. Fixed by wrapping the whole page in a `ScrollView` (`root`'s
   element type, not just a plain `ColumnLayout` like every other page)
-  - the first page in this project that needed one.
+  - the first page in this project that needed one, and worth keeping
+  regardless of the plot layout question below, since even a single row
+  of two plots plus labels/buttons can still exceed a short window.
+- **On request, side by side after all** - found on a second attempt, not
+  by finally cracking `RowLayout`'s actual bug, but by sidestepping it a
+  different way than the two failed attempts above: a plain `Row` (not
+  `RowLayout`, same as the failed second attempt) with each `PlotItem`'s
+  `width:` computed from `root.availableWidth` instead of
+  `acquisitionDelegate.width`. The earlier attempt's circularity was
+  specifically about `acquisitionDelegate.width` (a `Repeater` delegate's
+  own width, which turned out to be ambiguous when referenced from its
+  own descendants) - `root` is the page's own top-level `ScrollView`,
+  gets its width authoritatively from `MainWindow.qml`'s `StackLayout`
+  from *outside* this file, and nothing inside ever writes back to it, so
+  there's no cycle to feed. Confirmed live, stable (no freeze, normal
+  CPU), correct split, before asking for confirmation - this is the
+  layout `AcquisitionView.qml` actually ships with; the vertical-stack
+  fallback above was superseded, not left as an alternate path.
+  `TODO.md`'s `IAutoGuiding` entry should be read with this in mind: the
+  `root.availableWidth` technique, not vertical stacking, is the
+  recommended starting point for that widget's own two plots.
+- Two more issues only visible live, not from reading the QML/C++: the
+  narrower side-by-side plots' y-axis tick labels (long decimal degree
+  values, e.g. `0.0003142`) overlapped the rotated y-axis title text -
+  both were being drawn inside the same fixed-width `kMarginLeft = 55`
+  zone in `PlotItem::paint()`. Fixed by computing the left margin per-
+  paint from the actual widest y-tick label's measured text width
+  (`QFontMetrics`) plus a reserved strip for the title, rather than one
+  constant shared by both. Separately, `AcquisitionAttempt`'s
+  `offset_lon`/`offset_lat` are degrees, which produced exactly those
+  impractically long decimal tick labels for values this small - added
+  `PlotItem.xScale`/`yScale` (default `1.0`, applied in
+  `reparsePoints()`, so no QML-side per-point transform is needed) and
+  set them to `3600` on the offset plot, matching
+  `autoguidingwidget.py`'s own degrees-to-arcsec convention for the same
+  kind of small angular offset. The result row below the plots
+  (`RA/Dec offset: (...)`) was switched to arcsec too, for consistency
+  with the plot it sits under.
 
 ---
 

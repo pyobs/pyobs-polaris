@@ -11,7 +11,16 @@ namespace plot {
 
 namespace {
 
-constexpr int kMarginLeft = 55;
+// Left margin is computed per-paint from the actual y-tick label text
+// (see paint()) rather than a fixed constant like the others: a fixed
+// width let long tick labels (e.g. small offset values with many decimal
+// digits) overlap the rotated y-axis title text sharing that same zone -
+// found live on AcquisitionView.qml's narrower side-by-side offset plot.
+// kYLabelWidth reserves room for the rotated title, kYLabelGap/
+// kTickLabelGap are breathing room on either side of the tick labels.
+constexpr int kYLabelWidth = 14;
+constexpr int kYLabelGap = 4;
+constexpr int kTickLabelGap = 6;
 constexpr int kMarginBottom = 40;
 constexpr int kMarginTop = 12;
 constexpr int kMarginRight = 15;
@@ -110,6 +119,26 @@ void PlotItem::setYFieldIndex(int index)
     Q_EMIT yFieldIndexChanged();
 }
 
+void PlotItem::setXScale(double scale)
+{
+    if (m_xScale == scale) {
+        return;
+    }
+    m_xScale = scale;
+    reparsePoints();
+    Q_EMIT xScaleChanged();
+}
+
+void PlotItem::setYScale(double scale)
+{
+    if (m_yScale == scale) {
+        return;
+    }
+    m_yScale = scale;
+    reparsePoints();
+    Q_EMIT yScaleChanged();
+}
+
 void PlotItem::reparsePoints()
 {
     m_points.clear();
@@ -130,7 +159,7 @@ void PlotItem::reparsePoints()
             // misleading (0, 0).
             continue;
         }
-        m_points.push_back(QPointF(xField.toDouble(), yField.toDouble()));
+        m_points.push_back(QPointF(xField.toDouble() * m_xScale, yField.toDouble() * m_yScale));
     }
     update();
 }
@@ -239,16 +268,10 @@ void PlotItem::paint(QPainter *painter)
 {
     painter->setRenderHint(QPainter::Antialiasing, true);
 
-    const QRectF bounds(0, 0, width(), height());
-    const QRectF plotArea(bounds.left() + kMarginLeft, bounds.top() + kMarginTop,
-                          bounds.width() - kMarginLeft - kMarginRight,
-                          bounds.height() - kMarginTop - kMarginBottom);
-    if (plotArea.width() <= 0 || plotArea.height() <= 0) {
-        return;
-    }
-
     // Data bounds, including the reference line (if any) so it's never
-    // clipped outside the visible x-range.
+    // clipped outside the visible x-range. Computed before plotArea
+    // (below) since the left margin needs to know the actual y-tick
+    // label text to size itself against.
     double xMin = m_points.isEmpty() ? 0.0 : m_points.first().x();
     double xMax = xMin;
     double yMin = m_points.isEmpty() ? 0.0 : m_points.first().y();
@@ -265,6 +288,24 @@ void PlotItem::paint(QPainter *painter)
     }
     pad(xMin, xMax);
     pad(yMin, yMax);
+
+    QFont tickFont(painter->font().family(), 8);
+    painter->setFont(tickFont);
+    const QFontMetrics tickMetrics(tickFont);
+    int maxYTickWidth = 0;
+    for (int i = 0; i <= kTickCount; ++i) {
+        const double fy = yMax - (yMax - yMin) * i / kTickCount;
+        maxYTickWidth = std::max(maxYTickWidth, tickMetrics.horizontalAdvance(formatTick(fy)));
+    }
+    const int marginLeft = kYLabelWidth + kYLabelGap + maxYTickWidth + kTickLabelGap;
+
+    const QRectF bounds(0, 0, width(), height());
+    const QRectF plotArea(bounds.left() + marginLeft, bounds.top() + kMarginTop,
+                          bounds.width() - marginLeft - kMarginRight,
+                          bounds.height() - kMarginTop - kMarginBottom);
+    if (plotArea.width() <= 0 || plotArea.height() <= 0) {
+        return;
+    }
 
     if (m_equalAspect) {
         // matplotlib's set_aspect("equal", adjustable="datalim"): one
@@ -286,8 +327,6 @@ void PlotItem::paint(QPainter *painter)
         return QPointF(px, py);
     };
 
-    QFont tickFont(painter->font().family(), 8);
-    painter->setFont(tickFont);
     int lastIntXTick = std::numeric_limits<int>::min();
     for (int i = 0; i <= kTickCount; ++i) {
         double fx = xMin + (xMax - xMin) * i / kTickCount;
@@ -311,7 +350,8 @@ void PlotItem::paint(QPainter *painter)
         painter->setPen(QPen(kGridColor, 1, Qt::DotLine));
         painter->drawLine(QPointF(plotArea.left(), py), QPointF(plotArea.right(), py));
         painter->setPen(kTickLabelColor);
-        painter->drawText(QRectF(0, py - 8, kMarginLeft - 8, 16), Qt::AlignRight | Qt::AlignVCenter, formatTick(fy));
+        painter->drawText(QRectF(kYLabelWidth + kYLabelGap, py - 8, maxYTickWidth, 16), Qt::AlignRight | Qt::AlignVCenter,
+                          formatTick(fy));
     }
 
     painter->setPen(QPen(kAxisColor, 1));
@@ -376,7 +416,7 @@ void PlotItem::paint(QPainter *painter)
                       Qt::AlignHCenter | Qt::AlignTop, m_xLabel);
 
     painter->save();
-    painter->translate(12, plotArea.center().y());
+    painter->translate(kYLabelWidth / 2.0, plotArea.center().y());
     painter->rotate(-90);
     painter->drawText(QRectF(-plotArea.height() / 2, -8, plotArea.height(), 16), Qt::AlignHCenter | Qt::AlignTop,
                       m_yLabel);

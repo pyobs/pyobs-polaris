@@ -14,11 +14,11 @@ import pyobs.gui
 // separate event, so this page doesn't either.
 //
 // Wrapped in a ScrollView (unlike RoofView.qml/AutoFocusView.qml, which
-// are plain ColumnLayouts) since this page's two stacked plots per module
-// (see the "Stacked vertically" comment below) need more vertical room
-// than a typical window height comfortably offers - without this, the
-// result fields/buttons below the plots silently clip at the window's
-// bottom edge instead of being reachable by scrolling.
+// are plain ColumnLayouts) as a safety net for shorter windows - two
+// plots plus result fields/buttons per module can still exceed a modest
+// window's visible height, and without this, content below the plots
+// would silently clip at the window's bottom edge instead of being
+// reachable by scrolling.
 ScrollView {
     id: root
 
@@ -108,6 +108,13 @@ ScrollView {
                     return (value >= 0 ? "+" : "") + value.toFixed(decimals)
                 }
 
+                // Degrees -> arcsec, matching PlotItem's xScale/yScale: 3600
+                // on the offset plot below - the result row shows the same
+                // offset the plot does, not the raw wire value.
+                function toArcsec(value) {
+                    return (value === undefined || value === null) ? value : value * 3600
+                }
+
                 readonly property var acquisitionInterface: findInterface("IAcquisition")
                 readonly property var runningInterface: findInterface("IRunning")
                 visible: acquisitionInterface !== null
@@ -147,11 +154,17 @@ ScrollView {
                 readonly property var resultValue: fieldOf(acquisitionState, "result")
                 readonly property bool hasResult: resultValue !== undefined && resultValue !== null
 
+                // Plotted (and the result row below) in arcsec, not the
+                // raw wire degrees - matches autoguidingwidget.py's own
+                // convention (offset_lon/offset_lat * 3600) for the same
+                // kind of small angular offset; degrees produced
+                // impractically long decimal tick labels for values this
+                // small. PlotItem.xScale/yScale: 3600 do the conversion.
                 readonly property string offsetFrame: firstOffsetFrame(attemptsValue)
-                readonly property string offsetXLabel: offsetFrame === "radec" ? "RA offset [deg]"
-                    : offsetFrame === "altaz" ? "Alt offset [deg]" : "Offset 1 [deg]"
-                readonly property string offsetYLabel: offsetFrame === "radec" ? "Dec offset [deg]"
-                    : offsetFrame === "altaz" ? "Az offset [deg]" : "Offset 2 [deg]"
+                readonly property string offsetXLabel: offsetFrame === "radec" ? "RA offset [arcsec]"
+                    : offsetFrame === "altaz" ? "Alt offset [arcsec]" : "Offset 1 [arcsec]"
+                readonly property string offsetYLabel: offsetFrame === "radec" ? "Dec offset [arcsec]"
+                    : offsetFrame === "altaz" ? "Az offset [arcsec]" : "Offset 2 [arcsec]"
 
                 readonly property string resultOffsetFrame: hasResult ? fieldOf(resultValue, "offset_frame") : null
                 readonly property string offsetLabelText: resultOffsetFrame === "radec" ? "RA/Dec offset:"
@@ -170,45 +183,57 @@ ScrollView {
                     }
                 }
 
-                // Stacked vertically, not side by side: a RowLayout here
-                // reproducibly gave one child nearly all the width and the
-                // other almost none, regardless of which child type was
-                // tried (PlotItem directly, PlotItem wrapped in a plain Item,
-                // even plain debug-colored Rectangles with no PlotItem
-                // involved at all) - so the cause is RowLayout's own stretch
-                // distribution misbehaving in this specific nested context
-                // (Repeater delegate -> ColumnLayout -> StackLayout page),
-                // not anything about PlotItem itself. ColumnLayout's
-                // Layout.fillWidth-per-item behavior is what every other page
-                // in this app (including AutoFocusView.qml's own single
-                // PlotItem) already relies on successfully, so stacking
-                // trades the Python widget's side-by-side subplot layout for
-                // a reliably-working one rather than chasing this further.
-                PlotItem {
+                // Side by side, via a plain Row (not RowLayout - a
+                // RowLayout here reproducibly gave one child nearly all
+                // the width and the other almost none, regardless of
+                // child type: PlotItem directly, PlotItem wrapped in a
+                // plain Item, even plain debug-colored Rectangles with no
+                // PlotItem involved at all, so the cause was RowLayout's
+                // own stretch distribution misbehaving in this specific
+                // nested context - Repeater delegate -> ColumnLayout ->
+                // StackLayout page - not anything about PlotItem itself).
+                // Each PlotItem's width is computed directly from
+                // root.availableWidth - root (the page's own top-level
+                // ScrollView) gets its width authoritatively from
+                // MainWindow.qml's StackLayout, and nothing inside this
+                // file ever writes back to it, unlike
+                // acquisitionDelegate.width (a Repeater delegate's own
+                // width), which turned out to be ambiguous/circular when
+                // referenced from its own descendants - see
+                // DEVELOPMENT.md for the full debugging trail.
+                Row {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 220
                     Layout.leftMargin: 8
-                    points: acquisitionDelegate.attemptsValue
-                    xLabel: "Attempt"
-                    yLabel: "Distance to target [arcsec]"
-                    showLine: true
-                    xTicksAsIntegers: true
-                }
+                    spacing: 16
 
-                PlotItem {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 220
-                    Layout.leftMargin: 8
-                    points: acquisitionDelegate.attemptsValue
-                    xFieldIndex: 4
-                    yFieldIndex: 5
-                    xLabel: acquisitionDelegate.offsetXLabel
-                    yLabel: acquisitionDelegate.offsetYLabel
-                    showLine: true
-                    equalAspect: true
-                    originCrosshair: true
-                    showStartMarker: true
-                    showLatestMarker: true
+                    readonly property real plotWidth: (root.availableWidth - 16 - spacing) / 2
+
+                    PlotItem {
+                        width: parent.plotWidth
+                        height: 220
+                        points: acquisitionDelegate.attemptsValue
+                        xLabel: "Attempt"
+                        yLabel: "Distance to target [arcsec]"
+                        showLine: true
+                        xTicksAsIntegers: true
+                    }
+
+                    PlotItem {
+                        width: parent.plotWidth
+                        height: 220
+                        points: acquisitionDelegate.attemptsValue
+                        xFieldIndex: 4
+                        yFieldIndex: 5
+                        xScale: 3600
+                        yScale: 3600
+                        xLabel: acquisitionDelegate.offsetXLabel
+                        yLabel: acquisitionDelegate.offsetYLabel
+                        showLine: true
+                        equalAspect: true
+                        originCrosshair: true
+                        showStartMarker: true
+                        showLatestMarker: true
+                    }
                 }
 
                 Label {
@@ -233,8 +258,9 @@ ScrollView {
                     Label { text: acquisitionDelegate.offsetLabelText; color: "grey" }
                     Label {
                         Layout.columnSpan: 3
-                        text: "(" + acquisitionDelegate.signedFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "offset_lon"), 5)
-                            + ", " + acquisitionDelegate.signedFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "offset_lat"), 5) + ")"
+                        text: "(" + acquisitionDelegate.signedFixed(acquisitionDelegate.toArcsec(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "offset_lon")), 2)
+                            + ", " + acquisitionDelegate.signedFixed(acquisitionDelegate.toArcsec(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "offset_lat")), 2)
+                            + ") arcsec"
                     }
                 }
 

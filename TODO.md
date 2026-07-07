@@ -102,27 +102,31 @@ meaningful fixed first point).
 `PlotItem` (`src/plot/PlotItem.h/.cpp`) already grew everything
 `AcquisitionView.qml` needed (`showLine`, `equalAspect`,
 `originCrosshair`, `showStartMarker`/`showLatestMarker`,
-`xFieldIndex`/`yFieldIndex`, `xTicksAsIntegers`) and this widget's two
-plots map onto the exact same feature set (just `showStartMarker: false`
-for the offset scatter) - **no further PlotItem changes expected**,
-unlike the jump from `IAutoFocus` to `IAcquisition`. If AutoGuiding's own
-live verification turns up something PlotItem genuinely can't do, treat
-that as a real surprise worth its own writeup, not an assumed gap.
+`xFieldIndex`/`yFieldIndex`, `xTicksAsIntegers`, `xScale`/`yScale`) and
+this widget's two plots map onto the exact same feature set (just
+`showStartMarker: false` for the offset scatter, and `xScale`/`yScale:
+3600` for the same degrees-to-arcsec conversion
+`autoguidingwidget.py` already does itself) - **no further PlotItem
+changes expected**, unlike the jump from `IAutoFocus` to `IAcquisition`.
+If AutoGuiding's own live verification turns up something PlotItem
+genuinely can't do, treat that as a real surprise worth its own writeup,
+not an assumed gap.
 
-- Stack the two plots vertically in the page, not side by side in a
-  shared `RowLayout` - seemed like the obvious choice for parity with
-  `autoguidingwidget.py`'s `plt.subplots(1, 2)` layout, but
-  `AcquisitionView.qml` hit a real, reproducible `RowLayout` bug doing
-  exactly this (see `DEVELOPMENT.md`): two `Layout.fillWidth: true`
-  children of a `RowLayout`, nested inside a `Repeater` delegate inside a
-  `ColumnLayout` `StackLayout` page, did not split space evenly - one
-  child claimed nearly all the width, confirmed with plain debug-colored
-  `Rectangle`s standing in for `PlotItem`, so it wasn't a `PlotItem`-
-  specific cause. Vertical stacking via plain `ColumnLayout`
-  `Layout.fillWidth` (what every other page already does successfully)
-  sidesteps it entirely - don't re-attempt the side-by-side layout here
-  without first understanding *why* `RowLayout` broke, or it'll cost
-  another multi-hour live-debugging detour.
+- Put the two plots side by side in a plain `Row` (not `RowLayout`) with
+  each `PlotItem`'s `width:` computed from the page's own top-level
+  `ScrollView`'s `availableWidth` (`root.availableWidth`, read from
+  *outside* the `Repeater`/delegate tree) - this is what
+  `AcquisitionView.qml` actually ships with, after two failed attempts:
+  a `RowLayout` with `Layout.fillWidth: true` on both children
+  reproducibly gave one nearly all the width and the other almost none
+  (confirmed with plain debug-colored `Rectangle`s, not a `PlotItem`-
+  specific cause), and computing each child's width from the `Repeater`
+  delegate's own width (`acquisitionDelegate.width`) turned out to be
+  circular - that width wasn't the externally-driven value it looked
+  like, and the binding fed back on itself (one variant of this even
+  froze the app solid). Full trail in `DEVELOPMENT.md`'s `IAcquisition`
+  section - read it before touching this widget's plot layout, the
+  working answer isn't the obvious first thing to try.
 - `autoguidingwidget.py`'s bounded sample history (`_HISTORY_LENGTH =
   50`, a `deque`) is itself only a *client-side* display cap over what's
   likely a continuous append-only wire state - confirm against the real
@@ -131,6 +135,12 @@ that as a real surprise worth its own writeup, not an assumed gap.
   bounded-history trimming or whether the QML side should do it before
   ever handing points to `PlotItem`.
 - Wrap the page in a `ScrollView` from the start (see
-  `AcquisitionView.qml`) rather than a plain `ColumnLayout` - two stacked
-  220px-tall plots plus buttons/labels reliably exceeds a typical window
+  `AcquisitionView.qml`) rather than a plain `ColumnLayout` - even a
+  single row of two plots plus buttons/labels can exceed a short window's
   height, and content silently clips at the bottom without one.
+- If any axis ends up with long decimal tick labels (small values, many
+  significant digits), check `PlotItem`'s left-margin sizing still looks
+  right live - it's computed from the actual widest tick label's measured
+  text width (`QFontMetrics`), not a fixed constant, specifically because
+  `AcquisitionView.qml`'s offset plot once had its y-axis title
+  overlapping the tick labels before that fix.
