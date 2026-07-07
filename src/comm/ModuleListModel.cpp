@@ -89,6 +89,16 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
     };
 }
 
+const ModuleInfo *ModuleListModel::find(const QString &bareJid) const
+{
+    for (const ModuleInfo &info : m_modules) {
+        if (info.jid == bareJid) {
+            return &info;
+        }
+    }
+    return nullptr;
+}
+
 void ModuleListModel::upsert(const ModuleInfo &info)
 {
     for (int i = 0; i < m_modules.size(); ++i) {

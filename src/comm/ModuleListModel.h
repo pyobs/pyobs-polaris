@@ -66,6 +66,15 @@ public:
     // live-updating binding on its own.
     Q_INVOKABLE bool hasInterface(const QString &interfaceName) const;
 
+    // C++-internal lookup (not Q_INVOKABLE - QML never needs a whole
+    // ModuleInfo, only the per-role data() already exposes): used by
+    // XmppClient::executeMethod()'s real-parameter overload to find a
+    // command's CommandSchema before encoding real values for it. Returns
+    // nullptr if this bare JID isn't in the list. The returned pointer is
+    // only valid until the next upsert()/remove()/clear() call - callers
+    // must use it synchronously, not stash it.
+    const ModuleInfo *find(const QString &bareJid) const;
+
     // Adds a new module, or replaces the existing entry for the same bare
     // JID (a module re-announcing itself, or a fetchModuleInfo() reply
     // arriving for one already known from a live presence push).

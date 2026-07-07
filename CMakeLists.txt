@@ -86,6 +86,8 @@ qt_add_executable(pyobs-gui++
     src/codec/VariantBridge.cpp
     src/codec/Encode.h
     src/codec/Encode.cpp
+    src/plot/PlotItem.h
+    src/plot/PlotItem.cpp
 )
 
 qt_add_qml_module(pyobs-gui++
@@ -99,6 +101,7 @@ qt_add_qml_module(pyobs-gui++
         qml/views/LogsView.qml
         qml/views/StatusView.qml
         qml/views/RoofView.qml
+        qml/views/AutoFocusView.qml
         qml/widgets/KeyValueCard.qml
         qml/widgets/LogFooter.qml
 )
@@ -121,7 +124,7 @@ target_include_directories(pyobs-gui++ PRIVATE ${qxmpp_BINARY_DIR}/src)
 # class), so every directory holding such a header needs to be on the include
 # path directly - add each new one here as later phases add QML_ELEMENT types
 # outside src/comm.
-target_include_directories(pyobs-gui++ PRIVATE src/comm src/config)
+target_include_directories(pyobs-gui++ PRIVATE src/comm src/config src/plot)
 
 enable_testing()
 add_subdirectory(tests)

@@ -65,6 +65,19 @@ target_link_libraries(tst_encode PRIVATE Qt6::Test Qt6::Xml)
 
 add_test(NAME tst_encode COMMAND tst_encode)
 
+add_executable(tst_variantbridge
+    codec/tst_variantbridge.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/WireType.h
+    ${CMAKE_SOURCE_DIR}/src/codec/WireType.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/WireValue.h
+    ${CMAKE_SOURCE_DIR}/src/codec/VariantBridge.h
+    ${CMAKE_SOURCE_DIR}/src/codec/VariantBridge.cpp
+)
+target_include_directories(tst_variantbridge PRIVATE ${CMAKE_SOURCE_DIR}/src/codec)
+target_link_libraries(tst_variantbridge PRIVATE Qt6::Test Qt6::Xml)
+
+add_test(NAME tst_variantbridge COMMAND tst_variantbridge)
+
 add_executable(tst_eventmanager
     comm/tst_eventmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/comm/EventLogModel.h

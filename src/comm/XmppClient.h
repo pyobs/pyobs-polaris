@@ -2,6 +2,7 @@
 
 #include "EventLogModel.h"
 #include "ModuleListModel.h"
+#include "Rpc.h"
 #include "StateSubscription.h"
 
 #include <QJSValue>
@@ -116,6 +117,20 @@ public:
     Q_INVOKABLE void executeMethod(const QString &bareJid, const QString &methodName, int paramCount,
                                    const QJSValue &callback);
 
+    // A third overload for the (so far rare) case of a command whose
+    // params aren't all optional, so the null-params overloads above can't
+    // drive it - IAutoFocus's auto_focus(count, step, exposure_time) is the
+    // first one (see DEVELOPMENT.md). Looks up the command's CommandSchema
+    // from the module's already-fetched disco#info (first interface that
+    // declares a command of this name, same "dispatch by name alone"
+    // convention as the null-params overloads) and encodes each entry of
+    // `params` against the matching FieldSchema via codec::fromQVariant -
+    // callers pass plain values (e.g. QML SpinBox values), not WireValues.
+    // If the module or command can't be found, reports a client-side
+    // failure through `callback` without sending anything over the wire.
+    Q_INVOKABLE void executeMethod(const QString &bareJid, const QString &methodName, const QVariantList &params,
+                                   const QJSValue &callback);
+
 Q_SIGNALS:
     void statusChanged();
     void insecureSkipTlsVerificationChanged();
@@ -148,6 +163,12 @@ private:
     // once per roster fetch (QXmppRosterManager::rosterReceived(), which
     // QXmppClient triggers automatically after connecting).
     void probeRosterPresence();
+
+    // Shared tail of every executeMethod() overload: updates
+    // lastRpcResult/logs it, and invokes `callback` (if callable) with a
+    // {success, errorClass, errorMessage} object - factored out so the new
+    // real-parameter overload doesn't duplicate it.
+    void reportRpcResult(const QString &methodName, const RpcResult &result, const QJSValue &callback);
 
     QXmppClient m_client;
     ModuleListModel *m_modules;

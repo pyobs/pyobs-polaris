@@ -212,35 +212,70 @@ void XmppClient::executeMethod(const QString &bareJid, const QString &methodName
     const QVector<codec::FieldSchema> paramSchemas(paramCount);
 
     comm::executeMethod(m_client, fullJid, methodName, params, paramSchemas,
-                        [this, methodName, callback](RpcResult result) {
-        if (result.success) {
-            m_lastRpcResult = result.value.isNull()
-                ? QStringLiteral("%1 -> success").arg(methodName)
-                : QStringLiteral("%1 -> success: %2")
-                      .arg(methodName,
-                           QString::fromUtf8(QJsonDocument::fromVariant(codec::toQVariant(result.value))
-                                                  .toJson(QJsonDocument::Compact)));
-        } else {
-            m_lastRpcResult = QStringLiteral("%1 -> error%2: %3")
-                                   .arg(methodName,
-                                        result.errorClass.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(result.errorClass),
-                                        result.errorMessage);
-        }
-        qInfo().noquote() << "RPC" << m_lastRpcResult;
-        Q_EMIT lastRpcResultChanged();
+                        [this, methodName, callback](RpcResult result) { reportRpcResult(methodName, result, callback); });
+}
 
-        if (callback.isCallable()) {
-            QJSEngine *engine = qjsEngine(this);
-            if (engine) {
-                QJSValue resultObj = engine->newObject();
-                resultObj.setProperty(QStringLiteral("success"), result.success);
-                resultObj.setProperty(QStringLiteral("errorClass"), result.errorClass);
-                resultObj.setProperty(QStringLiteral("errorMessage"), result.errorMessage);
-                QJSValue callableCallback = callback;
-                callableCallback.call(QJSValueList { resultObj });
+void XmppClient::executeMethod(const QString &bareJid, const QString &methodName, const QVariantList &params,
+                               const QJSValue &callback)
+{
+    const codec::CommandSchema *schema = nullptr;
+    if (const ModuleInfo *info = m_modules->find(bareJid)) {
+        for (const codec::InterfaceSchema &iface : info->interfaces) {
+            const auto it = iface.commands.constFind(methodName);
+            if (it != iface.commands.constEnd()) {
+                schema = &it.value();
+                break;
             }
         }
-    });
+    }
+    if (!schema) {
+        RpcResult result;
+        result.errorMessage = QStringLiteral("Unknown command '%1' on %2").arg(methodName, bareJid);
+        reportRpcResult(methodName, result, callback);
+        return;
+    }
+
+    QVector<codec::WireValue> wireParams;
+    QVector<codec::FieldSchema> paramSchemas = schema->params;
+    wireParams.reserve(paramSchemas.size());
+    for (int i = 0; i < paramSchemas.size(); ++i) {
+        wireParams.push_back(codec::fromQVariant(i < params.size() ? params[i] : QVariant(), paramSchemas[i].type));
+    }
+
+    const QString fullJid = bareJid + QStringLiteral("/pyobs");
+    comm::executeMethod(m_client, fullJid, methodName, wireParams, paramSchemas,
+                        [this, methodName, callback](RpcResult result) { reportRpcResult(methodName, result, callback); });
+}
+
+void XmppClient::reportRpcResult(const QString &methodName, const RpcResult &result, const QJSValue &callback)
+{
+    if (result.success) {
+        m_lastRpcResult = result.value.isNull()
+            ? QStringLiteral("%1 -> success").arg(methodName)
+            : QStringLiteral("%1 -> success: %2")
+                  .arg(methodName,
+                       QString::fromUtf8(QJsonDocument::fromVariant(codec::toQVariant(result.value))
+                                              .toJson(QJsonDocument::Compact)));
+    } else {
+        m_lastRpcResult = QStringLiteral("%1 -> error%2: %3")
+                               .arg(methodName,
+                                    result.errorClass.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(result.errorClass),
+                                    result.errorMessage);
+    }
+    qInfo().noquote() << "RPC" << m_lastRpcResult;
+    Q_EMIT lastRpcResultChanged();
+
+    if (callback.isCallable()) {
+        QJSEngine *engine = qjsEngine(this);
+        if (engine) {
+            QJSValue resultObj = engine->newObject();
+            resultObj.setProperty(QStringLiteral("success"), result.success);
+            resultObj.setProperty(QStringLiteral("errorClass"), result.errorClass);
+            resultObj.setProperty(QStringLiteral("errorMessage"), result.errorMessage);
+            QJSValue callableCallback = callback;
+            callableCallback.call(QJSValueList { resultObj });
+        }
+    }
 }
 
 void XmppClient::probeRosterPresence()

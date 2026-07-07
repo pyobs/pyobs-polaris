@@ -42,4 +42,34 @@ QVariant toQVariant(const WireValue &value)
     Q_UNREACHABLE();
 }
 
+WireValue fromQVariant(const QVariant &value, const WireType &type)
+{
+    using Kind = WireType::Kind;
+
+    if (!value.isValid() || value.isNull()) {
+        return {};
+    }
+
+    const Kind kind = type.kind() == Kind::Optional ? type.inner().kind() : type.kind();
+    switch (kind) {
+    case Kind::Bool:
+        return WireValue(value.toBool());
+    case Kind::Int32:
+        return WireValue(static_cast<qint64>(value.toLongLong()));
+    case Kind::Float64:
+        return WireValue(value.toDouble());
+    case Kind::String:
+    case Kind::Enum:
+    case Kind::DateTime:
+        return WireValue(value.toString());
+    case Kind::Void:
+    case Kind::Any:
+    case Kind::Struct:
+    case Kind::Array:
+    case Kind::Optional:
+        return {};
+    }
+    Q_UNREACHABLE();
+}
+
 }
