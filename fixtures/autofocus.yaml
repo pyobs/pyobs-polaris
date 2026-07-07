@@ -1,0 +1,16 @@
+{include _comm.yaml}
+
+# Test fixture for RoofView.qml's planned sibling, the IAutoFocus/IRunning
+# widget (see TODO.md) - ported from pyobs-gui/test/autofocus.yaml, but
+# with a real XmppComm instead of LocalComm since this client talks to a
+# module over the wire, not in-process. Run with:
+#   pyobs fixtures/autofocus.yaml
+# against the same dev ejabberd server the other fixtures use (see
+# DEVELOPMENT.md's "Live-verification test fixtures").
+class: pyobs.modules.focus.DummyAutoFocus
+name: DummyAutoFocus
+
+comm:
+  <<: *comm
+  user: autofocus
+  password: pyobs

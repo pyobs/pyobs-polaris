@@ -103,32 +103,24 @@ up on a new machine:
    verification" checkbox for exactly that case.
 2. **A `pyobs-core` 2.0 install**, in its own venv (`pip install
    pyobs-core`) — this project has zero Python dependency itself,
-   pyobs-core is only needed to have real modules to test against. Run at
-   least one `DummyRoof` and one `DummyTelescope`:
-   ```yaml
-   # comm.shared.yaml - shared by every module config
-   comm_cfg: &comm
-     class: pyobs.comm.xmpp.XmppComm
-     domain: localhost         # match wherever your XMPP server is
-     use_tls: True
-     ignore_cert_errors: True  # self-signed dev cert
-   ```
-   ```yaml
-   # roof.yaml
-   {include comm.shared.yaml}
-   class: pyobs.modules.roof.DummyRoof
-   comm:
-     <<: *comm
-     user: roof
-     password: <pick one, register it on the XMPP server>
-   ```
-   Same pattern for `telescope.yaml` with `class:
-   pyobs.modules.telescope.DummyTelescope`. Start each with `pyobs
-   path/to/roof.yaml` from the pyobs-core venv.
-3. **Register XMPP accounts**: one per module (`roof@<domain>`,
-   `telescope@<domain>`, matching each config's `user:`), plus one more
-   for the GUI client itself to log in as (any registered account works —
-   doesn't need to be a module account).
+   pyobs-core is only needed to have real modules to test against.
+   `fixtures/` (checked into this repo) holds the actual configs used so
+   far - `fixtures/_comm.yaml` is the shared `XmppComm` block (`domain:
+   localhost`, `use_tls`/`ignore_cert_errors` for a self-signed dev cert),
+   included by each per-module config (e.g. `fixtures/autofocus.yaml`,
+   `class: pyobs.modules.focus.DummyAutoFocus`). Start one with `pyobs
+   fixtures/autofocus.yaml` from the pyobs-core venv. Add a new
+   `fixtures/<module>.yaml` alongside it (same `{include _comm.yaml}` +
+   `<<: *comm` shape) whenever a new interface-specific widget needs its
+   own dummy module - don't reach for an external/uncommitted config, so
+   the fixture a widget was actually verified against stays in the repo's
+   history next to it.
+3. **Register XMPP accounts**: one per module, matching each fixture's
+   `user:` (e.g. `ejabberdctl register autofocus localhost <password>`),
+   plus one more for the GUI client itself to log in as (any registered
+   account works — doesn't need to be a module account). The passwords
+   committed in `fixtures/*.yaml` are dev-only, meaningful solely against
+   a throwaway local ejabberd instance - not secrets worth protecting.
 4. **A headless C++ test-harness technique** was used throughout this
    project to verify wire behavior without needing a GUI/display: manually
    run `moc` on the relevant headers, compile a standalone

@@ -1,0 +1,5 @@
+comm_cfg: &comm
+  class: pyobs.comm.xmpp.XmppComm
+  domain: localhost
+  use_tls: True
+  ignore_cert_errors: True
