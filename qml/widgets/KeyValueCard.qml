@@ -19,7 +19,14 @@ ColumnLayout {
 
     spacing: 2
 
-    onValueChanged: console.log("KeyValueCard.value changed:", JSON.stringify(value), "isArray:", Array.isArray(value))
+    // Not Array.isArray(value): a QVariantList crossing the C++/QML
+    // boundary as a `QVariant value` Q_PROPERTY (StateSubscription::value)
+    // arrives as a list-like/iterable object - JSON.stringify and Repeater
+    // both handle it as a sequence, but it fails the strict ECMAScript
+    // Array.isArray() check, so gating rendering on that check left every
+    // real value stuck behind the "no value yet" placeholder. undefined/
+    // null (before the first value arrives) is the only thing to exclude.
+    readonly property bool hasValue: value !== undefined && value !== null
 
     function formatValue(v) {
         if (v === null || v === undefined) {
@@ -36,14 +43,14 @@ ColumnLayout {
 
     Label {
         Layout.fillWidth: true
-        visible: !Array.isArray(root.value)
+        visible: !root.hasValue
         text: "(no value yet)"
         color: "grey"
         font.italic: true
     }
 
     Repeater {
-        model: Array.isArray(root.value) ? root.value : []
+        model: root.hasValue ? root.value : []
 
         delegate: RowLayout {
             Layout.fillWidth: true

@@ -570,6 +570,48 @@ uppercase muted header). The "MODULES" header's `visible` is bound to
 the same `hasRoofModule` the Roof entry itself already used, so the
 header and the entry appear/disappear together.
 
+### Roof state display bug: `Array.isArray()` is unreliable across the C++/QML boundary
+
+`RoofView.qml`'s `KeyValueCard` was stuck on "(no value yet)" even after a
+real state change, first flagged as never-visually-verified in the old
+`RoofWidget` TODO entry (see the Dashboard-removal section above) and
+finally checked against a live `DummyRoof` module + real display this
+session. Root-caused with the same headless/live-verification discipline
+as everywhere else in this project - registered a throwaway `roof` XMPP
+account on the dev ejabberd server (password `pyobs`, matching the other
+dummy modules'), ran a real `DummyRoof`, and read temporary `qInfo()`/
+`console.log()` diagnostics while clicking Open/Close in a real window on
+a real Wayland session.
+
+The whole C++ side was already correct: `subscribe()`/`subscribeToNode()`/
+`fetchCurrentValue()` all succeeded, and `dispatchValue()` fired repeatedly
+with the right `QVariant` content (a `QVariantList` of `{"key", "value"}`
+entries, exactly what `codec::toQVariant()` is supposed to produce). The
+diagnostic that pinned it down was in `KeyValueCard.qml` itself:
+`JSON.stringify(value)` printed proper `[...]` array syntax, but
+`Array.isArray(value)` on that same value was `false`. **A `QVariantList`
+crossing into QML via a `Q_PROPERTY(QVariant ...)` (here,
+`StateSubscription::value`) arrives as a list-like/iterable object that
+`JSON.stringify` and `Repeater.model` both handle as a sequence, but which
+fails the strict ECMAScript `Array.isArray()` check.** `KeyValueCard.qml`
+gated *both* its placeholder text's visibility and its `Repeater`'s
+`model` on `Array.isArray(root.value)` - so the value was correctly
+delivered all the way to QML and then silently discarded by that check on
+every single dispatch.
+
+Fix: `KeyValueCard.qml` now gates on `value !== undefined && value !==
+null` (`hasValue`) instead of `Array.isArray(value)` - the only thing that
+ever needs excluding is "no value has arrived yet." `Repeater.model`
+itself was always fine consuming the list-like value directly; it was
+only the `Array.isArray()` guard in front of it that was wrong. No C++
+changes were needed - `codec::toQVariant()`, `StateSubscriptionManager`,
+and `StateSubscription` were all already correct, confirmed by this
+session's live trace. Worth remembering for any future generic-rendering
+code that inspects a `QVariant`-typed value in QML: don't reach for
+`Array.isArray()`/`typeof value === "object"` assumptions borrowed from
+plain JS - a value that *behaves* like an array/object across this
+boundary doesn't necessarily *pass as* one under strict JS type checks.
+
 ### Persistent log footer
 
 Direct request: ports pyobs-gui's `MainWindow` (`mainwindow.py`'s
@@ -592,13 +634,6 @@ share one component now only to be untangled later.
 
 ## Notes for whoever (human or Claude Code) picks this up next
 
-- **Active investigation, mid-debugging as of this commit:** the Roof
-  page's `IMotion` state card is stuck on "(no value yet)" even after a
-  real state change - see `TODO.md`'s "IN PROGRESS" section at the top
-  for the full trail (what's confirmed working via temporary `qInfo()`/
-  `console.log()` diagnostics already in the tree, what's still
-  unconfirmed, and the exact next repro step). Read that before touching
-  `StateSubscriptionManager`, `RoofView.qml`, or `KeyValueCard.qml`.
 - Re-clone/re-check the current branch state before resuming — don't
   assume the working tree matches whatever was last discussed in chat.
 - Every acceptance criterion in this project's history means "verified
