@@ -985,6 +985,56 @@ elsewhere in this project (whole-array reassignment for reactivity,
 worth an actual click-test whenever a display with automation tooling is
 available.
 
+### New page: all incoming events
+
+`qml/views/EventsView.qml`, ported from pyobs-gui's `eventswidget.py` - a
+generic dump of every incoming event across all connected modules, not
+just `LogEvent` (which `LogsView.qml`/`LogFooter.qml` already cover on
+their own pages). Always visible in the sidebar's TOOLS group, after
+Logs - not interface-gated, since events aren't module-type-specific the
+way Roof/Auto Focus/etc. are. Sidebar/`StackLayout` indices for Roof/Auto
+Focus/Acquisition/Auto Guiding shifted from 3-6 to 4-7 to make room.
+
+`EventLogModel` (Phase 6) already logs every event centrally -
+`entries()` (new `Q_INVOKABLE`, factored to share `toVariantMap()` with
+the existing `entriesOfType()` rather than duplicate the per-entry
+`QVariantMap` construction) is the unfiltered counterpart, same
+`{type, module, timestamp, uuid, data}` shape. `LogEvent` itself is
+excluded client-side (`EventsView.qml`'s own `refresh()`, `.filter(e =>
+e.type !== "LogEvent")`), matching `eventswidget.py::_handle_event`'s own
+explicit skip - confirmed live that this actually works, not just
+assumed: triggering a real module command (`ITelescope.init()`) produces
+both a fresh `LogEvent` (visible only in the Logs page/footer) and a
+`MotionStatusChangedEvent` (visible only in this new page), at the same
+moment, from the same module.
+
+Module and type filtering both reuse the exact multi-select checkbox
+`Flow` idiom `LogsView.qml`'s own filtering settled on (see that section
+above) rather than the single-select `ComboBox` originally sketched in
+`TODO.md` before that page's filtering shipped - written to match the
+current sibling page, not a stale plan. `data` (a `QVariantMap` crossing
+the C++/QML boundary) renders via `JSON.stringify()`, same as `LogEvent`'s
+own fields already do in `LogsView.qml` - confirmed live this also holds
+for a genuinely nested payload (`MotionStatusChangedEvent`'s data includes
+a nested `interfaces` dict, not just flat scalar fields like `LogEvent`),
+not only the flat case already proven.
+
+Live-verified end to end against two real running modules (`camera`,
+`telescope`, already up from an unrelated session) rather than just
+built: connected the app, confirmed the Events page and sidebar entry
+render correctly with nothing yet received, then drove a real RPC call
+(`ITelescope.init()`) via a throwaway script (this project's `ShellView`
+still can't send real params yet - see the Shell TODO item - so a script
+was the only way to exercise a command with real, non-null arguments)
+and confirmed the resulting `MotionStatusChangedEvent` appeared correctly
+with working type/module filters while the simultaneous `LogEvent`s
+correctly did not. The page's default-route wiring itself needed a
+temporary local edit to verify (`StackLayout.currentIndex` briefly forced
+to the new page, since no click-automation tool was available in this
+environment either - same gap noted in the Logs-filtering section above)
+- reverted before committing, confirmed via a clean rebuild + full
+`ctest` pass afterward.
+
 ---
 
 ## Notes for whoever (human or Claude Code) picks this up next

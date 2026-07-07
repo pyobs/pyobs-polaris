@@ -67,7 +67,16 @@ public:
     // is cheap to rescan.
     Q_INVOKABLE QVariantList entriesOfType(const QString &type) const;
 
+    // Same per-entry shape as entriesOfType(), but every event regardless
+    // of type - backs EventsView.qml's generic "all incoming events" page
+    // (ports pyobs-gui's eventswidget.py), which filters out just
+    // "LogEvent" client-side since LogsView.qml/LogFooter.qml already
+    // cover that one type on their own pages.
+    Q_INVOKABLE QVariantList entries() const;
+
 private:
+    static QVariantMap toVariantMap(const PyobsEvent &event);
+
     static constexpr int kMaxEvents = 500;
     QVector<PyobsEvent> m_events;
 };

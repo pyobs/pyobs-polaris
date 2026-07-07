@@ -99,6 +99,7 @@ qt_add_qml_module(pyobs-gui++
         qml/MainWindow.qml
         qml/views/ShellView.qml
         qml/views/LogsView.qml
+        qml/views/EventsView.qml
         qml/views/StatusView.qml
         qml/views/RoofView.qml
         qml/views/AutoFocusView.qml

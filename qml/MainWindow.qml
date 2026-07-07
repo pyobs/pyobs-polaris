@@ -91,24 +91,25 @@ ApplicationWindow {
 
     // The last IRoof/IAutoFocus/IAcquisition/IAutoGuiding module can
     // disconnect while its page is open - jump back to Status rather than
-    // leaving the sidebar highlighting a now-hidden entry.
+    // leaving the sidebar highlighting a now-hidden entry. Indices shifted
+    // by 1 (4-7, not 3-6) since Events was inserted at index 3.
     onHasRoofModuleChanged: {
-        if (!hasRoofModule && stack.currentIndex === 3) {
+        if (!hasRoofModule && stack.currentIndex === 4) {
             stack.currentIndex = 0
         }
     }
     onHasAutoFocusModuleChanged: {
-        if (!hasAutoFocusModule && stack.currentIndex === 4) {
+        if (!hasAutoFocusModule && stack.currentIndex === 5) {
             stack.currentIndex = 0
         }
     }
     onHasAcquisitionModuleChanged: {
-        if (!hasAcquisitionModule && stack.currentIndex === 5) {
+        if (!hasAcquisitionModule && stack.currentIndex === 6) {
             stack.currentIndex = 0
         }
     }
     onHasAutoGuidingModuleChanged: {
-        if (!hasAutoGuidingModule && stack.currentIndex === 6) {
+        if (!hasAutoGuidingModule && stack.currentIndex === 7) {
             stack.currentIndex = 0
         }
     }
@@ -162,6 +163,13 @@ ApplicationWindow {
                     onClicked: stack.currentIndex = 2
                 }
 
+                SidebarItem {
+                    iconGlyph: "⚡"
+                    text: "Events"
+                    highlighted: stack.currentIndex === 3
+                    onClicked: stack.currentIndex = 3
+                }
+
                 SidebarSectionLabel {
                     text: "MODULES"
                     visible: root.hasRoofModule || root.hasAutoFocusModule || root.hasAcquisitionModule
@@ -172,32 +180,32 @@ ApplicationWindow {
                     iconGlyph: "⌂"
                     text: "Roof"
                     visible: root.hasRoofModule
-                    highlighted: stack.currentIndex === 3
-                    onClicked: stack.currentIndex = 3
+                    highlighted: stack.currentIndex === 4
+                    onClicked: stack.currentIndex = 4
                 }
 
                 SidebarItem {
                     iconGlyph: "◎"
                     text: "Auto Focus"
                     visible: root.hasAutoFocusModule
-                    highlighted: stack.currentIndex === 4
-                    onClicked: stack.currentIndex = 4
+                    highlighted: stack.currentIndex === 5
+                    onClicked: stack.currentIndex = 5
                 }
 
                 SidebarItem {
                     iconGlyph: "⊕"
                     text: "Acquisition"
                     visible: root.hasAcquisitionModule
-                    highlighted: stack.currentIndex === 5
-                    onClicked: stack.currentIndex = 5
+                    highlighted: stack.currentIndex === 6
+                    onClicked: stack.currentIndex = 6
                 }
 
                 SidebarItem {
                     iconGlyph: "⌖"
                     text: "Auto Guiding"
                     visible: root.hasAutoGuidingModule
-                    highlighted: stack.currentIndex === 6
-                    onClicked: stack.currentIndex = 6
+                    highlighted: stack.currentIndex === 7
+                    onClicked: stack.currentIndex = 7
                 }
 
                 Item { Layout.fillHeight: true }
@@ -243,6 +251,11 @@ ApplicationWindow {
                 }
 
                 LogsView {
+                    Layout.margins: 16
+                    xmppClient: root.xmppClient
+                }
+
+                EventsView {
                     Layout.margins: 16
                     xmppClient: root.xmppClient
                 }
