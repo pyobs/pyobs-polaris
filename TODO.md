@@ -56,23 +56,3 @@ rather than reinventing the UI from scratch.
   non-null values; this is mostly new QML-side parameter UI plus wiring
   real values through `executeMethod` instead of `WireValue::null()` for
   every param.
-
----
-
-## Loose ends from Phase 7
-
-Not blocking, but worth closing out:
-
-- `RoofWidget` hasn't had a real visual/interactive check on an actual
-  display — only headless/offscreen verification so far (see
-  `DEVELOPMENT.md`'s Phase 7 note on why: repeated loss of X11 access
-  mid-session). Worth a manual look, now that a window reliably appears
-  to look at (see the Phase 7.5 window-visibility fix in
-  `DEVELOPMENT.md`).
-- `RoofWidget` doesn't identify which module it belongs to on screen — it
-  just shows up on the Dashboard unlabeled whenever an `IRoof` module is
-  present, which reads as unclear if you don't already know it's the roof
-  widget (came up as "what is this 'Roof' on the dashboard?" - a real
-  first-impression question). Give it a visible heading/label (e.g. the
-  module's JID or name) instead of relying on the reader already knowing
-  what it is.

@@ -107,11 +107,12 @@ public:
 
     // Phase 7: an overload that also reports the result back to a QML JS
     // callback (called with one object argument: {success, errorClass,
-    // errorMessage}) - RoofWidget.qml needs this for its own per-module
+    // errorMessage}) - ShellView.qml uses this for its own per-command
     // running/error tracking (RoofView.vue's reactive running/errors
-    // maps), unlike Phase 5's shared lastRpcResult debug label, which
-    // isn't enough once more than one module's commands can be in flight
-    // at once.
+    // maps was the original motivating case, in the now-removed
+    // RoofWidget.qml - see DEVELOPMENT.md), unlike Phase 5's shared
+    // lastRpcResult debug label, which isn't enough once more than one
+    // module's commands can be in flight at once.
     Q_INVOKABLE void executeMethod(const QString &bareJid, const QString &methodName, int paramCount,
                                    const QJSValue &callback);
 

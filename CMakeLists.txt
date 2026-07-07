@@ -95,12 +95,9 @@ qt_add_qml_module(pyobs-gui++
         qml/Main.qml
         qml/LoginWindow.qml
         qml/MainWindow.qml
-        qml/views/DashboardView.qml
         qml/views/ShellView.qml
         qml/views/LogsView.qml
         qml/views/StatusView.qml
-        qml/widgets/KeyValueCard.qml
-        qml/widgets/RoofWidget.qml
 )
 
 target_link_libraries(pyobs-gui++ PRIVATE

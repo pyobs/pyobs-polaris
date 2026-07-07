@@ -4,7 +4,7 @@ import QtQuick.Controls.Material
 import QtQuick.Layouts
 import pyobs.gui
 
-// Ports pyobs-web-client's AppLayout.vue: a left sidebar nav (Dashboard,
+// Ports pyobs-web-client's AppLayout.vue: a left sidebar nav (Status,
 // Shell, Logs) plus a main content area showing whichever page is
 // selected - RouterView's equivalent here is a plain StackLayout, since
 // this project has no separate routing concept.
@@ -37,7 +37,7 @@ ApplicationWindow {
 
             ItemDelegate {
                 Layout.fillWidth: true
-                text: "Dashboard"
+                text: "Status"
                 highlighted: stack.currentIndex === 0
                 onClicked: stack.currentIndex = 0
             }
@@ -54,13 +54,6 @@ ApplicationWindow {
                 text: "Logs"
                 highlighted: stack.currentIndex === 2
                 onClicked: stack.currentIndex = 2
-            }
-
-            ItemDelegate {
-                Layout.fillWidth: true
-                text: "Status"
-                highlighted: stack.currentIndex === 3
-                onClicked: stack.currentIndex = 3
             }
 
             Item { Layout.fillHeight: true }
@@ -95,7 +88,7 @@ ApplicationWindow {
             Layout.fillHeight: true
             currentIndex: 0
 
-            DashboardView {
+            StatusView {
                 Layout.margins: 16
                 xmppClient: root.xmppClient
             }
@@ -106,11 +99,6 @@ ApplicationWindow {
             }
 
             LogsView {
-                Layout.margins: 16
-                xmppClient: root.xmppClient
-            }
-
-            StatusView {
                 Layout.margins: 16
                 xmppClient: root.xmppClient
             }

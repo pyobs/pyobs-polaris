@@ -463,9 +463,12 @@ OK" overview of every connected module - name, `IModule` capabilities'
 `version`, and live presence-derived health (ready/error/local), with a
 one-click "Clear error" (just `IModule.reset_error`, already a generic
 command). Deliberately *not* a port of `StatusWidget`'s full `QTreeWidget`
-(interfaces/capabilities/state drill-down) - that already exists,
-differently, in `DashboardView.qml`'s expandable module rows; duplicating
-it here would just be two paths to the same data.
+(interfaces/capabilities/state drill-down) - that lived, differently, in
+`DashboardView.qml`'s expandable module rows at the time this page was
+written; duplicating it here would just have been two paths to the same
+data. (`DashboardView.qml` itself is gone as of the next section below -
+this note is kept for why Status was scoped narrowly, not because the
+alternative still exists.)
 
 The one genuinely new piece: this project's presence handling
 (`XmppClient::handlePresence`) previously only ever distinguished
@@ -505,6 +508,32 @@ and this display is the user's actual desktop session (visible other
 windows include a private chat client), so no broader screenshot was
 attempted either. Worth an actual look next time a clean display is
 available.
+
+### Dashboard and `RoofWidget` removed
+
+Direct request: Status moved to the top of the sidebar, and Dashboard
+dropped entirely rather than kept alongside it - taking `RoofWidget`
+(Phase 7's `IRoof` Open/Close/Stop controls) and the original generic
+expandable module list (interfaces/live state/commands, Phase 3-5) down
+with it, on the reasoning that neither had a second home to move into
+that wasn't itself extra unasked-for scope. `ShellView.qml` already
+covers generic command execution (module → method → execute → log); nothing
+currently replaces per-module live state viewing (`KeyValueCard`/
+`subscribeState()`) or dedicated roof control - `comm::StateSubscription`/
+`StateSubscriptionManager`/`XmppClient::subscribeState()` are untouched
+and still fully covered by `tests/comm/tst_statesubscription.cpp`, just
+with no QML caller left; picking a new home for live state viewing (the
+Status page? a rebuilt Dashboard? per-interface pages?) is an open
+question for whenever that capability is actually needed again, not
+decided here.
+
+Deleted: `qml/views/DashboardView.qml`, `qml/widgets/RoofWidget.qml`,
+`qml/widgets/KeyValueCard.qml` (the last one orphaned the moment the
+first two were gone - nothing else ever used it). `MainWindow.qml`'s
+`StackLayout`/sidebar order is now Status (0), Shell (1), Logs (2).
+`TODO.md`'s "Loose ends from Phase 7" section (both items were about
+`RoofWidget`) is gone too rather than left describing a widget that no
+longer exists.
 
 ---
 
