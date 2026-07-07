@@ -56,3 +56,19 @@ rather than reinventing the UI from scratch.
   non-null values; this is mostly new QML-side parameter UI plus wiring
   real values through `executeMethod` instead of `WireValue::null()` for
   every param.
+
+---
+
+## Real filtering on the Logs page
+
+**Goal:** `LogsView.qml` gains real filtering (per-module checkboxes,
+level filter, etc. — see `pyobs-gui`'s `mainwindow.py`'s `listClients`
+checkbox list feeding `LogModelProxy` for the shape to port), beyond its
+current single "All modules"/one-module `ComboBox`.
+
+- `qml/widgets/LogFooter.qml` (the persistent bottom-of-window log tail,
+  see `DEVELOPMENT.md`) is a **deliberate duplicate** of `LogsView.qml`'s
+  current unfiltered rendering, not a shared component - once this lands,
+  the two are expected to diverge (the footer stays a simple unfiltered
+  tail; the Logs page gets the real filter UI), not be reconciled back
+  into one.

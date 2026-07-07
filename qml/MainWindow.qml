@@ -93,108 +93,124 @@ ApplicationWindow {
 
     onClosing: Qt.quit()
 
-    RowLayout {
+    // Vertical split between the normal nav+content area and a persistent
+    // log tail docked below it on every page - ports pyobs-gui's
+    // MainWindow (mainwindow.py's splitterLog, always showing tableLog
+    // beneath the nav/content splitter regardless of which page is
+    // selected).
+    SplitView {
         anchors.fill: parent
-        spacing: 0
+        orientation: Qt.Vertical
 
-        ColumnLayout {
-            Layout.preferredWidth: 180
-            Layout.fillHeight: true
+        RowLayout {
+            SplitView.fillHeight: true
             spacing: 0
 
-            Label {
-                Layout.margins: 12
-                text: "pyobs-gui++"
-                font.bold: true
-            }
-
-            SidebarItem {
-                icon: "●"
-                text: "Status"
-                highlighted: stack.currentIndex === 0
-                onClicked: stack.currentIndex = 0
-            }
-
-            SidebarSectionLabel { text: "TOOLS" }
-
-            SidebarItem {
-                icon: "❯"
-                text: "Shell"
-                highlighted: stack.currentIndex === 1
-                onClicked: stack.currentIndex = 1
-            }
-
-            SidebarItem {
-                icon: "▤"
-                text: "Logs"
-                highlighted: stack.currentIndex === 2
-                onClicked: stack.currentIndex = 2
-            }
-
-            SidebarSectionLabel {
-                text: "MODULES"
-                visible: root.hasRoofModule
-            }
-
-            SidebarItem {
-                icon: "⌂"
-                text: "Roof"
-                visible: root.hasRoofModule
-                highlighted: stack.currentIndex === 3
-                onClicked: stack.currentIndex = 3
-            }
-
-            Item { Layout.fillHeight: true }
-
-            Rectangle { Layout.fillWidth: true; height: 1; color: "#2d3035" }
-
             ColumnLayout {
-                Layout.margins: 12
-                Layout.fillWidth: true
-                spacing: 4
+                Layout.preferredWidth: 180
+                Layout.fillHeight: true
+                spacing: 0
 
                 Label {
-                    Layout.fillWidth: true
-                    text: root.xmppClient.jid
-                    color: "grey"
-                    elide: Text.ElideMiddle
+                    Layout.margins: 12
+                    text: "pyobs-gui++"
+                    font.bold: true
                 }
 
-                Button {
+                SidebarItem {
+                    icon: "●"
+                    text: "Status"
+                    highlighted: stack.currentIndex === 0
+                    onClicked: stack.currentIndex = 0
+                }
+
+                SidebarSectionLabel { text: "TOOLS" }
+
+                SidebarItem {
+                    icon: "❯"
+                    text: "Shell"
+                    highlighted: stack.currentIndex === 1
+                    onClicked: stack.currentIndex = 1
+                }
+
+                SidebarItem {
+                    icon: "▤"
+                    text: "Logs"
+                    highlighted: stack.currentIndex === 2
+                    onClicked: stack.currentIndex = 2
+                }
+
+                SidebarSectionLabel {
+                    text: "MODULES"
+                    visible: root.hasRoofModule
+                }
+
+                SidebarItem {
+                    icon: "⌂"
+                    text: "Roof"
+                    visible: root.hasRoofModule
+                    highlighted: stack.currentIndex === 3
+                    onClicked: stack.currentIndex = 3
+                }
+
+                Item { Layout.fillHeight: true }
+
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#2d3035" }
+
+                ColumnLayout {
+                    Layout.margins: 12
                     Layout.fillWidth: true
-                    text: "Sign out"
-                    onClicked: root.xmppClient.disconnectFromServer()
+                    spacing: 4
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: root.xmppClient.jid
+                        color: "grey"
+                        elide: Text.ElideMiddle
+                    }
+
+                    Button {
+                        Layout.fillWidth: true
+                        text: "Sign out"
+                        onClicked: root.xmppClient.disconnectFromServer()
+                    }
+                }
+            }
+
+            Rectangle { Layout.fillHeight: true; width: 1; color: "#2d3035" }
+
+            StackLayout {
+                id: stack
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                currentIndex: 0
+
+                StatusView {
+                    Layout.margins: 16
+                    xmppClient: root.xmppClient
+                }
+
+                ShellView {
+                    Layout.margins: 16
+                    xmppClient: root.xmppClient
+                }
+
+                LogsView {
+                    Layout.margins: 16
+                    xmppClient: root.xmppClient
+                }
+
+                RoofView {
+                    Layout.margins: 16
+                    xmppClient: root.xmppClient
                 }
             }
         }
 
-        Rectangle { Layout.fillHeight: true; width: 1; color: "#2d3035" }
-
-        StackLayout {
-            id: stack
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            currentIndex: 0
-
-            StatusView {
-                Layout.margins: 16
-                xmppClient: root.xmppClient
-            }
-
-            ShellView {
-                Layout.margins: 16
-                xmppClient: root.xmppClient
-            }
-
-            LogsView {
-                Layout.margins: 16
-                xmppClient: root.xmppClient
-            }
-
-            RoofView {
-                Layout.margins: 16
-                xmppClient: root.xmppClient
-            }
+        LogFooter {
+            SplitView.preferredHeight: 140
+            SplitView.minimumHeight: 60
+            xmppClient: root.xmppClient
         }
     }
 }
