@@ -125,13 +125,19 @@ ApplicationWindow {
         anchors.fill: parent
         orientation: Qt.Vertical
 
-        RowLayout {
+        // Horizontal split between the sidebar and the page content,
+        // draggable the same way the log footer below is - the sidebar
+        // was previously a fixed-width RowLayout child (Layout.preferredWidth:
+        // 180, no way to resize it at all). SplitView's own handle
+        // replaces the manual 1px Rectangle divider that used to sit
+        // between them.
+        SplitView {
             SplitView.fillHeight: true
-            spacing: 0
+            orientation: Qt.Horizontal
 
             ColumnLayout {
-                Layout.preferredWidth: 180
-                Layout.fillHeight: true
+                SplitView.preferredWidth: 180
+                SplitView.minimumWidth: 140
                 spacing: 0
 
                 Label {
@@ -232,12 +238,9 @@ ApplicationWindow {
                 }
             }
 
-            Rectangle { Layout.fillHeight: true; width: 1; color: "#2d3035" }
-
             StackLayout {
                 id: stack
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                SplitView.fillWidth: true
                 currentIndex: 0
 
                 StatusView {
