@@ -122,9 +122,19 @@ private:
 
     // pyobs modules always connect with resource "pyobs" (matches
     // PYOBS_RESOURCE in useXmpp.ts); anything else is ignored. Unavailable
-    // presence removes the module from `m_modules`, anything else triggers
-    // fetchModuleInfo() to (re-)populate it.
+    // presence removes the module from `m_modules`. Available presence for
+    // an already-known module just updates its presence state in place
+    // (ModuleListModel::updatePresence) - a full disco#info re-fetch only
+    // happens for a module not seen before.
     void handlePresence(const QXmppPresence &presence);
+
+    // Internal overload used by handlePresence(): same as the public
+    // fetchModuleInfo(), but also stamps the resulting ModuleInfo with the
+    // presence state/error text already known from the triggering presence
+    // stanza, so a module that announces itself already in an error state
+    // doesn't show as "ready" until its next presence update.
+    void fetchModuleInfo(const QString &bareJid, const QString &fullJid, const QString &presenceState,
+                         const QString &presenceError);
 
     // Without this, a client that connects *after* modules are already
     // online never learns about them - live presence pushes only fire for

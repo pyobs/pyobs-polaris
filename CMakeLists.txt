@@ -98,6 +98,7 @@ qt_add_qml_module(pyobs-gui++
         qml/views/DashboardView.qml
         qml/views/ShellView.qml
         qml/views/LogsView.qml
+        qml/views/StatusView.qml
         qml/widgets/KeyValueCard.qml
         qml/widgets/RoofWidget.qml
 )

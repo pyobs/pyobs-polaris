@@ -56,6 +56,13 @@ ApplicationWindow {
                 onClicked: stack.currentIndex = 2
             }
 
+            ItemDelegate {
+                Layout.fillWidth: true
+                text: "Status"
+                highlighted: stack.currentIndex === 3
+                onClicked: stack.currentIndex = 3
+            }
+
             Item { Layout.fillHeight: true }
 
             Rectangle { Layout.fillWidth: true; height: 1; color: "#2d3035" }
@@ -99,6 +106,11 @@ ApplicationWindow {
             }
 
             LogsView {
+                Layout.margins: 16
+                xmppClient: root.xmppClient
+            }
+
+            StatusView {
                 Layout.margins: 16
                 xmppClient: root.xmppClient
             }

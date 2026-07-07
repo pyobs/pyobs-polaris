@@ -36,6 +36,16 @@ public:
         // name alone (pyobs-core routes RPC calls without an interface
         // qualifier), so "interface" here is for display/grouping only.
         CommandsRole,
+        // IModule capabilities' "version" field, or an empty string if the
+        // module hasn't reported IModule capabilities (shouldn't happen for
+        // a real pyobs module, but disco#info parsing failures degrade to
+        // this rather than a crash) - the Status page's "Version" column.
+        VersionRole,
+        // "ready" / "error" / "local", derived from presence show/status -
+        // see ModuleInfo::presenceState. The Status page's health badge.
+        PresenceStateRole,
+        // presence statusText() for the error case above - empty otherwise.
+        PresenceErrorRole,
     };
     Q_ENUM(Role)
 
@@ -53,6 +63,11 @@ public:
     // Removes the module with this bare JID, if present (presence
     // type="unavailable"). No-op if it isn't in the list.
     void remove(const QString &bareJid);
+
+    // Updates just the presence-derived fields of an already-known module in
+    // place (no disco#info re-fetch) - returns false if this JID isn't in
+    // the list yet, so the caller knows to fall back to a full fetch instead.
+    bool updatePresence(const QString &bareJid, const QString &state, const QString &errorText);
 
     // Empties the whole list - matches useXmpp.ts's disconnect() resetting
     // its modules ref, called from XmppClient::disconnectFromServer().

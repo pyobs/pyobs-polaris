@@ -84,6 +84,22 @@ target_link_libraries(tst_eventmanager PRIVATE Qt6::Test Qt6::Xml Qt6::Network Q
 
 add_test(NAME tst_eventmanager COMMAND tst_eventmanager)
 
+add_executable(tst_modulelistmodel
+    comm/tst_modulelistmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/comm/ModuleInfo.h
+    ${CMAKE_SOURCE_DIR}/src/comm/ModuleListModel.h
+    ${CMAKE_SOURCE_DIR}/src/comm/ModuleListModel.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/InterfaceSchema.h
+    ${CMAKE_SOURCE_DIR}/src/codec/WireValue.h
+)
+target_include_directories(tst_modulelistmodel PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/comm
+    ${CMAKE_SOURCE_DIR}/src/codec
+)
+target_link_libraries(tst_modulelistmodel PRIVATE Qt6::Test Qt6::Qml)
+
+add_test(NAME tst_modulelistmodel COMMAND tst_modulelistmodel)
+
 add_executable(tst_appsettings
     config/tst_appsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/config/AppSettings.h

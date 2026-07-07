@@ -21,6 +21,23 @@ namespace comm {
 
 namespace {
 constexpr auto kPyobsResource = "pyobs";
+
+// Mirrors pyobs-core's XmppComm._got_online/_got_presence_update mapping
+// from XMPP presence show/status onto ModuleState: dnd -> error, away/xa ->
+// local, anything else (available, chat) -> ready. "closed" has no mapping
+// here since unavailable presence removes the module from the list instead.
+QString presenceStateFor(const QXmppPresence &presence)
+{
+    switch (presence.availableStatusType()) {
+    case QXmppPresence::DND:
+        return QStringLiteral("error");
+    case QXmppPresence::Away:
+    case QXmppPresence::XA:
+        return QStringLiteral("local");
+    default:
+        return QStringLiteral("ready");
+    }
+}
 }
 
 XmppClient::XmppClient(QObject *parent)
@@ -130,8 +147,17 @@ void XmppClient::disconnectFromServer()
 
 void XmppClient::fetchModuleInfo(const QString &bareJid, const QString &fullJid)
 {
-    comm::fetchModuleInfo(m_client, bareJid, fullJid, [this](ModuleInfo info) {
+    fetchModuleInfo(bareJid, fullJid, QStringLiteral("ready"), QString());
+}
+
+void XmppClient::fetchModuleInfo(const QString &bareJid, const QString &fullJid, const QString &presenceState,
+                                 const QString &presenceError)
+{
+    comm::fetchModuleInfo(m_client, bareJid, fullJid,
+                          [this, presenceState, presenceError](ModuleInfo info) {
         logModuleInfo(info);
+        info.presenceState = presenceState;
+        info.presenceError = presenceError;
         m_modules->upsert(info);
         // Un-deduped on purpose, matches useXmpp.ts's own fetchModuleInfo:
         // re-subscribing to an already-subscribed node from the same JID
@@ -153,9 +179,15 @@ void XmppClient::handlePresence(const QXmppPresence &presence)
     const QString bareJid = QXmppUtils::jidToBareJid(from);
     if (presence.type() == QXmppPresence::Unavailable) {
         m_modules->remove(bareJid);
-    } else {
-        fetchModuleInfo(bareJid, from);
+        return;
     }
+
+    const QString state = presenceStateFor(presence);
+    const QString errorText = presence.statusText();
+    if (m_modules->updatePresence(bareJid, state, errorText)) {
+        return;
+    }
+    fetchModuleInfo(bareJid, from, state, errorText);
 }
 
 StateSubscription *XmppClient::subscribeState(const QString &bareJid, const QString &interfaceName, int version,

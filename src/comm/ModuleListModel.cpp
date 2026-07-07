@@ -55,6 +55,22 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         }
         return result;
     }
+    case VersionRole: {
+        const auto it = info.capabilities.constFind(QStringLiteral("IModule"));
+        if (it == info.capabilities.constEnd() || !it.value().isDict()) {
+            return QString();
+        }
+        for (const auto &field : it.value().toDict()) {
+            if (field.first == QStringLiteral("version") && field.second.isString()) {
+                return field.second.toString();
+            }
+        }
+        return QString();
+    }
+    case PresenceStateRole:
+        return info.presenceState;
+    case PresenceErrorRole:
+        return info.presenceError;
     default:
         return {};
     }
@@ -67,6 +83,9 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { NameRole, "name" },
         { StatefulInterfacesRole, "statefulInterfaces" },
         { CommandsRole, "commands" },
+        { VersionRole, "version" },
+        { PresenceStateRole, "presenceState" },
+        { PresenceErrorRole, "presenceError" },
     };
 }
 
@@ -85,6 +104,20 @@ void ModuleListModel::upsert(const ModuleInfo &info)
     beginInsertRows(QModelIndex(), row, row);
     m_modules.push_back(info);
     endInsertRows();
+}
+
+bool ModuleListModel::updatePresence(const QString &bareJid, const QString &state, const QString &errorText)
+{
+    for (int i = 0; i < m_modules.size(); ++i) {
+        if (m_modules.at(i).jid == bareJid) {
+            m_modules[i].presenceState = state;
+            m_modules[i].presenceError = errorText;
+            const QModelIndex idx = index(i);
+            Q_EMIT dataChanged(idx, idx, { PresenceStateRole, PresenceErrorRole });
+            return true;
+        }
+    }
+    return false;
 }
 
 void ModuleListModel::remove(const QString &bareJid)
