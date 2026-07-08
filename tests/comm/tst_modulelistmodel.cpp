@@ -16,10 +16,19 @@ private slots:
     void versionIsEmptyWithoutIModuleCapabilities();
     void modeGroupsComeFromIModeCapabilities();
     void modeGroupsIsEmptyWithoutIModeCapabilities();
+    void commandSchemasExposeFullParamList();
+    void commandSchemasMarkOptionalParamsAndUnwrapTheirType();
+    void commandSchemasIsEmptyWithoutCommands();
     void updatePresenceUpdatesInPlaceAndReturnsTrue();
     void updatePresenceOnUnknownJidReturnsFalse();
     void hasInterfaceFindsAMatchAmongMultipleModules();
     void hasInterfaceIsFalseWhenNoModuleHasIt();
+    void jidForModuleNameMatchesTheJidsLocalPart();
+    void jidForModuleNameIsEmptyWhenNoModuleMatches();
+    void jidForModuleNameDoesNotMatchTheDisplayName();
+    void allCommandsListsOneEntryPerCommandAcrossModules();
+    void allCommandsDedupesACommandDeclaredByMultipleInterfaces();
+    void allCommandsIsEmptyWithNoModules();
 };
 
 namespace {
@@ -114,6 +123,77 @@ void TestModuleListModel::modeGroupsIsEmptyWithoutIModeCapabilities()
     QVERIFY(model.data(model.index(0), ModuleListModel::ModeGroupsRole).toList().isEmpty());
 }
 
+void TestModuleListModel::commandSchemasExposeFullParamList()
+{
+    codec::InterfaceSchema schema;
+    schema.name = QStringLiteral("IMode");
+    codec::CommandSchema cmd;
+    cmd.name = QStringLiteral("set_mode");
+    cmd.params = {
+        codec::FieldSchema { QStringLiteral("group"), codec::WireType::stringType(), QString() },
+        codec::FieldSchema { QStringLiteral("mode"), codec::WireType::stringType(), QString() },
+    };
+    schema.commands.insert(cmd.name, cmd);
+
+    ModuleInfo info = makeModule(QStringLiteral("mode@localhost"));
+    info.interfaces.insert(schema.name, schema);
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList commands = model.data(model.index(0), ModuleListModel::CommandSchemasRole).toList();
+    QCOMPARE(commands.size(), 1);
+
+    const QVariantMap entry = commands.at(0).toMap();
+    QCOMPARE(entry.value(QStringLiteral("interface")).toString(), QStringLiteral("IMode"));
+    QCOMPARE(entry.value(QStringLiteral("name")).toString(), QStringLiteral("set_mode"));
+
+    const QVariantList params = entry.value(QStringLiteral("params")).toList();
+    QCOMPARE(params.size(), 2);
+
+    const QVariantMap group = params.at(0).toMap();
+    QCOMPARE(group.value(QStringLiteral("name")).toString(), QStringLiteral("group"));
+    QCOMPARE(group.value(QStringLiteral("type")).toString(), QStringLiteral("string"));
+    QCOMPARE(group.value(QStringLiteral("unit")).toString(), QString());
+    QCOMPARE(group.value(QStringLiteral("optional")).toBool(), false);
+}
+
+void TestModuleListModel::commandSchemasMarkOptionalParamsAndUnwrapTheirType()
+{
+    codec::InterfaceSchema schema;
+    schema.name = QStringLiteral("IAutoFocus");
+    codec::CommandSchema cmd;
+    cmd.name = QStringLiteral("auto_focus");
+    cmd.params = {
+        codec::FieldSchema { QStringLiteral("count"), codec::WireType::optionalType(codec::WireType::int32Type()),
+                              QStringLiteral("s") },
+    };
+    schema.commands.insert(cmd.name, cmd);
+
+    ModuleInfo info = makeModule(QStringLiteral("autofocus@localhost"));
+    info.interfaces.insert(schema.name, schema);
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList commands = model.data(model.index(0), ModuleListModel::CommandSchemasRole).toList();
+    const QVariantList params = commands.at(0).toMap().value(QStringLiteral("params")).toList();
+    QCOMPARE(params.size(), 1);
+
+    const QVariantMap count = params.at(0).toMap();
+    QCOMPARE(count.value(QStringLiteral("type")).toString(), QStringLiteral("int32"));
+    QCOMPARE(count.value(QStringLiteral("unit")).toString(), QStringLiteral("s"));
+    QCOMPARE(count.value(QStringLiteral("optional")).toBool(), true);
+}
+
+void TestModuleListModel::commandSchemasIsEmptyWithoutCommands()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("mode@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::CommandSchemasRole).toList().isEmpty());
+}
+
 void TestModuleListModel::updatePresenceUpdatesInPlaceAndReturnsTrue()
 {
     ModuleListModel model;
@@ -164,6 +244,118 @@ void TestModuleListModel::hasInterfaceIsFalseWhenNoModuleHasIt()
 
     ModuleListModel empty;
     QVERIFY(!empty.hasInterface(QStringLiteral("IRoof")));
+}
+
+void TestModuleListModel::jidForModuleNameMatchesTheJidsLocalPart()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("mode@localhost")));
+
+    QCOMPARE(model.jidForModuleName(QStringLiteral("mode")), QStringLiteral("mode@localhost"));
+}
+
+void TestModuleListModel::jidForModuleNameIsEmptyWhenNoModuleMatches()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("mode@localhost")));
+
+    QVERIFY(model.jidForModuleName(QStringLiteral("roof")).isEmpty());
+}
+
+void TestModuleListModel::jidForModuleNameDoesNotMatchTheDisplayName()
+{
+    // Confirmed against pyobs-core's XmppComm source: shell dispatch resolves
+    // the typed module name against the JID's local part only, never against
+    // the disco#info display name - see jidForModuleName()'s doc comment.
+    ModuleInfo info = makeModule(QStringLiteral("mode@localhost"));
+    info.name = QStringLiteral("DummyMode");
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    QVERIFY(model.jidForModuleName(QStringLiteral("DummyMode")).isEmpty());
+    QCOMPARE(model.jidForModuleName(QStringLiteral("mode")), QStringLiteral("mode@localhost"));
+}
+
+void TestModuleListModel::allCommandsListsOneEntryPerCommandAcrossModules()
+{
+    codec::InterfaceSchema modeSchema;
+    modeSchema.name = QStringLiteral("IMode");
+    codec::CommandSchema setMode;
+    setMode.name = QStringLiteral("set_mode");
+    setMode.params = {
+        codec::FieldSchema { QStringLiteral("mode"), codec::WireType::stringType(), QString() },
+        codec::FieldSchema { QStringLiteral("group"), codec::WireType::stringType(), QString() },
+    };
+    modeSchema.commands.insert(setMode.name, setMode);
+
+    ModuleInfo mode = makeModule(QStringLiteral("mode@localhost"));
+    mode.interfaces.insert(modeSchema.name, modeSchema);
+
+    codec::InterfaceSchema roofSchema;
+    roofSchema.name = QStringLiteral("IRoof");
+    codec::CommandSchema init;
+    init.name = QStringLiteral("init");
+    roofSchema.commands.insert(init.name, init);
+
+    ModuleInfo roof = makeModule(QStringLiteral("roof@localhost"));
+    roof.interfaces.insert(roofSchema.name, roofSchema);
+
+    ModuleListModel model;
+    model.upsert(mode);
+    model.upsert(roof);
+
+    const QVariantList commands = model.allCommands();
+    QCOMPARE(commands.size(), 2);
+
+    const QVariantMap setModeEntry = commands.at(0).toMap();
+    QCOMPARE(setModeEntry.value(QStringLiteral("module")).toString(), QStringLiteral("mode"));
+    QCOMPARE(setModeEntry.value(QStringLiteral("name")).toString(), QStringLiteral("set_mode"));
+    QCOMPARE(setModeEntry.value(QStringLiteral("params")).toList().size(), 2);
+
+    const QVariantMap initEntry = commands.at(1).toMap();
+    QCOMPARE(initEntry.value(QStringLiteral("module")).toString(), QStringLiteral("roof"));
+    QCOMPARE(initEntry.value(QStringLiteral("name")).toString(), QStringLiteral("init"));
+    QVERIFY(initEntry.value(QStringLiteral("params")).toList().isEmpty());
+}
+
+void TestModuleListModel::allCommandsDedupesACommandDeclaredByMultipleInterfaces()
+{
+    codec::InterfaceSchema aSchema;
+    aSchema.name = QStringLiteral("AInterface");
+    codec::CommandSchema initFromA;
+    initFromA.name = QStringLiteral("init");
+    initFromA.params = { codec::FieldSchema { QStringLiteral("x"), codec::WireType::int32Type(), QString() } };
+    aSchema.commands.insert(initFromA.name, initFromA);
+
+    codec::InterfaceSchema bSchema;
+    bSchema.name = QStringLiteral("BInterface");
+    codec::CommandSchema initFromB;
+    initFromB.name = QStringLiteral("init");
+    initFromB.params = { codec::FieldSchema { QStringLiteral("y"), codec::WireType::stringType(), QString() } };
+    bSchema.commands.insert(initFromB.name, initFromB);
+
+    ModuleInfo info = makeModule(QStringLiteral("mode@localhost"));
+    info.interfaces.insert(aSchema.name, aSchema);
+    info.interfaces.insert(bSchema.name, bSchema);
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList commands = model.allCommands();
+    QCOMPARE(commands.size(), 1);
+
+    // "AInterface" sorts before "BInterface" - same iteration order
+    // XmppClient::executeMethod() dispatch uses, so its params win.
+    const QVariantList params = commands.at(0).toMap().value(QStringLiteral("params")).toList();
+    QCOMPARE(params.size(), 1);
+    QCOMPARE(params.at(0).toMap().value(QStringLiteral("name")).toString(), QStringLiteral("x"));
+}
+
+void TestModuleListModel::allCommandsIsEmptyWithNoModules()
+{
+    ModuleListModel model;
+    QVERIFY(model.allCommands().isEmpty());
 }
 
 QTEST_MAIN(TestModuleListModel)

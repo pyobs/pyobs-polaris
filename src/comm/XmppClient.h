@@ -131,6 +131,19 @@ public:
     Q_INVOKABLE void executeMethod(const QString &bareJid, const QString &methodName, const QVariantList &params,
                                    const QJSValue &callback);
 
+    // Shell rewrite (TODO.md, step 3): parses `commandText` as a single
+    // `module.command(arg1, arg2, ...)` line (shell::ShellCommandParser,
+    // porting pyobs-core's ShellCommand.parse()), resolves `module` to a
+    // bare JID (ModuleListModel::jidForModuleName() - the JID's local part,
+    // not any display name, confirmed against pyobs-core's XmppComm), and
+    // forwards to the real-param executeMethod() overload above - no
+    // separate encode/dispatch path, this is purely parse-and-resolve glue.
+    // A parse failure or an unresolvable module both report a client-side
+    // error through `callback` via reportRpcResult(), same as the real-param
+    // overload's own "unknown command" case, without sending anything over
+    // the wire.
+    Q_INVOKABLE void executeShellCommand(const QString &commandText, const QJSValue &callback);
+
 Q_SIGNALS:
     void statusChanged();
     void insecureSkipTlsVerificationChanged();

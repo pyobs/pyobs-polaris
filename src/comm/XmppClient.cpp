@@ -6,6 +6,7 @@
 #include "StateSubscriptionManager.h"
 
 #include "../codec/VariantBridge.h"
+#include "../shell/ShellCommandParser.h"
 
 #include <QDebug>
 #include <QJSEngine>
@@ -245,6 +246,27 @@ void XmppClient::executeMethod(const QString &bareJid, const QString &methodName
     const QString fullJid = bareJid + QStringLiteral("/pyobs");
     comm::executeMethod(m_client, fullJid, methodName, wireParams, paramSchemas,
                         [this, methodName, callback](RpcResult result) { reportRpcResult(methodName, result, callback); });
+}
+
+void XmppClient::executeShellCommand(const QString &commandText, const QJSValue &callback)
+{
+    const auto parsed = shell::ShellCommandParser::parse(commandText);
+    if (!parsed) {
+        RpcResult result;
+        result.errorMessage = QStringLiteral("Invalid command syntax: %1").arg(commandText);
+        reportRpcResult(commandText, result, callback);
+        return;
+    }
+
+    const QString bareJid = m_modules->jidForModuleName(parsed->module);
+    if (bareJid.isEmpty()) {
+        RpcResult result;
+        result.errorMessage = QStringLiteral("Unknown module '%1'").arg(parsed->module);
+        reportRpcResult(parsed->command, result, callback);
+        return;
+    }
+
+    executeMethod(bareJid, parsed->command, parsed->params, callback);
 }
 
 void XmppClient::reportRpcResult(const QString &methodName, const RpcResult &result, const QJSValue &callback)

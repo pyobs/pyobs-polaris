@@ -17,111 +17,79 @@ a guarantee.
 
 ---
 
-## Real parameterized command execution in Shell
+## Plugin mechanism for custom module widgets
 
-**Moved down one slot from its original "simplest" position**: its plan
-changed (see below) in a way that adds real scope - a hand-rolled parser
-and a new-to-this-project autocomplete popup UI, not just wiring
-existing parts together the way `IMode` does. Re-sort, per this doc's
-own intro, rather than leave a now-inaccurate complexity ranking.
+**Goal:** let a widget for a given interface (or a given specific module)
+be contributed without recompiling `pyobs-gui++`, instead of every new
+widget requiring a hand-edited PR against this repo (as `IWeather`/
+`ITelescope`/`ICamera` below all are). Motivated by pyobs's own
+extensibility — modules can expose arbitrary custom interfaces beyond the
+built-ins this project ships views for, and those can't all be maintained
+in-tree.
 
-**Plan changed, on direct instruction**: not a port of `pyobs-web-client`'s
-`ShellView.vue` (per-`WireType` parameter widgets: bool/enum/number/string
-fields you fill in, then click Execute) anymore - instead, port
-pyobs-gui's actual `ShellWidget`/`CommandInputWidget`/
-`pyobs.utils.shellcommand.ShellCommand`: a single-line command prompt
-(`module.command(arg1, arg2, ...)` syntax, typed and executed like a
-shell, not clicked through module/method pickers) with autocomplete and
-command history. `ShellView.qml`'s current module-picker-then-method-
-picker-then-click UI is replaced entirely, not extended.
+**Only step 1 is comparably simple to this doc's other items — steps 2
+and 3 add real, open-ended scope, same reason the Shell item above got
+reordered once its plan grew.** Re-sort this item once step 1 lands and
+step 2's actual size is clearer.
 
-**Broken into four steps, on direct instruction** - each independently
-buildable/runnable per this doc's own intro, rather than one big PR:
+1. **Internal registry refactor — no external loading yet, no behavior
+   change.** Today, adding a widget means hand-editing five spots in
+   `MainWindow.qml`: a `hasXModule` boolean property computed from
+   `ModuleListModel::hasInterface()` and its `Connections` handler
+   (~lines 72–92), a `SidebarItem` entry (~lines 156–230), and a
+   `StackLayout` page (~lines 261–304) — plus a `CMakeLists.txt`
+   `QML_FILES` entry (~lines 64–74). Replace this with a registry
+   mapping either an interface name **or** a module's bare `jid`
+   (`ModuleInfo::jid`, `ModuleInfo.h:14` — the same identity
+   `ModuleListModel` already dedupes on) to a widget `Component`/factory.
+   Sidebar and `StackLayout` become `Repeater`s driven by the registry's
+   current entries, instead of one hand-written item per widget — the
+   same per-module `Repeater` idiom `ModeView.qml`/`RoofView.qml` etc.
+   already use internally, just one level up. Built-in widgets register
+   themselves at startup, so this is pure plumbing: verify no visible
+   regression against every existing widget before moving on.
+   - **Resolution rule, decided during design discussion**: if a module
+     matches both an interface-level registration and an exact-`jid`
+     registration, show both by default (composes, consistent with this
+     project's existing "two modules sharing `IMode` both render" —
+     see `ModuleListModel`/`ModeView.qml` behavior). A registration can
+     opt into `exclusive: true` to suppress the interface-level widget
+     for that specific module only, for the case of a bespoke
+     module-specific widget replacing the generic one.
+2. **QML-file plugin loading.** Scan a configurable plugins directory at
+   startup for `.qml` files, instantiate each via `Loader{ source: ... }`
+   (or `Qt.createComponent`) against the same C++ context built-in views
+   already bind to (`XmppClient`, `ModuleListModel`, `StateSubscription`),
+   and have each loaded component register itself into step 1's registry
+   (by interface name and/or `jid`). No new native types are available to
+   these plugins — QML + inline JS only (event handlers, computed
+   properties, `Canvas`/`Shape` for custom drawing), same as any other
+   QML file in this project; see `DEVELOPMENT.md` for why `Qt6::Widgets`
+   isn't linked here, which rules out anything from that module inside a
+   plugin too.
+   - Needs a defined, stable plugin API surface — the specific
+     properties/functions passed into a plugin's root context (`jid`,
+     `interfaces`, subscribe/execute helpers), so plugins don't reach
+     into internal singletons directly and don't break every time the
+     host refactors.
+   - Security note: this loads arbitrary local QML/JS with no sandboxing
+     — acceptable for a user-supplied local plugins folder, not a
+     mechanism for running untrusted/network-sourced plugin code.
+3. **Native C++ plugin loading — speculative, don't start without a
+   concrete need.** Real Qt QML plugins (own `qmldir` + shared library,
+   loaded via `QQmlEngine`'s import path) for the rare case a QML-only
+   plugin can't cover — e.g. a new `QQuickPaintedItem`-style widget akin
+   to `PlotItem.h`. Reopens ABI/Qt-version matching between host and
+   plugin binary, a real new class of build/deployment problem this
+   project has avoided so far (everything today is one statically-linked
+   binary — no `QPluginLoader`/`dlopen` anywhere). Unlike steps 1–2, the
+   general "let third parties contribute widgets" ask alone doesn't
+   justify this; only build it once a specific widget actually needs
+   native code a QML plugin can't provide.
 
-1. **`ModuleListModel`: expose full `CommandSchema`.** A new role
-   (e.g. `CommandSchemasRole`/`commandSchemas`), alongside the existing
-   `commands`/`CommandsRole` (Phase 5's `{interface, name, paramCount}` -
-   leave it alone, `ShellView.qml`'s current picker UI still uses it
-   until step 3 replaces that UI wholesale) - `{interface, name, params:
-   [{name, type, unit, optional}]}` per command, needed both to render
-   meaningful autocomplete signatures (step 4) and to know each
-   positional arg's target `WireType` for encoding (step 3). Pure C++ +
-   unit test, no QML/UI change at all - same shape as `IMode`'s
-   `ModeGroupsRole` addition.
-2. **Standalone parser.** Port `ShellCommand.parse()`
-   (`pyobs/utils/shellcommand.py`, read directly, not inferred): a small
-   hand-rolled tokenizer-based grammar - `module.command(` then zero or
-   more positional args, each either a `NUMBER` (optional unary `-`) or a
-   quoted `STRING`, comma-separated, closing `)`. **Positional only** -
-   no named params, no bool/enum literals as a distinct token type (a
-   bare `true`/`ACQUISITION` would need to arrive as a quoted string and
-   get coerced against the target `FieldSchema.type` at encode time, same
-   as every other real-param path in this project already does via
-   `VariantBridge::fromQVariant`). Own C++ class with Qt Test coverage of
-   the grammar's edge cases (unary minus, quoted strings, malformed
-   input) - logic only, no wiring to `ShellView.qml` yet, same testing
-   discipline as `WireType`/`Decode`'s own tests.
-3. **Swap the input/execution engine.** The one step that actually
-   changes `ShellView.qml`'s behavior and needs live wire verification
-   (e.g. typing `mode.set_mode("Fast", "Speed")` against the real
-   `DummyMode` fixture) - replaces the module-picker-then-method-picker
-   UI entirely with the command-line prompt:
-   - `CommandInputWidget` (a `QLineEdit` subclass): Enter executes and
-     clears the field, Up/Down cycle a local command history array (not
-     persisted across sessions) - `commandExecuted.emit(cmd)` on Enter
-     maps to a QML `TextField`'s `Keys.onReturnPressed`/
-     `Keys.onUpPressed`/`Keys.onDownPressed`, no C++ needed for this part.
-   - Parses via step 2, matches parsed args positionally against the
-     target command's `CommandSchema.params` (step 1), and executes via
-     the existing real-param `executeMethod(jid, methodName,
-     QVariantList, callback)` overload (built for `IAutoFocus`, reused by
-     `IMode`) - confirmed this doesn't need new C++:
-     `ShellCommand.execute()`'s `proxy.execute(command, *params)` is just
-     `pyobs.comm.proxy.Proxy`'s own generic "call this method by name
-     with positional args" convenience wrapper (read directly -
-     `Proxy.execute()` forwards to the same per-method RPC dispatch every
-     other proxy call already uses), not a distinct wire-level "generic
-     execute" RPC.
-   - **Result log**: keep `ShellView.qml`'s existing scrolling,
-     green/success-red/error-colored log rendering below the prompt -
-     already matches `ShellCommandResponse.color` (`lime`/`red`) exactly,
-     nothing to change there.
-4. **Autocomplete popup.** Purely additive on top of a working step 3,
-   built from step 1's schema data - pyobs-gui's `CommandModel` (a
-   `QAbstractTableModel` feeding a `QCompleter` in `PopupCompletion` mode)
-   enumerates every `module.command` pair across all connected
-   modules/interfaces (deduped by name - same "first interface declaring
-   a command wins" convention this project's own dispatch-by-name-alone
-   already uses, confirmed again here) and shows a popup table of name /
-   param signature / doc while typing.
-   - **Not `QCompleter` - checked, and it doesn't fit this project**:
-     `QCompleter` lives in `QtWidgets` (`Q_WIDGETS_EXPORT`, confirmed
-     directly against the installed Qt6 headers), not exposed to QML at
-     all, and this project links only `Qt6::Quick`/`Qt6::Xml`/
-     `Qt6::Network` today - no `Qt6::Widgets` anywhere in
-     `CMakeLists.txt`. Pulling in the whole Widgets module for one
-     non-visual utility class would be a real, architecturally
-     inconsistent new dependency for a project that's otherwise pure QML
-     end to end. `ComboBox { editable: true }` (the closest built-in QML
-     equivalent) doesn't fit either - it only filters a flat list of full
-     strings, not a live multi-column name/signature popup. Build this as
-     a plain QML-native popup instead: a `Popup` anchored under the
-     command `TextField`, containing a `ListView` bound to a filtered JS
-     array recomputed on `TextField.onTextChanged` - the same "plain
-     array + `filter()`" idiom `LogsView.qml`/`EventsView.qml` already use
-     repeatedly, not a new pattern, and no new Qt module.
-   - **Confirmed gap vs. the Python reference, not fixable from the wire
-     alone**: pyobs-gui's completion popup's third column is the
-     command's Python docstring first line (`inspect.getmembers`/
-     `member.__doc__`) - this project's `codec::CommandSchema`/
-     `FieldSchema` (checked directly: `{name, type, unit}`, no
-     doc/description field anywhere in `InterfaceSchema.h`) has no
-     equivalent on the wire at all. disco#info was never going to carry
-     Python docstrings - the completion popup here can only ever show
-     `module.command(param: type, ...)` (built from `FieldSchema.name`/
-     `.type`, with `WireType::Kind::Optional` distinguishing required from
-     optional params - already representable, just not yet QML-exposed),
-     never a description. Not a bug to chase, a real ceiling.
+**Deliberately out of scope**: any plugin marketplace/discovery UI,
+hot-reloading native plugins, or a permission/sandboxing model beyond
+"it's a local file/library the user placed there themselves."
 
 ---
 

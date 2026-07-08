@@ -5,6 +5,29 @@
 
 namespace comm {
 
+namespace {
+
+// Shared by CommandSchemasRole and allCommands() - both need the same
+// {name, type, unit, optional} shape per FieldSchema (see
+// CommandSchemasRole's own doc comment for why "type" is unwrapped rather
+// than shown as "optional<...>").
+QVariantList paramsToVariantList(const QVector<codec::FieldSchema> &params)
+{
+    QVariantList result;
+    for (const codec::FieldSchema &field : params) {
+        const bool optional = field.type.kind() == codec::WireType::Kind::Optional;
+        QVariantMap param;
+        param.insert(QStringLiteral("name"), field.name);
+        param.insert(QStringLiteral("type"), codec::wireTypeToString(optional ? field.type.inner() : field.type));
+        param.insert(QStringLiteral("unit"), field.unit);
+        param.insert(QStringLiteral("optional"), optional);
+        result.push_back(param);
+    }
+    return result;
+}
+
+}
+
 ModuleListModel::ModuleListModel(QObject *parent)
     : QAbstractListModel(parent)
 {
@@ -50,6 +73,19 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
                 entry.insert(QStringLiteral("interface"), it.value().name);
                 entry.insert(QStringLiteral("name"), cmdIt.value().name);
                 entry.insert(QStringLiteral("paramCount"), cmdIt.value().params.size());
+                result.push_back(entry);
+            }
+        }
+        return result;
+    }
+    case CommandSchemasRole: {
+        QVariantList result;
+        for (auto it = info.interfaces.constBegin(); it != info.interfaces.constEnd(); ++it) {
+            for (auto cmdIt = it.value().commands.constBegin(); cmdIt != it.value().commands.constEnd(); ++cmdIt) {
+                QVariantMap entry;
+                entry.insert(QStringLiteral("interface"), it.value().name);
+                entry.insert(QStringLiteral("name"), cmdIt.value().name);
+                entry.insert(QStringLiteral("params"), paramsToVariantList(cmdIt.value().params));
                 result.push_back(entry);
             }
         }
@@ -110,6 +146,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { NameRole, "name" },
         { StatefulInterfacesRole, "statefulInterfaces" },
         { CommandsRole, "commands" },
+        { CommandSchemasRole, "commandSchemas" },
         { VersionRole, "version" },
         { ModeGroupsRole, "modeGroups" },
         { PresenceStateRole, "presenceState" },
@@ -125,6 +162,16 @@ const ModuleInfo *ModuleListModel::find(const QString &bareJid) const
         }
     }
     return nullptr;
+}
+
+QString ModuleListModel::jidForModuleName(const QString &moduleName) const
+{
+    for (const ModuleInfo &info : m_modules) {
+        if (info.jid.section(QLatin1Char('@'), 0, 0) == moduleName) {
+            return info.jid;
+        }
+    }
+    return QString();
 }
 
 void ModuleListModel::upsert(const ModuleInfo &info)
@@ -178,6 +225,37 @@ bool ModuleListModel::hasInterface(const QString &interfaceName) const
         }
     }
     return false;
+}
+
+QVariantList ModuleListModel::allCommands() const
+{
+    QVariantList result;
+    for (const ModuleInfo &info : m_modules) {
+        const QString moduleName = info.jid.section(QLatin1Char('@'), 0, 0);
+
+        // QMap<QString, CommandSchema>, so insertion order doesn't matter -
+        // "first interface wins" falls out of iterating info.interfaces (a
+        // QMap sorted by interface name) and skipping a command name
+        // already seen, the same order/convention XmppClient::executeMethod()
+        // uses to resolve dispatch.
+        QMap<QString, codec::CommandSchema> byName;
+        for (auto it = info.interfaces.constBegin(); it != info.interfaces.constEnd(); ++it) {
+            for (auto cmdIt = it.value().commands.constBegin(); cmdIt != it.value().commands.constEnd(); ++cmdIt) {
+                if (!byName.contains(cmdIt.key())) {
+                    byName.insert(cmdIt.key(), cmdIt.value());
+                }
+            }
+        }
+
+        for (auto cmdIt = byName.constBegin(); cmdIt != byName.constEnd(); ++cmdIt) {
+            QVariantMap entry;
+            entry.insert(QStringLiteral("module"), moduleName);
+            entry.insert(QStringLiteral("name"), cmdIt.key());
+            entry.insert(QStringLiteral("params"), paramsToVariantList(cmdIt.value().params));
+            result.push_back(entry);
+        }
+    }
+    return result;
 }
 
 void ModuleListModel::clear()

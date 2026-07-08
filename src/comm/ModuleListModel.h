@@ -3,6 +3,7 @@
 #include "ModuleInfo.h"
 
 #include <QAbstractListModel>
+#include <QVariantList>
 #include <QVector>
 #include <qqmlintegration.h>
 
@@ -36,6 +37,22 @@ public:
         // name alone (pyobs-core routes RPC calls without an interface
         // qualifier), so "interface" here is for display/grouping only.
         CommandsRole,
+        // QVariantList of {"interface":..., "name":..., "params":[{"name":
+        // ..., "type":..., "unit":..., "optional":...}, ...]} entries, one
+        // per command across every interface - the full CommandSchema
+        // (unlike CommandsRole above, which condenses params down to a
+        // bare count). Needed by the Shell rewrite's parser (to encode
+        // positional args against each param's real WireType) and
+        // autocomplete popup (to render param signatures). "type" is
+        // already unwrapped of its Optional wrapper when "optional" is
+        // true, matching how a real-param call site would encode it -
+        // wireTypeToString() is the same disco#info-string renderer
+        // Discovery.cpp's debug logging uses (see codec::WireType.h),
+        // reused rather than duplicated. Complements, not replaces,
+        // CommandsRole - ShellView.qml's current module/method-picker UI
+        // still uses that role until the Shell rewrite replaces it
+        // wholesale (see TODO.md).
+        CommandSchemasRole,
         // IModule capabilities' "version" field, or an empty string if the
         // module hasn't reported IModule capabilities (shouldn't happen for
         // a real pyobs module, but disco#info parsing failures degrade to
@@ -73,6 +90,22 @@ public:
     // live-updating binding on its own.
     Q_INVOKABLE bool hasInterface(const QString &interfaceName) const;
 
+    // Flat, cross-module list of {"module":..., "name":..., "params":
+    // [...]} entries - one per distinct command name per module, deduped
+    // the same "first interface declaring a command wins" way
+    // XmppClient::executeMethod()'s real-param overload resolves dispatch
+    // (both iterate ModuleInfo::interfaces - a QMap sorted by interface
+    // name - in that same order), so a popup entry's displayed params
+    // always match what would actually execute. "module" is the JID's
+    // local part - matches what the user types before "." in a shell
+    // command, not any display name (see jidForModuleName()'s own doc
+    // comment for why). Q_INVOKABLE escape hatch for the Shell's
+    // autocomplete popup (TODO.md, step 4) - same "QML gets no generic
+    // random-access iteration over a QAbstractListModel" reasoning as
+    // hasInterface() above. Recompute this in QML on rowsInserted/
+    // rowsRemoved/modelReset/dataChanged, not just once.
+    Q_INVOKABLE QVariantList allCommands() const;
+
     // C++-internal lookup (not Q_INVOKABLE - QML never needs a whole
     // ModuleInfo, only the per-role data() already exposes): used by
     // XmppClient::executeMethod()'s real-parameter overload to find a
@@ -81,6 +114,21 @@ public:
     // only valid until the next upsert()/remove()/clear() call - callers
     // must use it synchronously, not stash it.
     const ModuleInfo *find(const QString &bareJid) const;
+
+    // C++-internal lookup (not Q_INVOKABLE, same reasoning as find() above):
+    // used by XmppClient::executeShellCommand() to resolve the plain module
+    // name a shell command is typed against (e.g. "mode" in
+    // "mode.set_mode(...)") to that module's bare JID. Matches against the
+    // JID's own local part, not ModuleInfo::name (the disco#info identity/
+    // display name) - confirmed against pyobs-core's XmppComm source
+    // (xmppcomm.py's _get_full_client_name()): it builds the target JID by
+    // gluing the typed name directly onto the domain with no lookup or
+    // escaping of any kind, so "name" (an independent, display-only field -
+    // see module.py's own "name always tracks the comm's own identity...
+    // not any locally configured string" comment) is never consulted for
+    // routing. Returns an empty string if no connected module's JID has
+    // this local part.
+    QString jidForModuleName(const QString &moduleName) const;
 
     // Adds a new module, or replaces the existing entry for the same bare
     // JID (a module re-announcing itself, or a fetchModuleInfo() reply

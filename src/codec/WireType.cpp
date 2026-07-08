@@ -47,4 +47,34 @@ WireType parseWireType(const QString &typeStr)
     return WireType::anyType();
 }
 
+QString wireTypeToString(const WireType &type)
+{
+    using Kind = WireType::Kind;
+    switch (type.kind()) {
+    case Kind::Bool:
+        return QStringLiteral("bool");
+    case Kind::Int32:
+        return QStringLiteral("int32");
+    case Kind::Float64:
+        return QStringLiteral("float64");
+    case Kind::String:
+        return QStringLiteral("string");
+    case Kind::Void:
+        return QStringLiteral("void");
+    case Kind::DateTime:
+        return QStringLiteral("datetime");
+    case Kind::Any:
+        return QStringLiteral("any");
+    case Kind::Enum:
+        return QStringLiteral("enum(%1)").arg(type.name());
+    case Kind::Struct:
+        return QStringLiteral("struct<%1>").arg(type.name());
+    case Kind::Array:
+        return QStringLiteral("array<%1>").arg(wireTypeToString(type.item()));
+    case Kind::Optional:
+        return QStringLiteral("optional<%1>").arg(wireTypeToString(type.inner()));
+    }
+    Q_UNREACHABLE();
+}
+
 }

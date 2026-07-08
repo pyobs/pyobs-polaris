@@ -104,6 +104,8 @@ add_executable(tst_modulelistmodel
     ${CMAKE_SOURCE_DIR}/src/comm/ModuleListModel.cpp
     ${CMAKE_SOURCE_DIR}/src/codec/InterfaceSchema.h
     ${CMAKE_SOURCE_DIR}/src/codec/WireValue.h
+    ${CMAKE_SOURCE_DIR}/src/codec/WireType.h
+    ${CMAKE_SOURCE_DIR}/src/codec/WireType.cpp
 )
 target_include_directories(tst_modulelistmodel PRIVATE
     ${CMAKE_SOURCE_DIR}/src/comm
@@ -112,6 +114,16 @@ target_include_directories(tst_modulelistmodel PRIVATE
 target_link_libraries(tst_modulelistmodel PRIVATE Qt6::Test Qt6::Qml)
 
 add_test(NAME tst_modulelistmodel COMMAND tst_modulelistmodel)
+
+add_executable(tst_shellcommandparser
+    shell/tst_shellcommandparser.cpp
+    ${CMAKE_SOURCE_DIR}/src/shell/ShellCommandParser.h
+    ${CMAKE_SOURCE_DIR}/src/shell/ShellCommandParser.cpp
+)
+target_include_directories(tst_shellcommandparser PRIVATE ${CMAKE_SOURCE_DIR}/src/shell)
+target_link_libraries(tst_shellcommandparser PRIVATE Qt6::Test)
+
+add_test(NAME tst_shellcommandparser COMMAND tst_shellcommandparser)
 
 add_executable(tst_plotitem
     plot/tst_plotitem.cpp

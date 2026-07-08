@@ -52,6 +52,8 @@ qt_add_executable(pyobs-gui++
     src/codec/Encode.cpp
     src/plot/PlotItem.h
     src/plot/PlotItem.cpp
+    src/shell/ShellCommandParser.h
+    src/shell/ShellCommandParser.cpp
 )
 
 qt_add_qml_module(pyobs-gui++

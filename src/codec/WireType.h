@@ -92,4 +92,11 @@ private:
 // to WireType::anyType() for anything unrecognized, same as the TS port.
 WireType parseWireType(const QString &typeStr);
 
+// The exact inverse of parseWireType() - renders a WireType back to its
+// disco#info wire-format string ("bool", "enum(Name)", "array<T>", ...).
+// Shared by Discovery.cpp's disco#info debug logging and by QML-facing
+// display roles that need a plain string, not a WireType value (e.g.
+// ModuleListModel::CommandSchemasRole).
+QString wireTypeToString(const WireType &type);
+
 }
