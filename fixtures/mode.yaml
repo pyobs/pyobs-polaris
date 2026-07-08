@@ -1,0 +1,27 @@
+{include _comm.yaml}
+
+# Test fixture for ModeView.qml's IMode/IMotion widget (see TODO.md). Run
+# with:
+#   pyobs fixtures/mode.yaml
+# against the same dev ejabberd server the other fixtures use (see
+# DEVELOPMENT.md's "Live-verification test fixtures"). DummyMode exposes
+# three real mode groups out of the box ("Size", "Speed", "Movement") and
+# genuinely cycles IMotion through SLEWING -> POSITIONED (a 3s delay) on
+# set_mode, covering both the capabilities-> ComboBox wiring and the
+# motion-gating behavior live.
+#
+# Full submodule path, not pyobs.modules.utils.DummyMode like the other
+# fixtures use for their Dummy* class - confirmed DummyMode is the one
+# Dummy* module not re-exported from its package's __init__.py in
+# pyobs-core (every other one used here is), so the short form 404s via
+# get_class_from_string(). Works fine via the full path since Python's
+# import machinery binds the submodule onto its parent package as a side
+# effect regardless. Worth an __init__.py fix upstream at some point, not
+# blocking this fixture.
+class: pyobs.modules.utils.dummymode.DummyMode
+name: DummyMode
+
+comm:
+  <<: *comm
+  user: mode
+  password: pyobs

@@ -73,12 +73,14 @@ ApplicationWindow {
     property bool hasAutoFocusModule: xmppClient.modules.hasInterface("IAutoFocus")
     property bool hasAcquisitionModule: xmppClient.modules.hasInterface("IAcquisition")
     property bool hasAutoGuidingModule: xmppClient.modules.hasInterface("IAutoGuiding")
+    property bool hasModeModule: xmppClient.modules.hasInterface("IMode")
 
     function refreshModuleGating() {
         root.hasRoofModule = root.xmppClient.modules.hasInterface("IRoof")
         root.hasAutoFocusModule = root.xmppClient.modules.hasInterface("IAutoFocus")
         root.hasAcquisitionModule = root.xmppClient.modules.hasInterface("IAcquisition")
         root.hasAutoGuidingModule = root.xmppClient.modules.hasInterface("IAutoGuiding")
+        root.hasModeModule = root.xmppClient.modules.hasInterface("IMode")
     }
 
     Connections {
@@ -89,10 +91,10 @@ ApplicationWindow {
         function onDataChanged() { root.refreshModuleGating() }
     }
 
-    // The last IRoof/IAutoFocus/IAcquisition/IAutoGuiding module can
+    // The last IRoof/IAutoFocus/IAcquisition/IAutoGuiding/IMode module can
     // disconnect while its page is open - jump back to Status rather than
     // leaving the sidebar highlighting a now-hidden entry. Indices shifted
-    // by 1 (4-7, not 3-6) since Events was inserted at index 3.
+    // by 1 (4-8, not 3-7) since Events was inserted at index 3.
     onHasRoofModuleChanged: {
         if (!hasRoofModule && stack.currentIndex === 4) {
             stack.currentIndex = 0
@@ -110,6 +112,11 @@ ApplicationWindow {
     }
     onHasAutoGuidingModuleChanged: {
         if (!hasAutoGuidingModule && stack.currentIndex === 7) {
+            stack.currentIndex = 0
+        }
+    }
+    onHasModeModuleChanged: {
+        if (!hasModeModule && stack.currentIndex === 8) {
             stack.currentIndex = 0
         }
     }
@@ -179,7 +186,7 @@ ApplicationWindow {
                 SidebarSectionLabel {
                     text: "MODULES"
                     visible: root.hasRoofModule || root.hasAutoFocusModule || root.hasAcquisitionModule
-                        || root.hasAutoGuidingModule
+                        || root.hasAutoGuidingModule || root.hasModeModule
                 }
 
                 SidebarItem {
@@ -212,6 +219,14 @@ ApplicationWindow {
                     visible: root.hasAutoGuidingModule
                     highlighted: stack.currentIndex === 7
                     onClicked: stack.currentIndex = 7
+                }
+
+                SidebarItem {
+                    iconGlyph: "⇄"
+                    text: "Mode"
+                    visible: root.hasModeModule
+                    highlighted: stack.currentIndex === 8
+                    onClicked: stack.currentIndex = 8
                 }
 
                 Item { Layout.fillHeight: true }
@@ -279,6 +294,11 @@ ApplicationWindow {
                 }
 
                 AutoGuidingView {
+                    Layout.margins: 16
+                    xmppClient: root.xmppClient
+                }
+
+                ModeView {
                     Layout.margins: 16
                     xmppClient: root.xmppClient
                 }

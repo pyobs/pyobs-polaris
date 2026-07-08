@@ -41,6 +41,13 @@ public:
         // a real pyobs module, but disco#info parsing failures degrade to
         // this rather than a crash) - the Status page's "Version" column.
         VersionRole,
+        // QVariantList of {"group":..., "modes":[...]} entries decoded from
+        // IMode capabilities ("modes" field: group name -> static list of
+        // mode options), empty list if the module hasn't reported IMode
+        // capabilities - ModeView.qml's per-group ComboBox population. Not
+        // a generic capabilities-dump role, same narrow-scope discipline as
+        // VersionRole above.
+        ModeGroupsRole,
         // "ready" / "error" / "local", derived from presence show/status -
         // see ModuleInfo::presenceState. The Status page's health badge.
         PresenceStateRole,

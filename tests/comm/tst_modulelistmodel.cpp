@@ -14,6 +14,8 @@ private slots:
     void newModuleDefaultsToReady();
     void versionComesFromIModuleCapabilities();
     void versionIsEmptyWithoutIModuleCapabilities();
+    void modeGroupsComeFromIModeCapabilities();
+    void modeGroupsIsEmptyWithoutIModeCapabilities();
     void updatePresenceUpdatesInPlaceAndReturnsTrue();
     void updatePresenceOnUnknownJidReturnsFalse();
     void hasInterfaceFindsAMatchAmongMultipleModules();
@@ -63,6 +65,53 @@ void TestModuleListModel::versionIsEmptyWithoutIModuleCapabilities()
     model.upsert(makeModule(QStringLiteral("roof@localhost")));
 
     QCOMPARE(model.data(model.index(0), ModuleListModel::VersionRole).toString(), QString());
+}
+
+void TestModuleListModel::modeGroupsComeFromIModeCapabilities()
+{
+    ModuleInfo info = makeModule(QStringLiteral("mode@localhost"));
+    info.capabilities.insert(
+        QStringLiteral("IMode"),
+        codec::WireValue(codec::WireDict {
+            { QStringLiteral("modes"),
+              codec::WireValue(codec::WireDict {
+                  { QStringLiteral("Size"),
+                    codec::WireValue(codec::WireList {
+                        codec::WireValue(QStringLiteral("XS")),
+                        codec::WireValue(QStringLiteral("S")),
+                        codec::WireValue(QStringLiteral("M")),
+                    }) },
+                  { QStringLiteral("Speed"),
+                    codec::WireValue(codec::WireList {
+                        codec::WireValue(QStringLiteral("Slow")),
+                        codec::WireValue(QStringLiteral("Fast")),
+                    }) },
+              }) },
+        }));
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList groups = model.data(model.index(0), ModuleListModel::ModeGroupsRole).toList();
+    QCOMPARE(groups.size(), 2);
+
+    const QVariantMap size = groups.at(0).toMap();
+    QCOMPARE(size.value(QStringLiteral("group")).toString(), QStringLiteral("Size"));
+    QCOMPARE(size.value(QStringLiteral("modes")).toStringList(),
+             QStringList({ QStringLiteral("XS"), QStringLiteral("S"), QStringLiteral("M") }));
+
+    const QVariantMap speed = groups.at(1).toMap();
+    QCOMPARE(speed.value(QStringLiteral("group")).toString(), QStringLiteral("Speed"));
+    QCOMPARE(speed.value(QStringLiteral("modes")).toStringList(),
+             QStringList({ QStringLiteral("Slow"), QStringLiteral("Fast") }));
+}
+
+void TestModuleListModel::modeGroupsIsEmptyWithoutIModeCapabilities()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("mode@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::ModeGroupsRole).toList().isEmpty());
 }
 
 void TestModuleListModel::updatePresenceUpdatesInPlaceAndReturnsTrue()

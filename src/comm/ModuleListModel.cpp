@@ -67,6 +67,33 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         }
         return QString();
     }
+    case ModeGroupsRole: {
+        QVariantList result;
+        const auto it = info.capabilities.constFind(QStringLiteral("IMode"));
+        if (it == info.capabilities.constEnd() || !it.value().isDict()) {
+            return result;
+        }
+        for (const auto &field : it.value().toDict()) {
+            if (field.first != QStringLiteral("modes") || !field.second.isDict()) {
+                continue;
+            }
+            for (const auto &group : field.second.toDict()) {
+                QVariantList modes;
+                if (group.second.isList()) {
+                    for (const codec::WireValue &mode : group.second.toList()) {
+                        if (mode.isString()) {
+                            modes.push_back(mode.toString());
+                        }
+                    }
+                }
+                QVariantMap entry;
+                entry.insert(QStringLiteral("group"), group.first);
+                entry.insert(QStringLiteral("modes"), modes);
+                result.push_back(entry);
+            }
+        }
+        return result;
+    }
     case PresenceStateRole:
         return info.presenceState;
     case PresenceErrorRole:
@@ -84,6 +111,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { StatefulInterfacesRole, "statefulInterfaces" },
         { CommandsRole, "commands" },
         { VersionRole, "version" },
+        { ModeGroupsRole, "modeGroups" },
         { PresenceStateRole, "presenceState" },
         { PresenceErrorRole, "presenceError" },
     };
