@@ -39,31 +39,6 @@ jobs:
       - name: Install QtKeychain build dependencies
         run: sudo apt-get install -y libsecret-1-dev pkg-config
 
-      # tst_savedaccountsmodel exercises the real OS keychain rather than
-      # mocking QtKeychain (see DEVELOPMENT.md) - that needs an actual
-      # Secret Service reachable over D-Bus at test time, not just
-      # libsecret-1-dev's headers/library. gnome-keyring provides one;
-      # dbus-x11 provides dbus-run-session to give this job its own
-      # session bus (a bare runner has none). Without this,
-      # QKeychain::isAvailable() still (wrongly) reports true - it only
-      # checks that libsecret's symbols resolved via dlopen, never whether
-      # a Secret Service is actually listening - so the test's own QSKIP
-      # guard doesn't trigger, and the real store/load calls just hang
-      # until QSignalSpy::wait()'s timeout instead of skipping cleanly.
-      #
-      # xvfb: QtKeychain's libsecret backend stores to
-      # SECRET_COLLECTION_DEFAULT (see qtkeychain/libsecret.cpp) - on a
-      # brand-new runner that collection doesn't exist yet, so gnome-keyring
-      # tries to create it via an interactive confirmation prompt
-      # (org.gnome.keyring.SystemPrompter, backed by gcr-prompter, a GTK
-      # dialog). Without any X server at all - not even a virtual one -
-      # that dialog crashes outright ("Gtk-WARNING: cannot open display"),
-      # which leaves the store call hanging rather than actually failing,
-      # so it still times out. xvfb-run gives it a real (if invisible)
-      # display to render into instead.
-      - name: Install keychain test runtime dependencies
-        run: sudo apt-get install -y gnome-keyring dbus-x11 xvfb
-
       - name: Install Conan
         run: pipx install conan
 
@@ -107,21 +82,20 @@ jobs:
       - name: Build
         run: cmake --build --preset conan-release
 
-      # Runs inside dbus-run-session (its own private session bus) with an
-      # unlocked gnome-keyring providing the Secret Service on it -
-      # `echo -n | gnome-keyring-daemon --unlock --daemonize
-      # --components=secrets` unlocks/creates the login keyring with an
-      # empty passphrase (fine for an ephemeral CI VM) and prints env var
-      # assignments (GNOME_KEYRING_CONTROL etc.) that `eval` exports into
-      # this shell, so QtKeychain's libsecret backend has something real
-      # to talk to - see the "Install keychain test runtime dependencies"
-      # step above for why this is needed at all.
+      # tst_savedaccountsmodel exercises the real OS keychain rather than
+      # mocking QtKeychain (see DEVELOPMENT.md) - a bare runner has no
+      # D-Bus session/keyring daemon at all, so its two keychain-storing
+      # tests skip themselves under CI specifically (see
+      # tst_savedaccountsmodel.cpp's realKeychainBackendAvailable() - `CI`
+      # is the env var GitHub Actions sets for this). Getting a real
+      # Secret Service running headlessly turned out to be genuinely
+      # fragile (gnome-keyring's interactive collection-creation prompt
+      # failed a different way in each of several attempts - see this
+      # file's own git history) - on the user's direct call, this is
+      # dev-machine-only coverage for those two tests rather than chasing
+      # a mock D-Bus Secret Service just for CI.
       - name: Test
-        run: |
-          xvfb-run -a dbus-run-session -- bash -c '
-            eval "$(echo -n | gnome-keyring-daemon --unlock --daemonize --components=secrets)"
-            ctest --output-on-failure
-          '
+        run: ctest --output-on-failure
         working-directory: build/Release
 
       # Only on a version tag push. The plain build/Release/pyobs-gui++

@@ -42,6 +42,26 @@ QVariantMap rowAt(const SavedAccountsModel &model, int row)
         {"insecureSkipTls", model.data(idx, SavedAccountsModel::InsecureSkipTlsRole)},
     };
 }
+
+// QKeychain::isAvailable() only checks that libsecret's symbols resolved
+// via dlopen - not whether a real Secret Service is actually reachable
+// over D-Bus. On a bare CI runner (no session D-Bus/keyring daemon at
+// all) it wrongly returns true, which used to make these two tests hang
+// until QSignalSpy::wait()'s timeout instead of skipping. Getting a real
+// Secret Service running headlessly in CI turned out to be genuinely
+// fragile (gnome-keyring's collection-creation flow needs its
+// interactive gcr-prompter, which failed a different way in each of
+// several attempts - see git history on .github/workflows/build.yml) -
+// on the user's direct call, these two tests stay real-backend-only
+// (dev machines, which do have one) and skip under CI specifically,
+// rather than chase a mock D-Bus Secret Service implementation just for
+// this. `CI` is the de facto standard env var GitHub Actions (and most
+// other CI providers) set for exactly this kind of "am I running in CI"
+// check.
+bool realKeychainBackendAvailable()
+{
+    return QKeychain::isAvailable() && !qEnvironmentVariableIsSet("CI");
+}
 } // namespace
 
 void TestSavedAccountsModel::initTestCase()
@@ -191,8 +211,8 @@ void TestSavedAccountsModel::loadPasswordFailsWhenNothingStored()
 
 void TestSavedAccountsModel::storeAndLoadPasswordRoundTripsThroughKeychain()
 {
-    if (!QKeychain::isAvailable()) {
-        QSKIP("No platform keychain backend available in this environment");
+    if (!realKeychainBackendAvailable()) {
+        QSKIP("No real platform keychain backend available in this environment");
     }
 
     SavedAccountsModel model;
@@ -218,8 +238,8 @@ void TestSavedAccountsModel::storeAndLoadPasswordRoundTripsThroughKeychain()
 
 void TestSavedAccountsModel::removeAccountDeletesItsKeychainEntry()
 {
-    if (!QKeychain::isAvailable()) {
-        QSKIP("No platform keychain backend available in this environment");
+    if (!realKeychainBackendAvailable()) {
+        QSKIP("No real platform keychain backend available in this environment");
     }
 
     SavedAccountsModel model;
