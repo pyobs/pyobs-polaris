@@ -37,28 +37,28 @@ as the other custom widgets (`MainWindow.qml`'s `hasModeModule`,
   `IMode` capabilities — same "add the role once something actually
   renders it" discipline `ModuleListModel.h`'s own header comment already
   states, not a generic capabilities-dump role.
-- **BLOCKED, re-checked 2026-07-08, previous note here was wrong**: this
-  doc previously claimed the `group` param had already changed upstream
-  from a positional index to the group name itself, "confirmed against
-  the current source." Re-verified directly against `pyobs-core`
-  (`develop`, clean, up to date with `origin`, full history/all-branches
-  searched for any string-`group` variant - none exists, nothing to
-  revert either): `IMode.set_mode(self, mode: str, group: int = 0, ...)`
-  is still an **int index** today, and `DummyMode.set_mode` still does
-  `list(self._mode_options.keys())[group]`. The earlier note appears to
-  have simply been mistaken, not stale from a subsequent revert. Confirmed
-  with the user (2026-07-08): they will make this upstream change
-  themselves (`pyobs-core`) before this item resumes - **do not start
-  implementing `ModeView.qml`/`ModeGroupsRole`/the `set_mode` call site
-  against either the int-index or string-name shape until that lands and
-  is confirmed merged**, to avoid building against a moving target twice.
-  Once it lands, re-confirm the exact signature (param name/default) from
-  source before resuming, same discipline as everywhere else in this doc.
-- Once the upstream change lands, groups should be tracked by name
-  throughout, with nothing to resolve at the RPC call site - `ModeView.qml`'s
-  per-group loop, current-mode lookup (`ModeState.modes` is itself keyed by
-  name), and the `set_mode` call all use the same group name string
-  directly. No index anywhere in this widget then.
+- **Unblocked 2026-07-08**: the upstream change landed
+  (`pyobs-core@3a0a70c3`, `develop`, pushed to `origin/develop`) -
+  `IMode.set_mode(self, mode: str, group: str = "", ...)` now takes the
+  **group name itself**, confirmed directly against source again after
+  landing (not just trusting the earlier plan): `DummyMode.set_mode`
+  defaults `group=""` to `next(iter(self._mode_options.keys()))` and
+  raises `ValueError` for an unknown group name, exactly as originally
+  described before the false start recorded below. `ModeGroupsRole`'s
+  `QVariantList` doesn't need to preserve wire order for *correctness* -
+  a group's position in that list is never sent anywhere, only its name
+  is. (A stable *display* order is still nice to have, just not
+  load-bearing.)
+- Groups are tracked by name throughout, with nothing to resolve at the
+  RPC call site either - `ModeView.qml`'s per-group loop, current-mode
+  lookup (`ModeState.modes` is itself keyed by name), and the `set_mode`
+  call all use the same group name string directly. No index anywhere in
+  this widget.
+- **False start, kept for the record**: this doc briefly (2026-07-08)
+  claimed this same string-`group` shape already existed upstream before
+  it actually did, got caught by re-verifying against source, and the
+  item was marked blocked pending the user landing the real change above
+  - see git history on this file for the full note if it matters later.
 - Live current mode per group comes from `IMode` state
   (`ModeState.modes: dict[str, str]`, group name → current mode),
   subscribed the same way every other widget subscribes state, read via
