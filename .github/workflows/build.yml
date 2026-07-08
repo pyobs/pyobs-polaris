@@ -50,8 +50,19 @@ jobs:
       # a Secret Service is actually listening - so the test's own QSKIP
       # guard doesn't trigger, and the real store/load calls just hang
       # until QSignalSpy::wait()'s timeout instead of skipping cleanly.
+      #
+      # xvfb: QtKeychain's libsecret backend stores to
+      # SECRET_COLLECTION_DEFAULT (see qtkeychain/libsecret.cpp) - on a
+      # brand-new runner that collection doesn't exist yet, so gnome-keyring
+      # tries to create it via an interactive confirmation prompt
+      # (org.gnome.keyring.SystemPrompter, backed by gcr-prompter, a GTK
+      # dialog). Without any X server at all - not even a virtual one -
+      # that dialog crashes outright ("Gtk-WARNING: cannot open display"),
+      # which leaves the store call hanging rather than actually failing,
+      # so it still times out. xvfb-run gives it a real (if invisible)
+      # display to render into instead.
       - name: Install keychain test runtime dependencies
-        run: sudo apt-get install -y gnome-keyring dbus-x11
+        run: sudo apt-get install -y gnome-keyring dbus-x11 xvfb
 
       - name: Install Conan
         run: pipx install conan
@@ -102,7 +113,7 @@ jobs:
       # step above for why this is needed at all.
       - name: Test
         run: |
-          dbus-run-session -- bash -c '
+          xvfb-run -a dbus-run-session -- bash -c '
             eval "$(echo -n | gnome-keyring-daemon --unlock --daemonize --components=secrets)"
             ctest --output-on-failure
           '
