@@ -1,4 +1,7 @@
+#include <QDir>
+#include <QFile>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 
 #include "AppSettings.h"
@@ -15,6 +18,11 @@ private slots:
 
     void lastSelectedAccountIdPersistsAndNotifies();
     void settingTheSameValueDoesNotNotifyAgain();
+    void pluginsDirectoryDefaultsToEmpty();
+    void pluginsDirectoryPersistsAndNotifies();
+    void pluginFilesIsEmptyWhenDirectoryUnset();
+    void pluginFilesIsEmptyWhenDirectoryDoesNotExist();
+    void pluginFilesListsOnlyQmlFilesSortedByName();
 };
 
 void TestAppSettings::initTestCase()
@@ -58,6 +66,62 @@ void TestAppSettings::settingTheSameValueDoesNotNotifyAgain()
     settings.setLastSelectedAccountId(QStringLiteral("abc-123"));
 
     QCOMPARE(spy.count(), 0);
+}
+
+void TestAppSettings::pluginsDirectoryDefaultsToEmpty()
+{
+    AppSettings settings;
+    QVERIFY(settings.pluginsDirectory().isEmpty());
+}
+
+void TestAppSettings::pluginsDirectoryPersistsAndNotifies()
+{
+    AppSettings settings;
+    QSignalSpy spy(&settings, &AppSettings::pluginsDirectoryChanged);
+
+    settings.setPluginsDirectory(QStringLiteral("/home/user/.pyobs-gui-plugins"));
+
+    QCOMPARE(settings.pluginsDirectory(), QStringLiteral("/home/user/.pyobs-gui-plugins"));
+    QCOMPARE(spy.count(), 1);
+
+    AppSettings reloaded;
+    QCOMPARE(reloaded.pluginsDirectory(), QStringLiteral("/home/user/.pyobs-gui-plugins"));
+
+    spy.clear();
+    settings.setPluginsDirectory(QStringLiteral("/home/user/.pyobs-gui-plugins"));
+    QCOMPARE(spy.count(), 0);
+}
+
+void TestAppSettings::pluginFilesIsEmptyWhenDirectoryUnset()
+{
+    AppSettings settings;
+    QVERIFY(settings.pluginFiles().isEmpty());
+}
+
+void TestAppSettings::pluginFilesIsEmptyWhenDirectoryDoesNotExist()
+{
+    AppSettings settings;
+    settings.setPluginsDirectory(QStringLiteral("/does/not/exist/anywhere"));
+    QVERIFY(settings.pluginFiles().isEmpty());
+}
+
+void TestAppSettings::pluginFilesListsOnlyQmlFilesSortedByName()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    QVERIFY(QFile(dir.filePath(QStringLiteral("Zebra.qml"))).open(QIODevice::WriteOnly));
+    QVERIFY(QFile(dir.filePath(QStringLiteral("Apple.qml"))).open(QIODevice::WriteOnly));
+    QVERIFY(QFile(dir.filePath(QStringLiteral("notes.txt"))).open(QIODevice::WriteOnly));
+
+    AppSettings settings;
+    settings.setPluginsDirectory(dir.path());
+
+    const QStringList files = settings.pluginFiles();
+    QCOMPARE(files.size(), 2);
+    QVERIFY(files.at(0).endsWith(QStringLiteral("Apple.qml")));
+    QVERIFY(files.at(1).endsWith(QStringLiteral("Zebra.qml")));
+    QVERIFY(files.at(0).startsWith(QStringLiteral("file://")));
 }
 
 QTEST_MAIN(TestAppSettings)

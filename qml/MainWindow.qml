@@ -63,6 +63,7 @@ ApplicationWindow {
     }
 
     required property var xmppClient
+    required property var appSettings
 
     // TODO.md's "Plugin mechanism for custom module widgets", step 1: a
     // registry mapping an interface (or a specific module) to a sidebar
@@ -70,10 +71,20 @@ ApplicationWindow {
     // "Mode" sidebar items and StackLayout pages below are generic
     // Repeaters instead of one hand-written pair per widget. Built-in
     // widgets register themselves once at startup (Component.onCompleted
-    // below) - step 2 will have loaded external .qml plugins register the
-    // same way, through the same registry.
+    // below); step 2's PluginLoader has loaded external .qml plugins
+    // register the same way, through this same registry.
     WidgetRegistry {
         id: widgetRegistry
+    }
+
+    // Step 2: scans AppSettings::pluginsDirectory for .qml files and
+    // registers each one into widgetRegistry above - see PluginLoader.qml
+    // for the plugin file contract. A no-op (nothing to load) while
+    // pluginsDirectory is unset, its default.
+    PluginLoader {
+        id: pluginLoader
+        xmppClient: root.xmppClient
+        registry: widgetRegistry
     }
 
     // One Component per built-in widget, capturing root.xmppClient via
@@ -129,6 +140,9 @@ ApplicationWindow {
         widgetRegistry.registerForInterface("IAutoGuiding",
             { iconGlyph: "⌖", label: "Auto Guiding", component: root.autoGuidingComponent })
         widgetRegistry.registerForInterface("IMode", { iconGlyph: "⇄", label: "Mode", component: root.modeComponent })
+
+        pluginLoader.loadAll(root.appSettings.pluginFiles())
+
         root.refreshVisibility()
     }
 

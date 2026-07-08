@@ -27,32 +27,15 @@ extensibility — modules can expose arbitrary custom interfaces beyond the
 built-ins this project ships views for, and those can't all be maintained
 in-tree.
 
-**Step 1 is done** (see `DEVELOPMENT.md`'s "Plugin mechanism, step 1"
-write-up) - `WidgetRegistry.qml` + `MainWindow.qml`'s generic Repeaters.
-**Only step 1 was comparably simple to this doc's other items — steps 2
-and 3 add real, open-ended scope, same reason the Shell item above got
-reordered once its plan grew.** Re-sort this item once step 2's actual
-size is clearer.
+**Steps 1 and 2 are done** (see `DEVELOPMENT.md`'s "Plugin mechanism,
+step 1" and "step 2" write-ups) - `WidgetRegistry.qml` +
+`MainWindow.qml`'s generic Repeaters, and `PluginLoader.qml` +
+`AppSettings::pluginsDirectory`/`pluginFiles()`. A worked, real,
+live-verified example plugin lives at
+`examples/plugins/TelescopeQuickView.qml`. Only step 3 remains, and it's
+explicitly speculative - re-sort or drop this item once it's clear
+whether a concrete need for it ever actually comes up.
 
-2. **QML-file plugin loading.** Scan a configurable plugins directory at
-   startup for `.qml` files, instantiate each via `Loader{ source: ... }`
-   (or `Qt.createComponent`) against the same C++ context built-in views
-   already bind to (`XmppClient`, `ModuleListModel`, `StateSubscription`),
-   and have each loaded component register itself into step 1's registry
-   (by interface name and/or `jid`). No new native types are available to
-   these plugins — QML + inline JS only (event handlers, computed
-   properties, `Canvas`/`Shape` for custom drawing), same as any other
-   QML file in this project; see `DEVELOPMENT.md` for why `Qt6::Widgets`
-   isn't linked here, which rules out anything from that module inside a
-   plugin too.
-   - Needs a defined, stable plugin API surface — the specific
-     properties/functions passed into a plugin's root context (`jid`,
-     `interfaces`, subscribe/execute helpers), so plugins don't reach
-     into internal singletons directly and don't break every time the
-     host refactors.
-   - Security note: this loads arbitrary local QML/JS with no sandboxing
-     — acceptable for a user-supplied local plugins folder, not a
-     mechanism for running untrusted/network-sourced plugin code.
 3. **Native C++ plugin loading — speculative, don't start without a
    concrete need.** Real Qt QML plugins (own `qmldir` + shared library,
    loaded via `QQmlEngine`'s import path) for the rare case a QML-only

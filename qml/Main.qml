@@ -52,6 +52,7 @@ QtObject {
 
     property var _mainWindow: MainWindow {
         xmppClient: xmppClient
+        appSettings: appSettings
         visible: xmppClient.status === "connected"
     }
 }
