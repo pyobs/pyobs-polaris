@@ -35,81 +35,93 @@ shell, not clicked through module/method pickers) with autocomplete and
 command history. `ShellView.qml`'s current module-picker-then-method-
 picker-then-click UI is replaced entirely, not extended.
 
-**Ported from the Python reference, confirmed against its actual
-source (not assumed):**
-- `CommandInputWidget` (a `QLineEdit` subclass): Enter executes and
-  clears the field, Up/Down cycle a local command history array (not
-  persisted across sessions) - `commandExecuted.emit(cmd)` on Enter maps
-  to a QML `TextField`'s `Keys.onReturnPressed`/`Keys.onUpPressed`/
-  `Keys.onDownPressed`, no C++ needed for this part.
-- `ShellCommand.parse()` (`pyobs/utils/shellcommand.py`, read directly,
-  not inferred): a small hand-rolled tokenizer-based grammar -
-  `module.command(` then zero or more positional args, each either a
-  `NUMBER` (optional unary `-`) or a quoted `STRING`, comma-separated,
-  closing `)`. **Positional only** - no named params, no bool/enum
-  literals as a distinct token type (a bare `true`/`ACQUISITION` would
-  need to arrive as a quoted string and get coerced against the target
-  `FieldSchema.type` at encode time, same as every other real-param path
-  in this project already does via `VariantBridge::fromQVariant`).
-- Autocomplete: pyobs-gui's `CommandModel` (a `QAbstractTableModel` feeding
-  a `QCompleter` in `PopupCompletion` mode) enumerates every
-  `module.command` pair across all connected modules/interfaces
-  (deduped by name - same "first interface declaring a command wins"
-  convention this project's own dispatch-by-name-alone already uses,
-  confirmed again here) and shows a popup table of name / param
-  signature / doc while typing.
+**Broken into four steps, on direct instruction** - each independently
+buildable/runnable per this doc's own intro, rather than one big PR:
 
-**Not `QCompleter` - checked, and it doesn't fit this project**:
-`QCompleter` lives in `QtWidgets` (`Q_WIDGETS_EXPORT`, confirmed directly
-against the installed Qt6 headers), not exposed to QML at all, and this
-project links only `Qt6::Quick`/`Qt6::Xml`/`Qt6::Network` today - no
-`Qt6::Widgets` anywhere in `CMakeLists.txt`. Pulling in the whole
-Widgets module for one non-visual utility class would be a real,
-architecturally inconsistent new dependency for a project that's
-otherwise pure QML end to end. `ComboBox { editable: true }` (the
-closest built-in QML equivalent) doesn't fit either - it only filters a
-flat list of full strings, not a live multi-column name/signature popup.
-Build this as a plain QML-native popup instead: a `Popup` anchored under
-the command `TextField`, containing a `ListView` bound to a filtered JS
-array recomputed on `TextField.onTextChanged` - the same "plain array +
-`filter()`" idiom `LogsView.qml`/`EventsView.qml` already use repeatedly,
-not a new pattern, and no new Qt module.
-
-**Confirmed gap vs. the Python reference, not fixable from the wire
-alone**: pyobs-gui's completion popup's third column is the command's
-Python docstring first line (`inspect.getmembers`/`member.__doc__`) -
-this project's `codec::CommandSchema`/`FieldSchema` (checked directly:
-`{name, type, unit}`, no doc/description field anywhere in
-`InterfaceSchema.h`) has no equivalent on the wire at all. disco#info
-was never going to carry Python docstrings - the completion popup here
-can only ever show `module.command(param: type, ...)` (built from
-`FieldSchema.name`/`.type`, with `WireType::Kind::Optional` distinguishing
-required from optional params - already representable, just not yet
-QML-exposed), never a description. Not a bug to chase, a real ceiling.
-
-**Also confirmed**: `ShellCommand.execute()`'s `proxy.execute(command,
-*params)` is just `pyobs.comm.proxy.Proxy`'s own generic "call this
-method by name with positional args" convenience wrapper (read directly
-- `Proxy.execute()` forwards to the same per-method RPC dispatch every
-other proxy call already uses), not a distinct wire-level "generic
-execute" RPC. Confirms this doesn't need new C++ - the existing
-real-param `executeMethod(jid, methodName, QVariantList, callback)`
-overload (built for `IAutoFocus`, reused by `IMode`/`ITelescope`'s plans)
-is the correct target, once parsed args are matched positionally against
-the command's `CommandSchema.params` and encoded via
-`VariantBridge::fromQVariant` per param.
-
-**Still needed, carried over from the original plan** (this is *more*
-load-bearing now, not less): `ModuleListModel`'s `commands` role only
-exposes `{interface, name, paramCount}` (Phase 5) - needs full
-`CommandSchema`s (param name/type/optionality) both to render meaningful
-autocomplete signatures and to know each positional arg's target
-`WireType` for encoding.
-
-**Result log**: keep `ShellView.qml`'s existing scrolling, green/success-
-red/error-colored log rendering below the prompt - already matches
-`ShellCommandResponse.color` (`lime`/`red`) exactly, nothing to change
-there.
+1. **`ModuleListModel`: expose full `CommandSchema`.** A new role
+   (e.g. `CommandSchemasRole`/`commandSchemas`), alongside the existing
+   `commands`/`CommandsRole` (Phase 5's `{interface, name, paramCount}` -
+   leave it alone, `ShellView.qml`'s current picker UI still uses it
+   until step 3 replaces that UI wholesale) - `{interface, name, params:
+   [{name, type, unit, optional}]}` per command, needed both to render
+   meaningful autocomplete signatures (step 4) and to know each
+   positional arg's target `WireType` for encoding (step 3). Pure C++ +
+   unit test, no QML/UI change at all - same shape as `IMode`'s
+   `ModeGroupsRole` addition.
+2. **Standalone parser.** Port `ShellCommand.parse()`
+   (`pyobs/utils/shellcommand.py`, read directly, not inferred): a small
+   hand-rolled tokenizer-based grammar - `module.command(` then zero or
+   more positional args, each either a `NUMBER` (optional unary `-`) or a
+   quoted `STRING`, comma-separated, closing `)`. **Positional only** -
+   no named params, no bool/enum literals as a distinct token type (a
+   bare `true`/`ACQUISITION` would need to arrive as a quoted string and
+   get coerced against the target `FieldSchema.type` at encode time, same
+   as every other real-param path in this project already does via
+   `VariantBridge::fromQVariant`). Own C++ class with Qt Test coverage of
+   the grammar's edge cases (unary minus, quoted strings, malformed
+   input) - logic only, no wiring to `ShellView.qml` yet, same testing
+   discipline as `WireType`/`Decode`'s own tests.
+3. **Swap the input/execution engine.** The one step that actually
+   changes `ShellView.qml`'s behavior and needs live wire verification
+   (e.g. typing `mode.set_mode("Fast", "Speed")` against the real
+   `DummyMode` fixture) - replaces the module-picker-then-method-picker
+   UI entirely with the command-line prompt:
+   - `CommandInputWidget` (a `QLineEdit` subclass): Enter executes and
+     clears the field, Up/Down cycle a local command history array (not
+     persisted across sessions) - `commandExecuted.emit(cmd)` on Enter
+     maps to a QML `TextField`'s `Keys.onReturnPressed`/
+     `Keys.onUpPressed`/`Keys.onDownPressed`, no C++ needed for this part.
+   - Parses via step 2, matches parsed args positionally against the
+     target command's `CommandSchema.params` (step 1), and executes via
+     the existing real-param `executeMethod(jid, methodName,
+     QVariantList, callback)` overload (built for `IAutoFocus`, reused by
+     `IMode`) - confirmed this doesn't need new C++:
+     `ShellCommand.execute()`'s `proxy.execute(command, *params)` is just
+     `pyobs.comm.proxy.Proxy`'s own generic "call this method by name
+     with positional args" convenience wrapper (read directly -
+     `Proxy.execute()` forwards to the same per-method RPC dispatch every
+     other proxy call already uses), not a distinct wire-level "generic
+     execute" RPC.
+   - **Result log**: keep `ShellView.qml`'s existing scrolling,
+     green/success-red/error-colored log rendering below the prompt -
+     already matches `ShellCommandResponse.color` (`lime`/`red`) exactly,
+     nothing to change there.
+4. **Autocomplete popup.** Purely additive on top of a working step 3,
+   built from step 1's schema data - pyobs-gui's `CommandModel` (a
+   `QAbstractTableModel` feeding a `QCompleter` in `PopupCompletion` mode)
+   enumerates every `module.command` pair across all connected
+   modules/interfaces (deduped by name - same "first interface declaring
+   a command wins" convention this project's own dispatch-by-name-alone
+   already uses, confirmed again here) and shows a popup table of name /
+   param signature / doc while typing.
+   - **Not `QCompleter` - checked, and it doesn't fit this project**:
+     `QCompleter` lives in `QtWidgets` (`Q_WIDGETS_EXPORT`, confirmed
+     directly against the installed Qt6 headers), not exposed to QML at
+     all, and this project links only `Qt6::Quick`/`Qt6::Xml`/
+     `Qt6::Network` today - no `Qt6::Widgets` anywhere in
+     `CMakeLists.txt`. Pulling in the whole Widgets module for one
+     non-visual utility class would be a real, architecturally
+     inconsistent new dependency for a project that's otherwise pure QML
+     end to end. `ComboBox { editable: true }` (the closest built-in QML
+     equivalent) doesn't fit either - it only filters a flat list of full
+     strings, not a live multi-column name/signature popup. Build this as
+     a plain QML-native popup instead: a `Popup` anchored under the
+     command `TextField`, containing a `ListView` bound to a filtered JS
+     array recomputed on `TextField.onTextChanged` - the same "plain
+     array + `filter()`" idiom `LogsView.qml`/`EventsView.qml` already use
+     repeatedly, not a new pattern, and no new Qt module.
+   - **Confirmed gap vs. the Python reference, not fixable from the wire
+     alone**: pyobs-gui's completion popup's third column is the
+     command's Python docstring first line (`inspect.getmembers`/
+     `member.__doc__`) - this project's `codec::CommandSchema`/
+     `FieldSchema` (checked directly: `{name, type, unit}`, no
+     doc/description field anywhere in `InterfaceSchema.h`) has no
+     equivalent on the wire at all. disco#info was never going to carry
+     Python docstrings - the completion popup here can only ever show
+     `module.command(param: type, ...)` (built from `FieldSchema.name`/
+     `.type`, with `WireType::Kind::Optional` distinguishing required from
+     optional params - already representable, just not yet QML-exposed),
+     never a description. Not a bug to chase, a real ceiling.
 
 ---
 
