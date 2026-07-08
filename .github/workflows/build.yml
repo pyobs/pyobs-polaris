@@ -80,16 +80,21 @@ jobs:
           key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt') }}
 
       # qxmpp and QtKeychain are both vendored via CMake FetchContent (see
-      # CMakeLists.txt), which means compiling ~100 of qxmpp's source files
-      # (plus QtKeychain's) from scratch on every CI run otherwise - by far
-      # the most expensive part of this build. Keyed on CMakeLists.txt
-      # (which pins both GIT_TAGs) so a version bump invalidates the cache
-      # automatically.
+      # cmake/Dependencies.cmake), which means compiling ~100 of qxmpp's
+      # source files (plus QtKeychain's) from scratch on every CI run
+      # otherwise - by far the most expensive part of this build. Keyed on
+      # cmake/Dependencies.cmake specifically (which pins both GIT_TAGs),
+      # not the whole CMakeLists.txt - that used to bust this cache on
+      # every unrelated CMakeLists.txt edit (a new widget/source file added
+      # to qt_add_executable()/qt_add_qml_module()'s lists, which is nearly
+      # every commit), silently costing a full rebuild-from-scratch each
+      # time. A real GIT_TAG bump still invalidates it correctly since that
+      # only lives in cmake/Dependencies.cmake now.
       - name: Cache FetchContent-vendored dependency builds
         uses: actions/cache@v4
         with:
           path: build/Release/_deps
-          key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+          key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
 
       - name: Conan install
         run: conan install . --build=missing

@@ -10,46 +10,10 @@ find_package(Qt6 REQUIRED COMPONENTS Quick Xml Network)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
-# qxmpp is vendored via FetchContent rather than Conan: see conanfile.txt
-# for why (its ConanCenter recipe would rebuild all of Qt from source).
-# Pinned to a tag, built against this project's system Qt6.
-include(FetchContent)
-set(BUILD_SHARED ON CACHE BOOL "" FORCE)
-set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(BUILD_INTERNAL_TESTS OFF CACHE BOOL "" FORCE)
-set(BUILD_DOCUMENTATION OFF CACHE BOOL "" FORCE)
-set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(BUILD_OMEMO OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    qxmpp
-    GIT_REPOSITORY https://github.com/qxmpp-project/qxmpp.git
-    GIT_TAG v1.10.2
-)
-FetchContent_MakeAvailable(qxmpp)
-
-# QtKeychain: same treatment as qxmpp above (vendored via FetchContent,
-# pinned to a tag, built against system Qt6) purely for consistency - one
-# dependency-management story for "small C++/Qt library that needs to
-# link against this project's system Qt", not because its Conan recipe
-# has qxmpp's Qt-from-source problem (untested either way; not worth
-# re-litigating while FetchContent already works). Needs libsecret-1-dev
-# + pkg-config on Linux (its own CMakeLists.txt requires libsecret-1 via
-# pkg_check_modules) - see DEVELOPMENT.md's Prerequisites.
-set(BUILD_WITH_QT5 OFF CACHE BOOL "" FORCE)
-set(BUILD_TEST_APPLICATION OFF CACHE BOOL "" FORCE)
-set(BUILD_QTQUICK_DEMO OFF CACHE BOOL "" FORCE)
-set(BUILD_TRANSLATIONS OFF CACHE BOOL "" FORCE)
-# Its own autotest subdirectory is gated on this CTest convention variable
-# (set via its own `include(CTest)`, defaulting to ON) - forcing it off
-# here only skips *its* test suite, since this project's own tests/
-# registers via plain add_test() unconditionally, not through this.
-set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    qtkeychain
-    GIT_REPOSITORY https://github.com/frankosterfeld/qtkeychain.git
-    GIT_TAG 0.17.0
-)
-FetchContent_MakeAvailable(qtkeychain)
+# qxmpp/QtKeychain FetchContent pins - see cmake/Dependencies.cmake's own
+# header comment for why these live in a separate file (CI cache-key
+# scoping), not inlined here.
+include(cmake/Dependencies.cmake)
 
 qt_add_executable(pyobs-gui++
     src/main.cpp
