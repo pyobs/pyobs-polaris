@@ -39,6 +39,20 @@ jobs:
       - name: Install QtKeychain build dependencies
         run: sudo apt-get install -y libsecret-1-dev pkg-config
 
+      # tst_savedaccountsmodel exercises the real OS keychain rather than
+      # mocking QtKeychain (see DEVELOPMENT.md) - that needs an actual
+      # Secret Service reachable over D-Bus at test time, not just
+      # libsecret-1-dev's headers/library. gnome-keyring provides one;
+      # dbus-x11 provides dbus-run-session to give this job its own
+      # session bus (a bare runner has none). Without this,
+      # QKeychain::isAvailable() still (wrongly) reports true - it only
+      # checks that libsecret's symbols resolved via dlopen, never whether
+      # a Secret Service is actually listening - so the test's own QSKIP
+      # guard doesn't trigger, and the real store/load calls just hang
+      # until QSignalSpy::wait()'s timeout instead of skipping cleanly.
+      - name: Install keychain test runtime dependencies
+        run: sudo apt-get install -y gnome-keyring dbus-x11
+
       - name: Install Conan
         run: pipx install conan
 
@@ -77,8 +91,21 @@ jobs:
       - name: Build
         run: cmake --build --preset conan-release
 
+      # Runs inside dbus-run-session (its own private session bus) with an
+      # unlocked gnome-keyring providing the Secret Service on it -
+      # `echo -n | gnome-keyring-daemon --unlock --daemonize
+      # --components=secrets` unlocks/creates the login keyring with an
+      # empty passphrase (fine for an ephemeral CI VM) and prints env var
+      # assignments (GNOME_KEYRING_CONTROL etc.) that `eval` exports into
+      # this shell, so QtKeychain's libsecret backend has something real
+      # to talk to - see the "Install keychain test runtime dependencies"
+      # step above for why this is needed at all.
       - name: Test
-        run: ctest --output-on-failure
+        run: |
+          dbus-run-session -- bash -c '
+            eval "$(echo -n | gnome-keyring-daemon --unlock --daemonize --components=secrets)"
+            ctest --output-on-failure
+          '
         working-directory: build/Release
 
       # Only on a version tag push. The plain build/Release/pyobs-gui++
