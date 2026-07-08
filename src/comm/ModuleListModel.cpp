@@ -227,6 +227,11 @@ bool ModuleListModel::hasInterface(const QString &interfaceName) const
     return false;
 }
 
+bool ModuleListModel::hasModule(const QString &bareJid) const
+{
+    return find(bareJid) != nullptr;
+}
+
 QVariantList ModuleListModel::allCommands() const
 {
     QVariantList result;

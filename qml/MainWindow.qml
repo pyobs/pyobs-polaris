@@ -64,59 +64,83 @@ ApplicationWindow {
 
     required property var xmppClient
 
-    // Gates the "Roof"/"Auto Focus"/"Acquisition"/"Auto Guiding" sidebar
-    // entries - only relevant while a connected module actually
-    // implements the interface. ModuleListModel::hasInterface() is a
-    // plain query, not a live binding, so it's explicitly recomputed on
-    // every model change rather than evaluated once.
-    property bool hasRoofModule: xmppClient.modules.hasInterface("IRoof")
-    property bool hasAutoFocusModule: xmppClient.modules.hasInterface("IAutoFocus")
-    property bool hasAcquisitionModule: xmppClient.modules.hasInterface("IAcquisition")
-    property bool hasAutoGuidingModule: xmppClient.modules.hasInterface("IAutoGuiding")
-    property bool hasModeModule: xmppClient.modules.hasInterface("IMode")
+    // TODO.md's "Plugin mechanism for custom module widgets", step 1: a
+    // registry mapping an interface (or a specific module) to a sidebar
+    // entry/page, so the "Roof"/"Auto Focus"/"Acquisition"/"Auto Guiding"/
+    // "Mode" sidebar items and StackLayout pages below are generic
+    // Repeaters instead of one hand-written pair per widget. Built-in
+    // widgets register themselves once at startup (Component.onCompleted
+    // below) - step 2 will have loaded external .qml plugins register the
+    // same way, through the same registry.
+    WidgetRegistry {
+        id: widgetRegistry
+    }
 
-    function refreshModuleGating() {
-        root.hasRoofModule = root.xmppClient.modules.hasInterface("IRoof")
-        root.hasAutoFocusModule = root.xmppClient.modules.hasInterface("IAutoFocus")
-        root.hasAcquisitionModule = root.xmppClient.modules.hasInterface("IAcquisition")
-        root.hasAutoGuidingModule = root.xmppClient.modules.hasInterface("IAutoGuiding")
-        root.hasModeModule = root.xmppClient.modules.hasInterface("IMode")
+    // One Component per built-in widget, capturing root.xmppClient via
+    // closure exactly like every other page below already does - declared
+    // here (not inline at registration time) since Component.onCompleted
+    // is imperative JS and can't declare a Component value itself.
+    property Component roofComponent: Component {
+        RoofView { xmppClient: root.xmppClient }
+    }
+    property Component autoFocusComponent: Component {
+        AutoFocusView { xmppClient: root.xmppClient }
+    }
+    property Component acquisitionComponent: Component {
+        AcquisitionView { xmppClient: root.xmppClient }
+    }
+    property Component autoGuidingComponent: Component {
+        AutoGuidingView { xmppClient: root.xmppClient }
+    }
+    property Component modeComponent: Component {
+        ModeView { xmppClient: root.xmppClient }
+    }
+
+    // Per-entry visibility (same order/length as widgetRegistry.entries),
+    // recomputed explicitly on every module-list change - WidgetRegistry's
+    // isVisible() is a plain query, not a live binding, same as
+    // ModuleListModel::hasInterface()'s existing callers. Deliberately a
+    // parallel array of booleans, not a filtered subset of entries: every
+    // registered widget's Component is always instantiated (see the
+    // StackLayout Repeater below, over the *unfiltered* registry) - only
+    // whether it's shown is dynamic. See WidgetRegistry.qml's own doc
+    // comment on `entries` for why that matters (a real bug, caught live).
+    property var visibilityByEntry: []
+
+    function refreshVisibility() {
+        root.visibilityByEntry = widgetRegistry.entries.map(
+            (entry) => widgetRegistry.isVisible(entry, root.xmppClient.modules))
     }
 
     Connections {
         target: xmppClient.modules
-        function onRowsInserted() { root.refreshModuleGating() }
-        function onRowsRemoved() { root.refreshModuleGating() }
-        function onModelReset() { root.refreshModuleGating() }
-        function onDataChanged() { root.refreshModuleGating() }
+        function onRowsInserted() { root.refreshVisibility() }
+        function onRowsRemoved() { root.refreshVisibility() }
+        function onModelReset() { root.refreshVisibility() }
+        function onDataChanged() { root.refreshVisibility() }
     }
 
-    // The last IRoof/IAutoFocus/IAcquisition/IAutoGuiding/IMode module can
-    // disconnect while its page is open - jump back to Status rather than
-    // leaving the sidebar highlighting a now-hidden entry. Indices shifted
-    // by 1 (4-8, not 3-7) since Events was inserted at index 3.
-    onHasRoofModuleChanged: {
-        if (!hasRoofModule && stack.currentIndex === 4) {
-            stack.currentIndex = 0
-        }
+    Component.onCompleted: {
+        widgetRegistry.registerForInterface("IRoof", { iconGlyph: "⌂", label: "Roof", component: root.roofComponent })
+        widgetRegistry.registerForInterface("IAutoFocus",
+            { iconGlyph: "◎", label: "Auto Focus", component: root.autoFocusComponent })
+        widgetRegistry.registerForInterface("IAcquisition",
+            { iconGlyph: "⊕", label: "Acquisition", component: root.acquisitionComponent })
+        widgetRegistry.registerForInterface("IAutoGuiding",
+            { iconGlyph: "⌖", label: "Auto Guiding", component: root.autoGuidingComponent })
+        widgetRegistry.registerForInterface("IMode", { iconGlyph: "⇄", label: "Mode", component: root.modeComponent })
+        root.refreshVisibility()
     }
-    onHasAutoFocusModuleChanged: {
-        if (!hasAutoFocusModule && stack.currentIndex === 5) {
-            stack.currentIndex = 0
-        }
-    }
-    onHasAcquisitionModuleChanged: {
-        if (!hasAcquisitionModule && stack.currentIndex === 6) {
-            stack.currentIndex = 0
-        }
-    }
-    onHasAutoGuidingModuleChanged: {
-        if (!hasAutoGuidingModule && stack.currentIndex === 7) {
-            stack.currentIndex = 0
-        }
-    }
-    onHasModeModuleChanged: {
-        if (!hasModeModule && stack.currentIndex === 8) {
+
+    // The last module backing the currently-open dynamic page can
+    // disconnect while that page is open - jump back to Status rather than
+    // leaving the sidebar/StackLayout pointing at a now-hidden entry.
+    // Static pages occupy indices 0-3 (Status/Shell/Logs/Events); dynamic
+    // ones start at 4, one per widgetRegistry.entries position, in order
+    // (stable regardless of visibility - see WidgetRegistry.qml).
+    onVisibilityByEntryChanged: {
+        const i = stack.currentIndex - 4
+        if (i >= 0 && i < visibilityByEntry.length && !visibilityByEntry[i]) {
             stack.currentIndex = 0
         }
     }
@@ -185,48 +209,28 @@ ApplicationWindow {
 
                 SidebarSectionLabel {
                     text: "MODULES"
-                    visible: root.hasRoofModule || root.hasAutoFocusModule || root.hasAcquisitionModule
-                        || root.hasAutoGuidingModule || root.hasModeModule
+                    visible: root.visibilityByEntry.some((v) => v)
                 }
 
-                SidebarItem {
-                    iconGlyph: "⌂"
-                    text: "Roof"
-                    visible: root.hasRoofModule
-                    highlighted: stack.currentIndex === 4
-                    onClicked: stack.currentIndex = 4
-                }
+                // One entry per WidgetRegistry registration (not filtered
+                // to currently-visible ones - see WidgetRegistry.qml's own
+                // doc comment on `entries`) - position N here always
+                // corresponds to StackLayout's dynamic page N below (index
+                // 4 + N), since both Repeaters iterate the exact same
+                // widgetRegistry.entries array in the same order.
+                Repeater {
+                    model: widgetRegistry.entries
 
-                SidebarItem {
-                    iconGlyph: "◎"
-                    text: "Auto Focus"
-                    visible: root.hasAutoFocusModule
-                    highlighted: stack.currentIndex === 5
-                    onClicked: stack.currentIndex = 5
-                }
+                    delegate: SidebarItem {
+                        required property var modelData
+                        required property int index
 
-                SidebarItem {
-                    iconGlyph: "⊕"
-                    text: "Acquisition"
-                    visible: root.hasAcquisitionModule
-                    highlighted: stack.currentIndex === 6
-                    onClicked: stack.currentIndex = 6
-                }
-
-                SidebarItem {
-                    iconGlyph: "⌖"
-                    text: "Auto Guiding"
-                    visible: root.hasAutoGuidingModule
-                    highlighted: stack.currentIndex === 7
-                    onClicked: stack.currentIndex = 7
-                }
-
-                SidebarItem {
-                    iconGlyph: "⇄"
-                    text: "Mode"
-                    visible: root.hasModeModule
-                    highlighted: stack.currentIndex === 8
-                    onClicked: stack.currentIndex = 8
+                        iconGlyph: modelData.iconGlyph
+                        text: modelData.label
+                        visible: root.visibilityByEntry[index] === true
+                        highlighted: stack.currentIndex === 4 + index
+                        onClicked: stack.currentIndex = 4 + index
+                    }
                 }
 
                 Item { Layout.fillHeight: true }
@@ -278,29 +282,46 @@ ApplicationWindow {
                     xmppClient: root.xmppClient
                 }
 
-                RoofView {
-                    Layout.margins: 16
-                    xmppClient: root.xmppClient
-                }
+                // One dynamic page per WidgetRegistry registration, always
+                // instantiated regardless of current visibility - Repeater
+                // works as a direct StackLayout child the same way it
+                // already does inside a plain Layout, injecting each
+                // delegate as a StackLayout page in order (positions 4, 5,
+                // 6, ... after the four static pages above, stable
+                // regardless of which are currently shown in the sidebar).
+                // A Loader is required here (not the widget directly)
+                // since each position needs a *different* Component picked
+                // at runtime - matches step 2's own planned `Loader{
+                // source: ... }` mechanism for actual external plugin
+                // files.
+                //
+                // Always eager, never gated on visibilityByEntry, on
+                // purpose - see WidgetRegistry.qml's own doc comment on
+                // `entries` for the real bug this avoids: instantiating a
+                // widget lazily, only once its registration first becomes
+                // visible, meant its internal per-module Repeater did its
+                // initial bulk population against a model that could
+                // already be mid-mutation from other modules concurrently
+                // connecting, racing a dataChanged against that Repeater's
+                // own construction and creating a spurious duplicate
+                // delegate for a module that should only ever get one -
+                // caught live (comparing screenshots against the
+                // pre-refactor build), not by reasoning about the QML
+                // alone. Every built-in widget was *always* eagerly
+                // instantiated before this registry existed too, so this
+                // isn't new behavior, just no longer hand-written per
+                // widget.
+                Repeater {
+                    model: widgetRegistry.entries
 
-                AutoFocusView {
-                    Layout.margins: 16
-                    xmppClient: root.xmppClient
-                }
+                    delegate: Loader {
+                        required property var modelData
 
-                AcquisitionView {
-                    Layout.margins: 16
-                    xmppClient: root.xmppClient
-                }
-
-                AutoGuidingView {
-                    Layout.margins: 16
-                    xmppClient: root.xmppClient
-                }
-
-                ModeView {
-                    Layout.margins: 16
-                    xmppClient: root.xmppClient
+                        Layout.margins: 16
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        sourceComponent: modelData.component
+                    }
                 }
             }
         }

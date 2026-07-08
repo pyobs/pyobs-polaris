@@ -90,6 +90,13 @@ public:
     // live-updating binding on its own.
     Q_INVOKABLE bool hasInterface(const QString &interfaceName) const;
 
+    // True if a module with exactly this bare JID is currently connected.
+    // Same "QML gets no generic random-access iteration" escape-hatch
+    // reasoning as hasInterface() above, for the module-specific (rather
+    // than interface-specific) half of WidgetRegistry.qml's registration
+    // lookup (TODO.md's "Plugin mechanism" item, step 1).
+    Q_INVOKABLE bool hasModule(const QString &bareJid) const;
+
     // Flat, cross-module list of {"module":..., "name":..., "params":
     // [...]} entries - one per distinct command name per module, deduped
     // the same "first interface declaring a command wins" way

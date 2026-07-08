@@ -23,6 +23,8 @@ private slots:
     void updatePresenceOnUnknownJidReturnsFalse();
     void hasInterfaceFindsAMatchAmongMultipleModules();
     void hasInterfaceIsFalseWhenNoModuleHasIt();
+    void hasModuleFindsAnExactJidMatch();
+    void hasModuleIsFalseWhenNoModuleHasThatJid();
     void jidForModuleNameMatchesTheJidsLocalPart();
     void jidForModuleNameIsEmptyWhenNoModuleMatches();
     void jidForModuleNameDoesNotMatchTheDisplayName();
@@ -244,6 +246,25 @@ void TestModuleListModel::hasInterfaceIsFalseWhenNoModuleHasIt()
 
     ModuleListModel empty;
     QVERIFY(!empty.hasInterface(QStringLiteral("IRoof")));
+}
+
+void TestModuleListModel::hasModuleFindsAnExactJidMatch()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("roof@localhost")));
+
+    QVERIFY(model.hasModule(QStringLiteral("roof@localhost")));
+}
+
+void TestModuleListModel::hasModuleIsFalseWhenNoModuleHasThatJid()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("roof@localhost")));
+
+    QVERIFY(!model.hasModule(QStringLiteral("telescope@localhost")));
+
+    ModuleListModel empty;
+    QVERIFY(!empty.hasModule(QStringLiteral("roof@localhost")));
 }
 
 void TestModuleListModel::jidForModuleNameMatchesTheJidsLocalPart()

@@ -27,35 +27,13 @@ extensibility — modules can expose arbitrary custom interfaces beyond the
 built-ins this project ships views for, and those can't all be maintained
 in-tree.
 
-**Only step 1 is comparably simple to this doc's other items — steps 2
+**Step 1 is done** (see `DEVELOPMENT.md`'s "Plugin mechanism, step 1"
+write-up) - `WidgetRegistry.qml` + `MainWindow.qml`'s generic Repeaters.
+**Only step 1 was comparably simple to this doc's other items — steps 2
 and 3 add real, open-ended scope, same reason the Shell item above got
-reordered once its plan grew.** Re-sort this item once step 1 lands and
-step 2's actual size is clearer.
+reordered once its plan grew.** Re-sort this item once step 2's actual
+size is clearer.
 
-1. **Internal registry refactor — no external loading yet, no behavior
-   change.** Today, adding a widget means hand-editing five spots in
-   `MainWindow.qml`: a `hasXModule` boolean property computed from
-   `ModuleListModel::hasInterface()` and its `Connections` handler
-   (~lines 72–92), a `SidebarItem` entry (~lines 156–230), and a
-   `StackLayout` page (~lines 261–304) — plus a `CMakeLists.txt`
-   `QML_FILES` entry (~lines 64–74). Replace this with a registry
-   mapping either an interface name **or** a module's bare `jid`
-   (`ModuleInfo::jid`, `ModuleInfo.h:14` — the same identity
-   `ModuleListModel` already dedupes on) to a widget `Component`/factory.
-   Sidebar and `StackLayout` become `Repeater`s driven by the registry's
-   current entries, instead of one hand-written item per widget — the
-   same per-module `Repeater` idiom `ModeView.qml`/`RoofView.qml` etc.
-   already use internally, just one level up. Built-in widgets register
-   themselves at startup, so this is pure plumbing: verify no visible
-   regression against every existing widget before moving on.
-   - **Resolution rule, decided during design discussion**: if a module
-     matches both an interface-level registration and an exact-`jid`
-     registration, show both by default (composes, consistent with this
-     project's existing "two modules sharing `IMode` both render" —
-     see `ModuleListModel`/`ModeView.qml` behavior). A registration can
-     opt into `exclusive: true` to suppress the interface-level widget
-     for that specific module only, for the case of a bespoke
-     module-specific widget replacing the generic one.
 2. **QML-file plugin loading.** Scan a configurable plugins directory at
    startup for `.qml` files, instantiate each via `Loader{ source: ... }`
    (or `Qt.createComponent`) against the same C++ context built-in views

@@ -63,6 +63,7 @@ qt_add_qml_module(pyobs-gui++
         qml/Main.qml
         qml/LoginWindow.qml
         qml/MainWindow.qml
+        qml/WidgetRegistry.qml
         qml/views/ShellView.qml
         qml/views/LogsView.qml
         qml/views/EventsView.qml
