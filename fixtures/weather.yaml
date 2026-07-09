@@ -1,0 +1,23 @@
+{include _comm.yaml}
+
+# Test fixture for WeatherView.qml's IWeather widget (see TODO.md).
+# pyobs.modules.weather.Weather (the real implementation) has no
+# self-contained simulated-data mode of its own - it's an HTTP client to a
+# separate pyobs-weather service. pyobs.modules.weather.MockWeather fills
+# that gap: a self-contained simulated station (fixed default sensor
+# values, see mockweather.py's DEFAULT_SENSOR_VALUES) with two extra
+# RPCs, set_good(good) and set_sensor_value(sensor, value), for exercising
+# the "Weather OK"/"Weather BAD" banner and live tile updates without any
+# extra infra.
+#
+# Run with:
+#   pyobs fixtures/weather.yaml
+# against the same dev ejabberd server the other fixtures use (see
+# DEVELOPMENT.md's "Live-verification test fixtures").
+class: pyobs.modules.weather.MockWeather
+name: MockWeather
+
+comm:
+  <<: *comm
+  user: weather
+  password: pyobs

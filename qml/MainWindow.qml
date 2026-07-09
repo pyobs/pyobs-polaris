@@ -106,6 +106,9 @@ ApplicationWindow {
     property Component modeComponent: Component {
         ModeView { xmppClient: root.xmppClient }
     }
+    property Component weatherComponent: Component {
+        WeatherView { xmppClient: root.xmppClient }
+    }
 
     // Per-entry visibility (same order/length as widgetRegistry.entries),
     // recomputed explicitly on every module-list change - WidgetRegistry's
@@ -140,6 +143,7 @@ ApplicationWindow {
         widgetRegistry.registerForInterface("IAutoGuiding",
             { iconGlyph: "⌖", label: "Auto Guiding", component: root.autoGuidingComponent })
         widgetRegistry.registerForInterface("IMode", { iconGlyph: "⇄", label: "Mode", component: root.modeComponent })
+        widgetRegistry.registerForInterface("IWeather", { iconGlyph: "☁", label: "Weather", component: root.weatherComponent })
 
         pluginLoader.loadAll(root.appSettings.pluginFiles())
 
