@@ -10,7 +10,7 @@ namespace config {
 
 // Wraps QSettings (resolves to the system's default config location - see
 // main.cpp's setOrganizationName()/setApplicationName(), e.g.
-// ~/.config/pyobs/pyobs-gui++.conf on Linux) for general, app-wide
+// ~/.config/pyobs/Polaris.conf on Linux) for general, app-wide
 // settings that aren't per-account - see SavedAccountsModel for the
 // actual saved-login list. Starts with just which account was last
 // selected (purely to preselect it in the login window on next launch);
@@ -26,7 +26,7 @@ class AppSettings : public QObject
     // Empty (the default) means "don't scan for plugins at all" - TODO.md's
     // "Plugin mechanism" item, step 2. No settings-UI control for this yet
     // (out of scope here - edit the config file directly, e.g. via
-    // `QSettings`'s own on-disk ini at ~/.config/pyobs/pyobs-gui++.conf on
+    // `QSettings`'s own on-disk ini at ~/.config/pyobs/Polaris.conf on
     // Linux, `[General]` section, `pluginsDirectory=`), same "add more
     // settings here as features need them, don't design a UI speculatively"
     // discipline this class's own header comment already states.

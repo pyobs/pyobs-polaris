@@ -98,7 +98,7 @@ jobs:
         run: ctest --output-on-failure
         working-directory: build/Release
 
-      # Only on a version tag push. The plain build/Release/pyobs-gui++
+      # Only on a version tag push. The plain build/Release/polaris
       # binary is not redistributable as-is: it links libQXmppQt6.so.5 and
       # libqt6keychain.so.1 via an absolute RUNPATH into this job's own
       # ephemeral build directory (CMake's normal, correct behavior for an
@@ -112,11 +112,11 @@ jobs:
         run: |
           sudo apt-get install -y patchelf
           mkdir -p dist
-          cp build/Release/pyobs-gui++ dist/
+          cp build/Release/polaris dist/
           cp -P build/Release/_deps/qxmpp-build/src/libQXmppQt6.so* dist/
           cp -P build/Release/bin/libqt6keychain.so* dist/
-          patchelf --set-rpath '$ORIGIN' dist/pyobs-gui++
-          tar -czf pyobs-gui++-linux-x86_64.tar.gz -C dist .
+          patchelf --set-rpath '$ORIGIN' dist/polaris
+          tar -czf polaris-linux-x86_64.tar.gz -C dist .
 
       # System Qt6 itself (Qt6Core/Gui/Qml/Quick/Network/Xml and the
       # QtQuick.Controls/.Material/.Layouts QML plugins) is deliberately
@@ -133,10 +133,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" \
-            pyobs-gui++-linux-x86_64.tar.gz \
+            polaris-linux-x86_64.tar.gz \
             --title "${{ github.ref_name }}" \
             --notes "$(cat <<'EOF'
-          First tagged release of pyobs-gui++, a clean-room C++/QML client for pyobs 2.0. Every phase up to this tag was verified live against a real ejabberd server and real pyobs modules - see DEVELOPMENT.md for the full phase-by-phase history.
+          A release of Polaris (pyobs-polaris), a clean-room C++/QML client for pyobs 2.0. Every phase up to this tag was verified live against a real ejabberd server and real pyobs modules - see DEVELOPMENT.md for the full phase-by-phase history.
 
           **What's in this release:**
           - XMPP connect/disconnect with live status
@@ -149,13 +149,13 @@ jobs:
 
           **Runtime requirements (Linux x86_64):**
           - Qt 6.5+ installed on the system (built and tested against Qt 6.10.2 from Ubuntu 26.04's apt packages): `libQt6Core`, `libQt6Gui`, `libQt6Qml`, `libQt6Quick`, `libQt6Network`, `libQt6Xml`, plus the QtQuick.Controls / QtQuick.Controls.Material / QtQuick.Layouts QML modules
-          - The bundled `libQXmppQt6.so.5` (vendored, QXmpp v1.10.2) and `libqt6keychain.so.1` (vendored, QtKeychain v0.17.0) must stay alongside the `pyobs-gui++` binary - already laid out correctly in this tarball
+          - The bundled `libQXmppQt6.so.5` (vendored, QXmpp v1.10.2) and `libqt6keychain.so.1` (vendored, QtKeychain v0.17.0) must stay alongside the `polaris` binary - already laid out correctly in this tarball
           - `libsecret-1-0` (usually already present on a KDE/GNOME desktop) plus a running Secret Service provider (e.g. gnome-keyring, KWallet) if you want "remember this login" to actually persist a password - the app works fine without one, that checkbox just won't have anywhere secure to store the password
 
           **Usage:**
           ```
-          tar -xzf pyobs-gui++-linux-x86_64.tar.gz
-          ./pyobs-gui++
+          tar -xzf polaris-linux-x86_64.tar.gz
+          ./polaris
           ```
 
           Built directly by this repository's CI (ubuntu-26.04, Qt 6.10.2) from this tag.

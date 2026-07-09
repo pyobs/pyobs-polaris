@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A clean-room C++/QML desktop client for **pyobs 2.0** (an observatory
-control framework), modeled directly on `pyobs-web-client`
+**Polaris** (repo: `pyobs-polaris`) is a clean-room C++/QML desktop client
+for **pyobs 2.0** (an observatory control framework), modeled directly on
+`pyobs-web-client`
 (TypeScript/Vue): no dependency on `pyobs-core` itself — everything is
 built from XMPP presence + disco#info discovered live over the wire
 (QXmpp instead of Strophe.js). Generic rendering by default; hand-written
@@ -48,7 +49,7 @@ cmake --preset conan-release -DCMAKE_BUILD_TYPE=Release
 cmake --build --preset conan-release
 ctest --output-on-failure --test-dir build/Release
 
-./build/Release/pyobs-gui++
+./build/Release/polaris
 ```
 
 The first configure fetches and builds `qxmpp` (~100 source files) and
@@ -94,7 +95,7 @@ behavior without a GUI: hand-compile a standalone `QCoreApplication`/
 against the already-built `libQXmppQt6.so` under
 `build/Release/_deps/qxmpp-build/src/`. For loading real `.qml` files
 this way, point `QQmlEngine::addImportPath()` at a copy of the generated
-`build/Release/pyobs/gui/` dir with the `prefer :/qt/qml/...` line
+`build/Release/pyobs/polaris/` dir with the `prefer :/qt/qml/...` line
 stripped from its `qmldir` — otherwise it silently fails to resolve with
 no warnings. This technique cannot confirm actual window visibility on a
 real compositor (offscreen QPA is a harness artifact, not proof of a UI
@@ -155,7 +156,7 @@ generic path; only add a custom view when there's a concrete UX reason,
 matching the precedent in `DEVELOPMENT.md`'s phase write-ups.
 
 ### Connection & subscription lifecycle (`src/comm/`)
-- `XmppClient` (QML singleton-ish, exposed as `pyobs.gui`'s `XmppClient`
+- `XmppClient` (QML singleton-ish, exposed as `pyobs.polaris`'s `XmppClient`
   element) is a thin wrapper around `QXmppClient`, exposing `status`
   (`"disconnected"|"connecting"|"connected"|"error"`, matching
   `useXmpp.ts`'s `XmppStatus` exactly), the live `ModuleListModel`, and
@@ -225,7 +226,7 @@ binding silently to nothing.
 basename of whatever header the `.cpp` that defines a `QML_ELEMENT` class
 originally included — so **every directory containing a `QML_ELEMENT`
 header must be added directly** to
-`target_include_directories(pyobs-gui++ PRIVATE ...)` in
+`target_include_directories(polaris PRIVATE ...)` in
 `CMakeLists.txt`. When adding a new `QML_ELEMENT` type in a new
 subdirectory, add that directory there too, or the build fails with a
 missing-header error that has nothing to do with the actual new code.

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(pyobs-gui++ LANGUAGES CXX)
+project(polaris LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,7 +15,7 @@ qt_standard_project_setup(REQUIRES 6.5)
 # scoping), not inlined here.
 include(cmake/Dependencies.cmake)
 
-qt_add_executable(pyobs-gui++
+qt_add_executable(polaris
     src/main.cpp
     src/comm/XmppClient.cpp
     src/comm/XmppClient.h
@@ -56,8 +56,8 @@ qt_add_executable(pyobs-gui++
     src/shell/ShellCommandParser.cpp
 )
 
-qt_add_qml_module(pyobs-gui++
-    URI pyobs.gui
+qt_add_qml_module(polaris
+    URI pyobs.polaris
     VERSION 1.0
     QML_FILES
         qml/Main.qml
@@ -79,7 +79,7 @@ qt_add_qml_module(pyobs-gui++
         qml/widgets/LogFooter.qml
 )
 
-target_link_libraries(pyobs-gui++ PRIVATE
+target_link_libraries(polaris PRIVATE
     Qt6::Quick
     Qt6::Xml
     Qt6::Network
@@ -90,14 +90,14 @@ target_link_libraries(pyobs-gui++ PRIVATE
 # QXmppQt6's target_include_directories only exposes qxmpp_export.h (from
 # generate_export_header) as a PRIVATE include, so consumers linking against
 # it via FetchContent need this added explicitly.
-target_include_directories(pyobs-gui++ PRIVATE ${qxmpp_BINARY_DIR}/src)
+target_include_directories(polaris PRIVATE ${qxmpp_BINARY_DIR}/src)
 
 # qmltyperegistrar emits #include <HeaderName.h> using only the header's
 # basename (taken from the #include in the .cpp that defined the QML_ELEMENT
 # class), so every directory holding such a header needs to be on the include
 # path directly - add each new one here as later phases add QML_ELEMENT types
 # outside src/comm.
-target_include_directories(pyobs-gui++ PRIVATE src/comm src/config src/plot)
+target_include_directories(polaris PRIVATE src/comm src/config src/plot)
 
 enable_testing()
 add_subdirectory(tests)

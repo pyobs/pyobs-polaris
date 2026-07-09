@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Ports pyobs-gui's ShellWidget/CommandInputWidget/pyobs.utils.shellcommand.
 // ShellCommand: a single-line command prompt (`module.command(arg1, arg2,

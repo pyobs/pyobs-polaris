@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Persistent log tail docked below the main content on every page,
 // ported from pyobs-gui's MainWindow (mainwindow.py's always-visible

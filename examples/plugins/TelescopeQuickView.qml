@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Example plugin (TODO.md's "Plugin mechanism for custom module widgets",
 // step 2) - see PluginLoader.qml's own doc comment for the full contract

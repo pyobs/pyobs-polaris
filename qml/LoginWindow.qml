@@ -19,7 +19,7 @@ ApplicationWindow {
     id: root
     width: 640
     height: 640
-    title: "pyobs-gui++ - Sign in"
+    title: "Polaris - Sign in"
 
     Material.theme: Material.Dark
 
@@ -205,7 +205,7 @@ ApplicationWindow {
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
-                text: "pyobs-gui++"
+                text: "Polaris"
                 font.bold: true
                 font.pixelSize: 20
             }

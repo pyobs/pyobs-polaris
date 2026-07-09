@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Ports pyobs-gui's StatusWidget (statuswidget.py): a flat table of every
 // connected module's name, version and live presence state (ready/error/

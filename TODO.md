@@ -1,4 +1,4 @@
-# pyobs-gui++ — todo
+# pyobs-polaris — todo
 
 What's planned next. See `DEVELOPMENT.md` for how to build, and for the
 design decisions/gotchas behind everything already done (Phases 0–7.5).
@@ -20,7 +20,7 @@ a guarantee.
 ## Plugin mechanism for custom module widgets
 
 **Goal:** let a widget for a given interface (or a given specific module)
-be contributed without recompiling `pyobs-gui++`, instead of every new
+be contributed without recompiling `polaris`, instead of every new
 widget requiring a hand-edited PR against this repo (as `IWeather`/
 `ITelescope`/`ICamera` below all are). Motivated by pyobs's own
 extensibility — modules can expose arbitrary custom interfaces beyond the

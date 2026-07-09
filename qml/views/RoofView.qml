@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Dedicated page for IRoof modules, promoted from the former RoofWidget
 // (previously embedded in the now-removed Dashboard) on direct request -

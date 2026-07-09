@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Dedicated page for IMode modules, ported from pyobs-gui's modewidget.py
 // (ModeWidget) - see TODO.md. Only reachable via the sidebar while at

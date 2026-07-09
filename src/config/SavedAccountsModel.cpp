@@ -11,7 +11,7 @@ namespace {
 // AppSettings' original doc comment. Entries are keyed on the account's
 // stable `id`, not its jid, so editing the jid never orphans a stored
 // password.
-constexpr auto kKeychainService = "pyobs-gui++";
+constexpr auto kKeychainService = "Polaris";
 constexpr auto kAccountsArrayKey = "accounts";
 } // namespace
 

@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Ports pyobs-web-client's LoggingView.vue. Note this filters to
 // type === "LogEvent" specifically - unlike Phase 6's original

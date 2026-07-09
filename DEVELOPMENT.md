@@ -1,4 +1,4 @@
-# pyobs-gui++ — development notes
+# pyobs-polaris — development notes
 
 A clean-room C++/QML client for pyobs 2.0, modeled directly on
 **pyobs-web-client**: no dependency on pyobs-core, everything built from
@@ -69,8 +69,8 @@ too, not just the code.
 ### Build
 
 ```bash
-git clone git@github.com:pyobs/pyobs-gui-.git pyobs-gui++
-cd pyobs-gui++
+git clone git@github.com:pyobs/pyobs-polaris.git pyobs-polaris
+cd pyobs-polaris
 
 # Generates CMakeUserPresets.json (gitignored) - do this before the
 # cmake --preset step below, or that preset won't exist yet.
@@ -88,7 +88,7 @@ minutes), and deliberately not a Conan dependency (see `CMakeLists.txt`'s
 own comment: ConanCenter's `qxmpp` recipe would rebuild the whole of Qt
 from source instead).
 
-Run it: `./build/Release/pyobs-gui++`
+Run it: `./build/Release/polaris`
 
 ### Live-verification test fixtures
 
@@ -331,7 +331,7 @@ single-login version is gone, not kept alongside this.
 
 - `config::AppSettings` (QObject, `QML_ELEMENT`) wraps a plain `QSettings`
   for genuinely app-wide, non-per-account settings — resolves to the
-  system default location (e.g. `~/.config/pyobs/pyobs-gui++.conf` on
+  system default location (e.g. `~/.config/pyobs/Polaris.conf` on
   Linux) purely from `QCoreApplication::setOrganizationName()`/
   `setApplicationName()` in `main.cpp`, which must run before any
   `QSettings` is constructed. Currently holds only
@@ -374,7 +374,7 @@ single-login version is gone, not kept alongside this.
   same treatment as qxmpp (Phase 0) — `storePassword()`/`loadPassword()`/
   `clearStoredPassword()` go through `QKeychain::WritePasswordJob`/
   `ReadPasswordJob`/`DeletePasswordJob` (async, `finished` signal), keyed
-  on the account's `id` under service `"pyobs-gui++"`. On Linux this needs
+  on the account's `id` under service `"Polaris"`. On Linux this needs
   `libsecret-1-dev` + `pkg-config` to build (see Prerequisites) and a
   running Secret Service provider (gnome-keyring/KWallet) at runtime for
   it to actually persist anything — `QKeychain::isAvailable()` is false
@@ -405,7 +405,7 @@ single-login version is gone, not kept alongside this.
   which account a delayed keychain read ends up connecting.
 - `qt6keychain` builds as a shared library (`BUILD_SHARED_LIBS` defaults
   `ON` upstream) - like `libQXmppQt6.so.5`, it needs bundling alongside the
-  `pyobs-gui++` binary for releases (`.github/workflows/build.yml`'s
+  `polaris` binary for releases (`.github/workflows/build.yml`'s
   packaging step), not just at dev-build time.
 - Its own `autotest` subdirectory builds by default (gated on the CTest
   convention variable `BUILD_TESTING`, set via its own `include(CTest)`)
@@ -975,7 +975,7 @@ this item's own bugs**:
 - The dev ejabberd server's `mode`/`autofocus` (and likely other) fixture
   accounts had their passwords out of sync with what `fixtures/*.yaml`
   assume (`pyobs`) - fixed via `ejabberdctl change_password`, not a
-  `pyobs-gui++` or `pyobs-core` bug, just dev-environment drift. Worth
+  `pyobs-polaris` or `pyobs-core` bug, just dev-environment drift. Worth
   checking again if a fresh fixture run ever gets "Invalid username or
   password" for an account that's already in `registered_users`.
 - `pyobs.modules.utils.DummyMode` isn't re-exported from that package's
@@ -1497,9 +1497,12 @@ release notes call this out as a runtime requirement instead.
 
 ## Repository
 
-`git@github.com:pyobs/pyobs-gui-.git` (trailing hyphen is deliberate, not
-a typo — renamed from `pyobs-qml-client` during Phase 0). Currently
-reports as private to unauthenticated GitHub API reads, which also means
-CI run status and release contents can't be checked from a plain
-unauthenticated `curl` — needs either the `gh` CLI with a token, or
-checking directly on github.com.
+`git@github.com:pyobs/pyobs-polaris.git` — renamed from `pyobs-gui++`
+(itself renamed from `pyobs-qml-client` during Phase 0): `++` isn't valid
+in a GitHub repo name, which the old name only worked around with a
+trailing hyphen (`pyobs-gui-`); the project and its GUI are both just
+called Polaris now, sidestepping the problem rather than working around
+it again. Currently reports as private to unauthenticated GitHub API
+reads, which also means CI run status and release contents can't be
+checked from a plain unauthenticated `curl` — needs either the `gh` CLI
+with a token, or checking directly on github.com.

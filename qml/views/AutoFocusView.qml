@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Dedicated page for IAutoFocus modules, ported from pyobs-gui's
 // autofocuswidget.py (AutoFocusWidget) - see TODO.md. Only reachable via

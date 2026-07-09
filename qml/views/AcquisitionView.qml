@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Dedicated page for IAcquisition modules, ported from pyobs-gui's
 // acquisitionwidget.py (AcquisitionWidget) - see TODO.md. Only reachable

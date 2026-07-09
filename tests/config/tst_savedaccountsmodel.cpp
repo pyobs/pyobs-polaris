@@ -256,7 +256,7 @@ void TestSavedAccountsModel::removeAccountDeletesItsKeychainEntry()
     // the keychain entry itself is actually gone, not just the QSettings
     // row - removeAccount() fires its delete job fire-and-forget, so give
     // it a moment to land.
-    auto *job = new QKeychain::ReadPasswordJob(QStringLiteral("pyobs-gui++"));
+    auto *job = new QKeychain::ReadPasswordJob(QStringLiteral("Polaris"));
     job->setAutoDelete(true);
     job->setKey(id);
     QSignalSpy finishedSpy(job, &QKeychain::Job::finished);

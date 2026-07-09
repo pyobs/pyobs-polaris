@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Ports pyobs-gui's eventswidget.py: a generic dump of every incoming
 // event across all connected modules, not just LogEvent (LogsView.qml/

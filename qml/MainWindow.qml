@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Ports pyobs-web-client's AppLayout.vue: a left sidebar nav (Status,
 // then a "Tools" group - Shell/Logs - then a conditionally-visible
@@ -17,7 +17,7 @@ ApplicationWindow {
     id: root
     width: 900
     height: 700
-    title: "pyobs-gui++"
+    title: "Polaris"
 
     Material.theme: Material.Dark
 
@@ -191,7 +191,7 @@ ApplicationWindow {
 
                 Label {
                     Layout.margins: 12
-                    text: "pyobs-gui++"
+                    text: "Polaris"
                     font.bold: true
                 }
 

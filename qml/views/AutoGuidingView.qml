@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Dedicated page for IAutoGuiding modules, ported from pyobs-gui's
 // autoguidingwidget.py (AutoGuidingWidget) - see TODO.md. Only reachable

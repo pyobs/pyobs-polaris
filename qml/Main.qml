@@ -1,5 +1,5 @@
 import QtQuick
-import pyobs.gui
+import pyobs.polaris
 
 // Entry point. Not a Window itself - just owns the one XmppClient
 // instance (which must survive the login -> main window handoff, since
