@@ -54,6 +54,8 @@ qt_add_executable(polaris
     src/plot/PlotItem.cpp
     src/shell/ShellCommandParser.h
     src/shell/ShellCommandParser.cpp
+    src/util/CoordinateTransform.h
+    src/util/CoordinateTransform.cpp
 )
 
 qt_add_qml_module(polaris
@@ -87,6 +89,7 @@ target_link_libraries(polaris PRIVATE
     Qt6::Network
     QXmppQt6
     qt6keychain
+    libnova
 )
 
 # QXmppQt6's target_include_directories only exposes qxmpp_export.h (from
@@ -94,12 +97,20 @@ target_link_libraries(polaris PRIVATE
 # it via FetchContent need this added explicitly.
 target_include_directories(polaris PRIVATE ${qxmpp_BINARY_DIR}/src)
 
+# libnova's ln_types.h requires exactly one of LIBNOVA_SHARED/
+# LIBNOVA_STATIC to be defined, but (unlike QXmppQt6 above) its own
+# CMakeLists.txt doesn't propagate this to consumers via
+# target_compile_definitions(... PUBLIC ...) - see cmake/Dependencies.cmake's
+# own comment on the libnova FetchContent block for why. Matches
+# BUILD_SHARED_LIBRARY defaulting to ON there.
+target_compile_definitions(polaris PRIVATE LIBNOVA_SHARED)
+
 # qmltyperegistrar emits #include <HeaderName.h> using only the header's
 # basename (taken from the #include in the .cpp that defined the QML_ELEMENT
 # class), so every directory holding such a header needs to be on the include
 # path directly - add each new one here as later phases add QML_ELEMENT types
 # outside src/comm.
-target_include_directories(polaris PRIVATE src/comm src/config src/plot)
+target_include_directories(polaris PRIVATE src/comm src/config src/plot src/util)
 
 enable_testing()
 add_subdirectory(tests)

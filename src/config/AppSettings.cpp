@@ -9,6 +9,9 @@ namespace config {
 namespace {
 constexpr auto kLastSelectedAccountIdKey = "login/lastSelectedAccountId";
 constexpr auto kPluginsDirectoryKey = "plugins/directory";
+constexpr auto kObserverLatitudeKey = "observer/latitude";
+constexpr auto kObserverLongitudeKey = "observer/longitude";
+constexpr auto kObserverElevationKey = "observer/elevation";
 } // namespace
 
 AppSettings::AppSettings(QObject *parent)
@@ -44,6 +47,56 @@ void AppSettings::setPluginsDirectory(const QString &path)
 
     m_settings.setValue(kPluginsDirectoryKey, path);
     Q_EMIT pluginsDirectoryChanged();
+}
+
+double AppSettings::observerLatitude() const
+{
+    return m_settings.value(kObserverLatitudeKey, 0.0).toDouble();
+}
+
+void AppSettings::setObserverLatitude(double value)
+{
+    if (value == observerLatitude()) {
+        return;
+    }
+
+    m_settings.setValue(kObserverLatitudeKey, value);
+    Q_EMIT observerLatitudeChanged();
+}
+
+double AppSettings::observerLongitude() const
+{
+    return m_settings.value(kObserverLongitudeKey, 0.0).toDouble();
+}
+
+void AppSettings::setObserverLongitude(double value)
+{
+    if (value == observerLongitude()) {
+        return;
+    }
+
+    m_settings.setValue(kObserverLongitudeKey, value);
+    Q_EMIT observerLongitudeChanged();
+}
+
+double AppSettings::observerElevation() const
+{
+    return m_settings.value(kObserverElevationKey, 0.0).toDouble();
+}
+
+void AppSettings::setObserverElevation(double value)
+{
+    if (value == observerElevation()) {
+        return;
+    }
+
+    m_settings.setValue(kObserverElevationKey, value);
+    Q_EMIT observerElevationChanged();
+}
+
+bool AppSettings::hasObserverLocation() const
+{
+    return m_settings.contains(kObserverLatitudeKey) && m_settings.contains(kObserverLongitudeKey);
 }
 
 QStringList AppSettings::pluginFiles() const

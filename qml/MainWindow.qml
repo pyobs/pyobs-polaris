@@ -110,7 +110,7 @@ ApplicationWindow {
         WeatherView { xmppClient: root.xmppClient }
     }
     property Component telescopeComponent: Component {
-        TelescopeView { xmppClient: root.xmppClient }
+        TelescopeView { xmppClient: root.xmppClient; appSettings: root.appSettings }
     }
     property Component cameraComponent: Component {
         CameraView { xmppClient: root.xmppClient }

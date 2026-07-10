@@ -5,19 +5,30 @@ import pyobs.polaris
 
 // Dedicated page for ITelescope modules, ported from pyobs-gui's
 // telescopewidget.py - MVP scope only (see TODO.md for what's
-// deliberately out of scope: sexagesimal RA/Dec parsing, destination-
-// coordinate preview, solar-frame pointing, SIMBAD/Horizons/MPC lookups,
-// jog control, Filter/Focus/Temperatures). ITelescope itself is a bare
-// IMotion marker (confirmed against pyobs.interfaces.ITelescope source),
-// so the base block below is identical to RoofView.qml's; Move and
-// Offsets stack under it, each gated on the module actually implementing
-// the relevant capability interface (IPointingRaDec/IPointingAltAz/
-// IOffsetsRaDec/IOffsetsAltAz) - see DEVELOPMENT.md for the live-
-// verification caveat around IOffsetsAltAz specifically.
+// deliberately out of scope: sexagesimal RA/Dec parsing, solar-frame
+// pointing, SIMBAD/Horizons/MPC lookups, jog control, Filter/Focus/
+// Temperatures). ITelescope itself is a bare IMotion marker (confirmed
+// against pyobs.interfaces.ITelescope source), so the base block below is
+// identical to RoofView.qml's; Move and Offsets stack under it, each
+// gated on the module actually implementing the relevant capability
+// interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/IOffsetsAltAz) -
+// see DEVELOPMENT.md for the live-verification caveat around
+// IOffsetsAltAz specifically.
+//
+// Move also includes a destination-coordinate preview (typed RA/Dec <->
+// Alt/Az, computed via the CoordinateTransform QML singleton - see
+// src/util/CoordinateTransform.h) and an inline Observer Location editor.
+// pyobs-core has no wire path for observer location at all (confirmed
+// against source - the legacy Python GUI only had it via in-process
+// Python object sharing, never serialized to XMPP), so this is a
+// client-side-only AppSettings value the user enters once, not fetched
+// from any module. Purely informational either way - never changes what
+// move_radec()/move_altaz() actually send.
 ScrollView {
     id: root
 
     required property var xmppClient
+    required property var appSettings
 
     clip: true
 
@@ -269,6 +280,55 @@ ScrollView {
                         font.bold: true
                     }
 
+                    // Client-side only - see the file header comment for
+                    // why this can't be fetched from the module. Plain
+                    // "controlled component" TextFields (same idiom as
+                    // CameraView.qml's broadcastCheck): text is set once
+                    // from the persisted AppSettings value, then the user
+                    // freely edits it, writing back on editingFinished.
+                    RowLayout {
+                        Label { text: "Observer:" }
+                        Label { text: "Lat [deg]:" }
+                        TextField {
+                            id: obsLatField
+                            implicitWidth: 70
+                            text: root.appSettings.observerLatitude.toFixed(4)
+                            validator: DoubleValidator { bottom: -90; top: 90 }
+                            onEditingFinished: {
+                                const value = parseFloat(text)
+                                if (!isNaN(value)) {
+                                    root.appSettings.observerLatitude = value
+                                }
+                            }
+                        }
+                        Label { text: "Lon [deg]:" }
+                        TextField {
+                            id: obsLonField
+                            implicitWidth: 70
+                            text: root.appSettings.observerLongitude.toFixed(4)
+                            validator: DoubleValidator { bottom: -180; top: 180 }
+                            onEditingFinished: {
+                                const value = parseFloat(text)
+                                if (!isNaN(value)) {
+                                    root.appSettings.observerLongitude = value
+                                }
+                            }
+                        }
+                        Label { text: "Elev [m]:" }
+                        TextField {
+                            id: obsElevField
+                            implicitWidth: 60
+                            text: root.appSettings.observerElevation.toFixed(1)
+                            validator: DoubleValidator {}
+                            onEditingFinished: {
+                                const value = parseFloat(text)
+                                if (!isNaN(value)) {
+                                    root.appSettings.observerElevation = value
+                                }
+                            }
+                        }
+                    }
+
                     RowLayout {
                         Label { text: "Coordinates:" }
                         ComboBox {
@@ -304,6 +364,56 @@ ScrollView {
                             enabled: telescopeDelegate.motionReady && raField.acceptableInput && decField.acceptableInput
                             onClicked: telescopeDelegate.runWithParams(
                                 "move_radec", [parseFloat(raField.text), parseFloat(decField.text)])
+                        }
+                    }
+
+                    // Destination-coordinate preview: shows what the
+                    // *other* coordinate system's values would be for
+                    // whichever page is currently active, computed via
+                    // the CoordinateTransform QML singleton (libnova-
+                    // backed, see src/util/CoordinateTransform.h).
+                    // Read-only, informational only - the Move buttons
+                    // above/below always send exactly the user's typed/
+                    // spun values, unchanged.
+                    Label {
+                        Layout.leftMargin: 8
+                        color: "grey"
+                        text: {
+                            // Read these unconditionally, before any
+                            // early return - real bug caught live: a
+                            // Q_INVOKABLE call like hasObserverLocation()
+                            // below creates no QML binding dependency by
+                            // itself. The first evaluation of this binding
+                            // happens while location is still unset, so it
+                            // used to return before ever reading
+                            // observerLatitude/observerLongitude as
+                            // properties - meaning this binding never
+                            // re-evaluated once the user actually set a
+                            // location, since no dependency on those
+                            // properties had ever been established.
+                            // Reading them here every time, regardless of
+                            // branch, fixes that.
+                            const lat = root.appSettings.observerLatitude
+                            const lon = root.appSettings.observerLongitude
+                            const elev = root.appSettings.observerElevation
+                            if (!root.appSettings.hasObserverLocation()) {
+                                return "Set observer location above to preview"
+                            }
+                            if (moveTypeCombo.currentText === "RA/Dec") {
+                                const ra = parseFloat(raField.text)
+                                const dec = parseFloat(decField.text)
+                                if (isNaN(ra) || isNaN(dec)) {
+                                    return ""
+                                }
+                                const result = CoordinateTransform.equatorialToHorizontal(ra, dec, lat, lon, elev)
+                                return "→ Alt: " + result.alt.toFixed(2) + "°, Az: " + result.az.toFixed(2) + "°"
+                            }
+                            if (moveTypeCombo.currentText === "Alt/Az") {
+                                const result = CoordinateTransform.horizontalToEquatorial(
+                                    altSpin.value, azSpin.value, lat, lon, elev)
+                                return "→ RA: " + result.ra.toFixed(2) + "°, Dec: " + result.dec.toFixed(2) + "°"
+                            }
+                            return ""
                         }
                     }
 

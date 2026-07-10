@@ -32,6 +32,24 @@ class AppSettings : public QObject
     // discipline this class's own header comment already states.
     Q_PROPERTY(
         QString pluginsDirectory READ pluginsDirectory WRITE setPluginsDirectory NOTIFY pluginsDirectoryChanged)
+    // Client-side observer location (TODO.md's "ITelescope follow-up") -
+    // TelescopeView.qml's destination-coordinate preview needs this, but
+    // pyobs-core has no wire path for it at all (confirmed against
+    // source: the legacy Python GUI only had it because it ran in-process
+    // as a pyobs.modules.Module inside the same MultiModule tree as the
+    // telescope, sharing an in-memory astroplan.Observer - never
+    // serialized to XMPP). Unlike pluginsDirectory above (a one-time
+    // developer-only knob with deliberately no settings UI), this is a
+    // genuinely interactive end-user feature - TelescopeView.qml gives it
+    // real inline TextFields, not "edit the ini directly". Degrees,
+    // degrees, meters - see hasObserverLocation() for why the getters
+    // alone don't distinguish "never set" from "set to 0".
+    Q_PROPERTY(double observerLatitude READ observerLatitude WRITE setObserverLatitude NOTIFY
+                   observerLatitudeChanged)
+    Q_PROPERTY(double observerLongitude READ observerLongitude WRITE setObserverLongitude NOTIFY
+                   observerLongitudeChanged)
+    Q_PROPERTY(double observerElevation READ observerElevation WRITE setObserverElevation NOTIFY
+                   observerElevationChanged)
 
 public:
     explicit AppSettings(QObject *parent = nullptr);
@@ -41,6 +59,26 @@ public:
 
     QString pluginsDirectory() const;
     void setPluginsDirectory(const QString &path);
+
+    double observerLatitude() const;
+    void setObserverLatitude(double value);
+    double observerLongitude() const;
+    void setObserverLongitude(double value);
+    double observerElevation() const;
+    void setObserverElevation(double value);
+
+    // Getters above default to 0.0 when unset - indistinguishable from a
+    // real location at (0,0). This is the actual "has the user set this
+    // yet" check TelescopeView.qml's destination preview gates on before
+    // showing anything, checked via QSettings::contains() rather than a
+    // NaN sentinel (a double NaN's round-trip through QSettings' on-disk
+    // ini serialization isn't guaranteed reliable across platforms/Qt
+    // versions - contains() sidesteps that entirely). Elevation
+    // deliberately isn't part of this check - it defaults to sea level
+    // (0m) harmlessly, and coordxform::equatorialToHorizontal() doesn't
+    // even use it (see CoordinateTransform.cpp) - only lat/lon actually
+    // gate whether a preview can be computed at all.
+    Q_INVOKABLE bool hasObserverLocation() const;
 
     // Every *.qml file directly inside pluginsDirectory() (non-recursive -
     // matches TODO.md's "a configurable plugins directory" wording, not a
@@ -56,6 +94,9 @@ public:
 Q_SIGNALS:
     void lastSelectedAccountIdChanged();
     void pluginsDirectoryChanged();
+    void observerLatitudeChanged();
+    void observerLongitudeChanged();
+    void observerElevationChanged();
 
 private:
     QSettings m_settings;

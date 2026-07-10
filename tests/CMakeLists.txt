@@ -163,3 +163,17 @@ target_link_libraries(tst_savedaccountsmodel PRIVATE Qt6::Test Qt6::Core Qt6::Qm
 # dbus-run-session) is available first rather than assuming this passes
 # there unmodified.
 add_test(NAME tst_savedaccountsmodel COMMAND tst_savedaccountsmodel)
+
+# No Qml/Network/Xml needed - CoordinateTransform.cpp has zero XMPP/QML
+# dependency (see its own header comment), just libnova.
+add_executable(tst_coordinatetransform
+    util/tst_coordinatetransform.cpp
+    ${CMAKE_SOURCE_DIR}/src/util/CoordinateTransform.h
+    ${CMAKE_SOURCE_DIR}/src/util/CoordinateTransform.cpp
+)
+target_include_directories(tst_coordinatetransform PRIVATE ${CMAKE_SOURCE_DIR}/src/util)
+target_link_libraries(tst_coordinatetransform PRIVATE Qt6::Test Qt6::Qml libnova)
+# See CMakeLists.txt's own comment on polaris's identical definition.
+target_compile_definitions(tst_coordinatetransform PRIVATE LIBNOVA_SHARED)
+
+add_test(NAME tst_coordinatetransform COMMAND tst_coordinatetransform)

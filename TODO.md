@@ -54,33 +54,60 @@ hot-reloading native plugins, or a permission/sandboxing model beyond
 
 ---
 
-## `ITelescope` follow-up: libnova, destination preview, solar-frame pointing
+## Solar-frame pointing (`IPointingHGS`/`IPointingHelioprojective`) — blocked
 
-**Goal:** unblock the coordinate-transform-dependent items deferred from
-the `ITelescope` MVP above, in one follow-up PR rather than piecemeal,
-since destination preview and solar-frame pointing both need the same
-observer-location + Alt/Az↔RA/Dec transform plumbing.
+**Split out of the original "`ITelescope` follow-up: libnova, destination
+preview, solar-frame pointing" item** once libnova vendoring + the
+destination-coordinate preview shipped (see `DEVELOPMENT.md`) - this piece
+alone is blocked, not merely deferred, so it gets its own entry rather
+than silently vanishing from the backlog.
 
-- Vendor **libnova** via CMake `FetchContent` (pinned git tag, built
-  against system libs) — same treatment as `qxmpp`/`qtkeychain` (see
-  `DEVELOPMENT.md`'s Phase 0 summary), not a Conan dependency. Chosen over
-  ERFA/NOVAS/SPICE: it's the library KStars/INDI already use for this
-  exact problem (telescope-pointing Alt/Az↔RA/Dec, sidereal time,
-  VSOP87 solar/planetary positions) rather than a general-purpose
-  data-reduction toolkit (ERFA) or heavier ephemeris/catalog system
-  (NOVAS, SPICE — SPICE also needs downloaded kernel files, hundreds of
-  MB, only worth it if JPL Horizons' network lookup itself needs
-  replacing).
-- Destination-coordinate preview: show the Alt/Az a typed-in RA/Dec target
-  corresponds to (and vice versa) before committing to Move, using the
-  logged-in observer's location — ports `_calc_dest_equatorial`/
-  `_calc_dest_horizontal`.
-- Solar-frame pointing: `IPointingHGS`/`IPointingHelioprojective` pages,
-  needs libnova's solar position (VSOP87) on top of the coordinate
-  transform.
-- Still explicitly out of scope even after this: SIMBAD/JPL Horizons/MPC
-  lookups (network dependency, unrelated to libnova), the compass widget,
-  the Filter/Focus/Temperatures sidebar.
+**Why it's blocked:** zero live-testable coverage anywhere in the pyobs
+ecosystem, confirmed by reading source across every sibling repo, not
+assumed. `IPointingHGS` has never been implemented by any module,
+anywhere - the interface exists purely speculatively. `IPointingHelioprojective`
+is implemented by exactly one module, `SolarTelescope`
+(`pyobs-iagvt/pyobs_iagvt/modules/solartelescope.py`) - hardware-backed (a
+real siderostat device), not usable as a dev fixture, and in a different
+sibling repo from pyobs-core. `DummyTelescope` implements neither. Unlike
+every other partial-coverage caveat already documented in this project
+(`ITelescope`'s own `IOffsetsAltAz`, `ICamera`'s `IAbortable`/`IFilters` -
+each a single sub-row shipped schema-verified-only), this would mean
+shipping two full interfaces' worth of Move UI with **no way to verify
+any of it** against a real module, ever, in this dev environment - judged
+too large a gap to accept silently (user-confirmed decision, not a
+unilateral call).
+
+**What would unblock it** (either is sufficient):
+- A new lightweight mock module added to pyobs-core implementing
+  `IPointingHGS` and/or `IPointingHelioprojective` (mirrors how
+  `pyobs.modules.weather.MockWeather` unblocked `IWeather` - see
+  `DEVELOPMENT.md`), maintained upstream, not client-side.
+- Dev access to a real `SolarTelescope` deployment/hardware environment.
+
+**If/when unblocked**, the actual widget work: `TelescopeView.qml`'s Move
+`ComboBox` gains "HGS"/"Helioprojective" entries alongside the existing
+RA/Dec and Alt/Az pages (visible only if the module implements the
+relevant interface, same capability-gating shape every other Move option
+already uses); `move_hgs_lon_lat(lon, lat)`/`move_helioprojective(theta_x,
+theta_y)` (both plain degrees on the wire - confirmed from source, not the
+arcsec the legacy Python widget's spin boxes happened to display) via the
+same real-param `executeMethod` call sites as `move_radec`/`move_altaz`.
+Full destination-coordinate transform to/from these frames (the legacy
+`telescopewidget.py`'s HGS↔Helioprojective conversion, via `sunpy`'s
+`Heliographic Stonyhurst`/`Helioprojective` frame machinery) is out of
+scope even then unless something concrete needs it - libnova has no
+built-in support for either frame, that math would need to be ported or a
+new dependency added, and the legacy widget's own version of this
+specific piece (`_calc_dest_heliographic_stonyhurst`/
+`_calc_dest_helioprojective_radial`) turned out to be an incomplete
+stub when actually read (just shows the Sun's current position, doesn't
+convert the typed value) - not a trustworthy reference to port from
+as-is.
+
+**Still explicitly out of scope even once unblocked**: SIMBAD/JPL
+Horizons/MPC lookups (network dependency, unrelated to any of this), the
+compass widget, the Filter/Focus/Temperatures sidebar.
 
 ---
 
