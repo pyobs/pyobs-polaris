@@ -90,6 +90,16 @@ from source instead).
 
 Run it: `./build/Release/polaris`
 
+**IDE gotcha (CLion or similar)**: an ad-hoc IDE-generated build profile
+(e.g. CLion's default `cmake-build-debug`) invokes `cmake` directly,
+bypassing the Conan-generated toolchain entirely — `find_package(cfitsio)`
+then fails outright (`cfitsio` is Conan-only, no system package fallback,
+unlike Qt6). Point the IDE's CMake profile at the `conan-release` CMake
+preset instead of a raw custom profile. For a Debug build specifically,
+run `conan install . --build=missing -s build_type=Debug` first (adds a
+`conan-debug` preset, generates `build/Debug/generators/`) and point the
+IDE at that preset.
+
 ### Live-verification test fixtures
 
 Treating "verified live" as the bar for done (see above) means reproducing
