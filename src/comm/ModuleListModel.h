@@ -65,6 +65,24 @@ public:
         // a generic capabilities-dump role, same narrow-scope discipline as
         // VersionRole above.
         ModeGroupsRole,
+        // QVariantList of "{x}x{y}" strings decoded from IBinning
+        // capabilities' "binnings" field (list of {x,y} structs), empty
+        // list if the module hasn't reported IBinning capabilities -
+        // CameraView.qml's IBinning ComboBox population. Same narrow-scope
+        // discipline as ModeGroupsRole above, not a generic capabilities
+        // dump.
+        BinningOptionsRole,
+        // QVariantMap {"fullFrameX":..., "fullFrameY":..., "fullFrameWidth":
+        // ..., "fullFrameHeight":...} decoded from IWindow capabilities
+        // (four flat int fields, no nesting), empty map if the module
+        // hasn't reported IWindow capabilities - CameraView.qml's IWindow
+        // SpinBox bounds.
+        WindowExtentRole,
+        // QVariantList of plain strings decoded from IImageFormat
+        // capabilities' "image_formats" field, empty list if the module
+        // hasn't reported IImageFormat capabilities - CameraView.qml's
+        // IImageFormat ComboBox population.
+        ImageFormatsRole,
         // "ready" / "error" / "local", derived from presence show/status -
         // see ModuleInfo::presenceState. The Status page's health badge.
         PresenceStateRole,

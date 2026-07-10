@@ -130,6 +130,72 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         }
         return result;
     }
+    case BinningOptionsRole: {
+        QVariantList result;
+        const auto it = info.capabilities.constFind(QStringLiteral("IBinning"));
+        if (it == info.capabilities.constEnd() || !it.value().isDict()) {
+            return result;
+        }
+        for (const auto &field : it.value().toDict()) {
+            if (field.first != QStringLiteral("binnings") || !field.second.isList()) {
+                continue;
+            }
+            for (const codec::WireValue &binning : field.second.toList()) {
+                if (!binning.isDict()) {
+                    continue;
+                }
+                qint64 x = 0;
+                qint64 y = 0;
+                for (const auto &axis : binning.toDict()) {
+                    if (axis.first == QStringLiteral("x") && axis.second.isInt()) {
+                        x = axis.second.toInt();
+                    } else if (axis.first == QStringLiteral("y") && axis.second.isInt()) {
+                        y = axis.second.toInt();
+                    }
+                }
+                result.push_back(QStringLiteral("%1x%2").arg(x).arg(y));
+            }
+        }
+        return result;
+    }
+    case WindowExtentRole: {
+        QVariantMap result;
+        const auto it = info.capabilities.constFind(QStringLiteral("IWindow"));
+        if (it == info.capabilities.constEnd() || !it.value().isDict()) {
+            return result;
+        }
+        static const QMap<QString, QString> fieldNames {
+            { QStringLiteral("full_frame_x"), QStringLiteral("fullFrameX") },
+            { QStringLiteral("full_frame_y"), QStringLiteral("fullFrameY") },
+            { QStringLiteral("full_frame_width"), QStringLiteral("fullFrameWidth") },
+            { QStringLiteral("full_frame_height"), QStringLiteral("fullFrameHeight") },
+        };
+        for (const auto &field : it.value().toDict()) {
+            const auto nameIt = fieldNames.constFind(field.first);
+            if (nameIt != fieldNames.constEnd() && field.second.isInt()) {
+                result.insert(nameIt.value(), static_cast<qlonglong>(field.second.toInt()));
+            }
+        }
+        return result;
+    }
+    case ImageFormatsRole: {
+        QVariantList result;
+        const auto it = info.capabilities.constFind(QStringLiteral("IImageFormat"));
+        if (it == info.capabilities.constEnd() || !it.value().isDict()) {
+            return result;
+        }
+        for (const auto &field : it.value().toDict()) {
+            if (field.first != QStringLiteral("image_formats") || !field.second.isList()) {
+                continue;
+            }
+            for (const codec::WireValue &format : field.second.toList()) {
+                if (format.isString()) {
+                    result.push_back(format.toString());
+                }
+            }
+        }
+        return result;
+    }
     case PresenceStateRole:
         return info.presenceState;
     case PresenceErrorRole:
@@ -149,6 +215,9 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { CommandSchemasRole, "commandSchemas" },
         { VersionRole, "version" },
         { ModeGroupsRole, "modeGroups" },
+        { BinningOptionsRole, "binningOptions" },
+        { WindowExtentRole, "windowExtent" },
+        { ImageFormatsRole, "imageFormats" },
         { PresenceStateRole, "presenceState" },
         { PresenceErrorRole, "presenceError" },
     };

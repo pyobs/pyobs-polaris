@@ -16,6 +16,12 @@ private slots:
     void versionIsEmptyWithoutIModuleCapabilities();
     void modeGroupsComeFromIModeCapabilities();
     void modeGroupsIsEmptyWithoutIModeCapabilities();
+    void binningOptionsComeFromIBinningCapabilities();
+    void binningOptionsIsEmptyWithoutIBinningCapabilities();
+    void windowExtentComesFromIWindowCapabilities();
+    void windowExtentIsEmptyWithoutIWindowCapabilities();
+    void imageFormatsComeFromIImageFormatCapabilities();
+    void imageFormatsIsEmptyWithoutIImageFormatCapabilities();
     void commandSchemasExposeFullParamList();
     void commandSchemasMarkOptionalParamsAndUnwrapTheirType();
     void commandSchemasIsEmptyWithoutCommands();
@@ -123,6 +129,102 @@ void TestModuleListModel::modeGroupsIsEmptyWithoutIModeCapabilities()
     model.upsert(makeModule(QStringLiteral("mode@localhost")));
 
     QVERIFY(model.data(model.index(0), ModuleListModel::ModeGroupsRole).toList().isEmpty());
+}
+
+void TestModuleListModel::binningOptionsComeFromIBinningCapabilities()
+{
+    ModuleInfo info = makeModule(QStringLiteral("camera@localhost"));
+    info.capabilities.insert(
+        QStringLiteral("IBinning"),
+        codec::WireValue(codec::WireDict {
+            { QStringLiteral("binnings"),
+              codec::WireValue(codec::WireList {
+                  codec::WireValue(codec::WireDict {
+                      { QStringLiteral("x"), codec::WireValue(qint64(1)) },
+                      { QStringLiteral("y"), codec::WireValue(qint64(1)) },
+                  }),
+                  codec::WireValue(codec::WireDict {
+                      { QStringLiteral("x"), codec::WireValue(qint64(2)) },
+                      { QStringLiteral("y"), codec::WireValue(qint64(2)) },
+                  }),
+                  codec::WireValue(codec::WireDict {
+                      { QStringLiteral("x"), codec::WireValue(qint64(3)) },
+                      { QStringLiteral("y"), codec::WireValue(qint64(3)) },
+                  }),
+              }) },
+        }));
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList options = model.data(model.index(0), ModuleListModel::BinningOptionsRole).toList();
+    QCOMPARE(options, QVariantList({ QStringLiteral("1x1"), QStringLiteral("2x2"), QStringLiteral("3x3") }));
+}
+
+void TestModuleListModel::binningOptionsIsEmptyWithoutIBinningCapabilities()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("camera@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::BinningOptionsRole).toList().isEmpty());
+}
+
+void TestModuleListModel::windowExtentComesFromIWindowCapabilities()
+{
+    ModuleInfo info = makeModule(QStringLiteral("camera@localhost"));
+    info.capabilities.insert(
+        QStringLiteral("IWindow"),
+        codec::WireValue(codec::WireDict {
+            { QStringLiteral("full_frame_x"), codec::WireValue(qint64(0)) },
+            { QStringLiteral("full_frame_y"), codec::WireValue(qint64(0)) },
+            { QStringLiteral("full_frame_width"), codec::WireValue(qint64(512)) },
+            { QStringLiteral("full_frame_height"), codec::WireValue(qint64(512)) },
+        }));
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantMap extent = model.data(model.index(0), ModuleListModel::WindowExtentRole).toMap();
+    QCOMPARE(extent.value(QStringLiteral("fullFrameX")).toLongLong(), 0);
+    QCOMPARE(extent.value(QStringLiteral("fullFrameY")).toLongLong(), 0);
+    QCOMPARE(extent.value(QStringLiteral("fullFrameWidth")).toLongLong(), 512);
+    QCOMPARE(extent.value(QStringLiteral("fullFrameHeight")).toLongLong(), 512);
+}
+
+void TestModuleListModel::windowExtentIsEmptyWithoutIWindowCapabilities()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("camera@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::WindowExtentRole).toMap().isEmpty());
+}
+
+void TestModuleListModel::imageFormatsComeFromIImageFormatCapabilities()
+{
+    ModuleInfo info = makeModule(QStringLiteral("camera@localhost"));
+    info.capabilities.insert(
+        QStringLiteral("IImageFormat"),
+        codec::WireValue(codec::WireDict {
+            { QStringLiteral("image_formats"),
+              codec::WireValue(codec::WireList {
+                  codec::WireValue(QStringLiteral("int8")),
+                  codec::WireValue(QStringLiteral("int16")),
+              }) },
+        }));
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList formats = model.data(model.index(0), ModuleListModel::ImageFormatsRole).toList();
+    QCOMPARE(formats, QVariantList({ QStringLiteral("int8"), QStringLiteral("int16") }));
+}
+
+void TestModuleListModel::imageFormatsIsEmptyWithoutIImageFormatCapabilities()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("camera@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::ImageFormatsRole).toList().isEmpty());
 }
 
 void TestModuleListModel::commandSchemasExposeFullParamList()

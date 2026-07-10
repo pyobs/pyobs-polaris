@@ -112,6 +112,9 @@ ApplicationWindow {
     property Component telescopeComponent: Component {
         TelescopeView { xmppClient: root.xmppClient }
     }
+    property Component cameraComponent: Component {
+        CameraView { xmppClient: root.xmppClient }
+    }
 
     // Per-entry visibility (same order/length as widgetRegistry.entries),
     // recomputed explicitly on every module-list change - WidgetRegistry's
@@ -148,6 +151,7 @@ ApplicationWindow {
         widgetRegistry.registerForInterface("IMode", { iconGlyph: "⇄", label: "Mode", component: root.modeComponent })
         widgetRegistry.registerForInterface("IWeather", { iconGlyph: "☁", label: "Weather", component: root.weatherComponent })
         widgetRegistry.registerForInterface("ITelescope", { iconGlyph: "🔭", label: "Telescope", component: root.telescopeComponent })
+        widgetRegistry.registerForInterface("ICamera", { iconGlyph: "📷", label: "Camera", component: root.cameraComponent })
 
         pluginLoader.loadAll(root.appSettings.pluginFiles())
 

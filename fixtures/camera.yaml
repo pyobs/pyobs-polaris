@@ -1,0 +1,30 @@
+{include _comm.yaml}
+
+# Test fixture for CameraView.qml's ICamera widget (see TODO.md).
+# DummyCamera implements ICamera/IExposureTime/IImageType (via
+# BaseCamera) plus IWindow/IBinning/ICooling/IGain/IImageFormat -
+# confirmed via source.
+#
+# Two known gaps, same class of caveat as ITelescope's IOffsetsAltAz:
+# - IAbortable is NOT declared (BaseCamera.abort() exists but isn't
+#   advertised via disco#info - its own docstring says "Derived class
+#   must implement IAbortable for this!"), so the Abort button's gating
+#   is schema-verified only, not live-tested against this fixture.
+# - IFilters is NOT declared either.
+#
+# Concrete defaults for sanity-checking a live wire dump against:
+# binnings [(1,1),(2,2),(3,3)], full frame (0,0,512,512), image formats
+# [int8,int16], gain 10.0/offset 0.0 (no declared range), cooling
+# setpoint -10.0/power 80/enabled true.
+#
+# Run with:
+#   pyobs fixtures/camera.yaml
+# against the same dev ejabberd server the other fixtures use (see
+# DEVELOPMENT.md's "Live-verification test fixtures").
+class: pyobs.modules.camera.DummyCamera
+name: DummyCamera
+
+comm:
+  <<: *comm
+  user: camera
+  password: pyobs
