@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Quick Xml Network)
+# Conan dependency (conanfile.txt), unlike qxmpp/QtKeychain below - see
+# that file's own comment on why cfitsio doesn't need the FetchContent/
+# system-Qt workaround qxmpp does (no Qt dependency of its own to
+# conflict with).
+find_package(cfitsio REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -60,6 +65,8 @@ qt_add_executable(polaris
     src/shell/ShellCommandParser.cpp
     src/util/CoordinateTransform.h
     src/util/CoordinateTransform.cpp
+    src/fits/FitsImage.h
+    src/fits/FitsImage.cpp
 )
 
 qt_add_qml_module(polaris
@@ -95,6 +102,7 @@ target_link_libraries(polaris PRIVATE
     QXmppQt6
     qt6keychain
     libnova
+    cfitsio::cfitsio
 )
 
 # QXmppQt6's target_include_directories only exposes qxmpp_export.h (from

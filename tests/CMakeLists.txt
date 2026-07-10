@@ -199,3 +199,15 @@ target_link_libraries(tst_coordinatetransform PRIVATE Qt6::Test Qt6::Qml libnova
 target_compile_definitions(tst_coordinatetransform PRIVATE LIBNOVA_SHARED)
 
 add_test(NAME tst_coordinatetransform COMMAND tst_coordinatetransform)
+
+# No Qml/Network/Xml needed either - FitsImage.cpp has zero Qt-object/QML
+# dependency (see its own header comment), just cfitsio.
+add_executable(tst_fitsimage
+    fits/tst_fitsimage.cpp
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsImage.h
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsImage.cpp
+)
+target_include_directories(tst_fitsimage PRIVATE ${CMAKE_SOURCE_DIR}/src/fits)
+target_link_libraries(tst_fitsimage PRIVATE Qt6::Test cfitsio::cfitsio)
+
+add_test(NAME tst_fitsimage COMMAND tst_fitsimage)

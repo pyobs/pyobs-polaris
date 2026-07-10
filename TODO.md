@@ -139,9 +139,16 @@ into scope.
   `CameraView.qml`'s `NewImageEvent` flow — that's still blocked on FITS
   decode below, since there's nothing useful to do with raw bytes without
   it.
-- **FITS decode.** This project's own Phase 0 notes already anticipated
-  `cfitsio` as a future Conan dependency for exactly this reason (see
-  `DEVELOPMENT.md`) — nothing else in this project has needed it yet.
+- **FITS decode — done** (see `DEVELOPMENT.md`'s "FITS decode" write-up):
+  `fits::FitsImage` (new `src/fits/`, plain C++ class, no QML surface yet
+  — nothing consumes it until the display widget below exists) decodes a
+  complete in-memory FITS file via `cfitsio` (added as this project's
+  first real Conan dependency, `conanfile.txt`) into row-major `double`
+  pixel data + header cards, uniformly regardless of on-disk `BITPIX`.
+  Live-verified against a real `grab_data()` → `VfsClient::fetchFile()`
+  round trip: decoded dimensions/header values/pixel min-max all matched
+  an independent `astropy` read of the same bytes exactly. Still nothing
+  wires this into `CameraView.qml` — that's the display widget below.
 - **An actual astronomical image display widget** (stretch/zoom/pan,
   `QFitsWidget`'s equivalent) — a genuinely new, non-trivial UI
   component, not an extension of `PlotItem` (which draws scatter/line

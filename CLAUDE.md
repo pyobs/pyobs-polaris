@@ -240,6 +240,6 @@ missing-header error that has nothing to do with the actual new code.
   header comment). Not Conan dependencies: qxmpp's ConanCenter recipe
   would rebuild all of Qt from source, conflicting with the system-Qt
   requirement above.
-- **Conan** is the dependency manager for everything else (currently
-  nothing — `conanfile.txt` has no `[requires]` yet; future candidates
-  like `cfitsio` will go there).
+- **Conan** is the dependency manager for everything else — `cfitsio`
+  (FITS decode, `src/fits/`) is the first real `[requires]` entry in
+  `conanfile.txt`; future candidates (plotting libs) go there too.
