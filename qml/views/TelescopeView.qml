@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import pyobs.gui
+import pyobs.polaris
 
 // Dedicated page for ITelescope modules, ported from pyobs-gui's
 // telescopewidget.py - MVP scope only (see TODO.md for what's
