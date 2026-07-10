@@ -1,0 +1,29 @@
+{include _comm.yaml}
+
+# Test fixture for TelescopeView.qml's ITelescope widget (see TODO.md).
+# DummyTelescope implements ITelescope/IMotion/IPointingRaDec/
+# IPointingAltAz/IOffsetsRaDec (plus IFocuser/IFilters/ITemperatures,
+# unused by this MVP widget) - confirmed against pyobs-core source.
+#
+# Two things worth knowing before using this fixture:
+# - It does NOT implement IOffsetsAltAz, so that sub-row is schema-
+#   verified only, not live-pixel-verified against a real running module -
+#   see DEVELOPMENT.md.
+# - DummyTelescope.open() starts it in MotionStatus.IDLE, not PARKED, so
+#   Move/Offsets are immediately usable without calling Init first -
+#   unlike a real telescope, which starts PARKED and refuses moves until
+#   initialized.
+#
+# Run with:
+#   pyobs fixtures/telescope.yaml
+# against the same dev ejabberd server the other fixtures use (see
+# DEVELOPMENT.md's "Live-verification test fixtures"). Uses the already-
+# registered "telescope" ejabberd account (present since an earlier
+# fixture pass - see `ejabberdctl registered_users localhost`).
+class: pyobs.modules.telescope.DummyTelescope
+name: DummyTelescope
+
+comm:
+  <<: *comm
+  user: telescope
+  password: pyobs

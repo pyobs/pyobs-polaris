@@ -70,6 +70,7 @@ qt_add_qml_module(polaris
         qml/views/EventsView.qml
         qml/views/StatusView.qml
         qml/views/RoofView.qml
+        qml/views/TelescopeView.qml
         qml/views/AutoFocusView.qml
         qml/views/AcquisitionView.qml
         qml/views/AutoGuidingView.qml
