@@ -1,0 +1,31 @@
+{include _comm.yaml}
+
+# Test fixture pairing camera.yaml's DummyCamera - an actual HTTP file
+# server for its "cache" VFS root to write to and this project's new
+# comm::VfsClient/config::VfsEndpointsModel to read back from (see
+# TODO.md's "ICamera follow-up" and DEVELOPMENT.md's VFS transport
+# write-up). No auth support at all (confirmed via source:
+# pyobs/modules/utils/httpfilecache.py's constructor has no username/
+# password params, unlike the HttpFile *client* side that reads from it)
+# - VfsClient's preemptive-Basic-Auth path is unit-tested against a stub
+# server instead (tst_vfsclient.cpp), not live-verified against this
+# fixture.
+#
+# Implements no pyobs interface (it's a plain aiohttp GET/POST server,
+# not a device) - the comm block below only exists because every
+# `pyobs <file>` fixture needs one to run at all, same as every other
+# fixture here.
+#
+# Run with:
+#   pyobs fixtures/httpfilecache.yaml
+# alongside fixtures/camera.yaml (its vfs: block points the "cache" root
+# at this server's port 37075) and the same dev ejabberd server the other
+# fixtures use.
+class: pyobs.modules.utils.HttpFileCache
+name: HttpFileCache
+port: 37075
+
+comm:
+  <<: *comm
+  user: filecache
+  password: pyobs

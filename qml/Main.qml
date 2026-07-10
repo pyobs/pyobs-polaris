@@ -43,6 +43,19 @@ QtObject {
         id: accountsModel
     }
 
+    // Scoped to the current session's bare JID (see VfsEndpointsModel.h -
+    // XmppClient::jid is already bare, LoginWindow.qml's jidField has no
+    // separate resource input) - set here once rather than in every
+    // consumer.
+    property var _vfsEndpoints: VfsEndpointsModel {
+        id: vfsEndpointsModel
+        currentJid: xmppClient.jid
+    }
+
+    property var _vfsClient: VfsClient {
+        id: vfsClient
+    }
+
     property var _loginWindow: LoginWindow {
         xmppClient: xmppClient
         appSettings: appSettings
@@ -53,6 +66,8 @@ QtObject {
     property var _mainWindow: MainWindow {
         xmppClient: xmppClient
         appSettings: appSettings
+        vfsEndpoints: vfsEndpointsModel
+        vfsClient: vfsClient
         visible: xmppClient.status === "connected"
     }
 }

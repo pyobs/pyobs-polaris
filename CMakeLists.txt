@@ -23,6 +23,10 @@ qt_add_executable(polaris
     src/config/AppSettings.cpp
     src/config/SavedAccountsModel.h
     src/config/SavedAccountsModel.cpp
+    src/config/VfsEndpointsModel.h
+    src/config/VfsEndpointsModel.cpp
+    src/comm/VfsClient.h
+    src/comm/VfsClient.cpp
     src/comm/ModuleInfo.h
     src/comm/ModuleListModel.h
     src/comm/ModuleListModel.cpp
@@ -70,6 +74,7 @@ qt_add_qml_module(polaris
         qml/views/ShellView.qml
         qml/views/LogsView.qml
         qml/views/EventsView.qml
+        qml/views/SettingsView.qml
         qml/views/StatusView.qml
         qml/views/RoofView.qml
         qml/views/TelescopeView.qml

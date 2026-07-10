@@ -17,7 +17,36 @@
 # [int8,int16], gain 10.0/offset 0.0 (no declared range), cooling
 # setpoint -10.0/power 80/enabled true.
 #
+# vfs: BaseCamera's default filename pattern is "/cache/pyobs-...fits.gz"
+# (confirmed via source), but VirtualFileSystem's own built-in default
+# roots are only "pyobs"/"robotic" (both pyobs.vfs.LocalFile) - "cache"
+# isn't one of them, so without this block grab_data() fails outright
+# with "Could not find root cache for file". Points it at
+# fixtures/httpfilecache.yaml's HttpFileCache instead (must be running
+# too - see that fixture's own comment) so grab_data() actually succeeds
+# and produces a filename comm::VfsClient/config::VfsEndpointsModel can
+# fetch back - see DEVELOPMENT.md's VFS transport write-up.
+vfs:
+  class: pyobs.vfs.VirtualFileSystem
+  roots:
+    cache:
+      class: pyobs.vfs.HttpFile
+      download: http://localhost:37075/
+      upload: http://localhost:37075/
+
+# location: grab_data() also fails without one - FitsHeaderMixin's
+# DAY-OBS header computation calls night_obs(self._observer), and
+# _observer is None unless a location is configured (confirmed live:
+# AttributeError: 'NoneType' object has no attribute 'sun_set_time').
+# Arbitrary real-world coordinates, not meaningful beyond "non-None" -
+# matches pyobs-gui's own legacy test/camera.yaml fixture.
+location:
+  longitude: 9.944722
+  latitude: 51.560583
+  elevation: 201
+
 # Run with:
+#   pyobs fixtures/httpfilecache.yaml
 #   pyobs fixtures/camera.yaml
 # against the same dev ejabberd server the other fixtures use (see
 # DEVELOPMENT.md's "Live-verification test fixtures").

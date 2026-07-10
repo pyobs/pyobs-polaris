@@ -124,16 +124,21 @@ why it's a materially different problem (the GUI would have to answer an
 incoming RPC, not just issue outgoing ones) whenever it does come back
 into scope.
 
-- **VFS (virtual file system) client transport.** `grab_data()` returns
-  only a filename reference — `DataDisplayWidget._on_new_data` fetches
-  the actual pixels via `self.vfs.read_fits(event.filename)`.
-  `pyobs.vfs` is a pluggable multi-backend abstraction (confirmed via
-  source: `file`/`http`/`sftp`/`smb`/`ssh`/`archive`/`mem`/`temp`/
-  `buffered` backends all exist) configured server-side — which backend
-  a real deployment actually uses isn't discoverable from disco#info the
-  way everything else in this project has been so far, so this needs its
-  own design pass (probably starting with just the `http` backend, the
-  most broadly deployable one, not all of them at once).
+- **VFS (virtual file system) client transport — done** (see
+  `DEVELOPMENT.md`'s "VFS transport" write-up): `config::VfsEndpointsModel`
+  (a new per-account, keychain-backed Settings page, mirroring
+  `SavedAccountsModel`'s pattern) maps a VFS root name to an HTTP base
+  URL, and `comm::VfsClient` fetches it via `QNetworkAccessManager`, live-
+  verified byte-for-byte against a real `grab_data()`-produced file served
+  by a real `pyobs.modules.utils.HttpFileCache`. Only the `http` backend
+  is modeled — same reasoning as `pyobs-web-client`'s `useVfsConfig.ts`,
+  which this ported: a desktop/browser client can only ever reach
+  `HttpFile`, never `LocalFile`/`SFTPFile`/`SMBFile`/etc. directly, so
+  those aren't a "not yet" gap, they're permanently out of scope for a
+  client-side VFS reader. Nothing yet calls this from
+  `CameraView.qml`'s `NewImageEvent` flow — that's still blocked on FITS
+  decode below, since there's nothing useful to do with raw bytes without
+  it.
 - **FITS decode.** This project's own Phase 0 notes already anticipated
   `cfitsio` as a future Conan dependency for exactly this reason (see
   `DEVELOPMENT.md`) — nothing else in this project has needed it yet.

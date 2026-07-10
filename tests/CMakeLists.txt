@@ -97,6 +97,16 @@ target_link_libraries(tst_eventmanager PRIVATE Qt6::Test Qt6::Xml Qt6::Network Q
 
 add_test(NAME tst_eventmanager COMMAND tst_eventmanager)
 
+add_executable(tst_vfsclient
+    comm/tst_vfsclient.cpp
+    ${CMAKE_SOURCE_DIR}/src/comm/VfsClient.h
+    ${CMAKE_SOURCE_DIR}/src/comm/VfsClient.cpp
+)
+target_include_directories(tst_vfsclient PRIVATE ${CMAKE_SOURCE_DIR}/src/comm)
+target_link_libraries(tst_vfsclient PRIVATE Qt6::Test Qt6::Network Qt6::Qml)
+
+add_test(NAME tst_vfsclient COMMAND tst_vfsclient)
+
 add_executable(tst_modulelistmodel
     comm/tst_modulelistmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/comm/ModuleInfo.h
@@ -163,6 +173,18 @@ target_link_libraries(tst_savedaccountsmodel PRIVATE Qt6::Test Qt6::Core Qt6::Qm
 # dbus-run-session) is available first rather than assuming this passes
 # there unmodified.
 add_test(NAME tst_savedaccountsmodel COMMAND tst_savedaccountsmodel)
+
+add_executable(tst_vfsendpointsmodel
+    config/tst_vfsendpointsmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/config/VfsEndpointsModel.h
+    ${CMAKE_SOURCE_DIR}/src/config/VfsEndpointsModel.cpp
+)
+target_include_directories(tst_vfsendpointsmodel PRIVATE ${CMAKE_SOURCE_DIR}/src/config)
+target_link_libraries(tst_vfsendpointsmodel PRIVATE Qt6::Test Qt6::Core Qt6::Qml qt6keychain)
+
+# Same real-keychain-backend, CI-skips-itself shape as
+# tst_savedaccountsmodel - see its own comment above, identical reasoning.
+add_test(NAME tst_vfsendpointsmodel COMMAND tst_vfsendpointsmodel)
 
 # No Qml/Network/Xml needed - CoordinateTransform.cpp has zero XMPP/QML
 # dependency (see its own header comment), just libnova.

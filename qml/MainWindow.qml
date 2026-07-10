@@ -64,6 +64,8 @@ ApplicationWindow {
 
     required property var xmppClient
     required property var appSettings
+    required property var vfsEndpoints
+    required property var vfsClient
 
     // TODO.md's "Plugin mechanism for custom module widgets", step 1: a
     // registry mapping an interface (or a specific module) to a sidebar
@@ -161,11 +163,11 @@ ApplicationWindow {
     // The last module backing the currently-open dynamic page can
     // disconnect while that page is open - jump back to Status rather than
     // leaving the sidebar/StackLayout pointing at a now-hidden entry.
-    // Static pages occupy indices 0-3 (Status/Shell/Logs/Events); dynamic
-    // ones start at 4, one per widgetRegistry.entries position, in order
-    // (stable regardless of visibility - see WidgetRegistry.qml).
+    // Static pages occupy indices 0-4 (Status/Shell/Logs/Events/Settings);
+    // dynamic ones start at 5, one per widgetRegistry.entries position, in
+    // order (stable regardless of visibility - see WidgetRegistry.qml).
     onVisibilityByEntryChanged: {
-        const i = stack.currentIndex - 4
+        const i = stack.currentIndex - 5
         if (i >= 0 && i < visibilityByEntry.length && !visibilityByEntry[i]) {
             stack.currentIndex = 0
         }
@@ -233,6 +235,13 @@ ApplicationWindow {
                     onClicked: stack.currentIndex = 3
                 }
 
+                SidebarItem {
+                    iconGlyph: "⚙"
+                    text: "Settings"
+                    highlighted: stack.currentIndex === 4
+                    onClicked: stack.currentIndex = 4
+                }
+
                 SidebarSectionLabel {
                     text: "MODULES"
                     visible: root.visibilityByEntry.some((v) => v)
@@ -254,8 +263,8 @@ ApplicationWindow {
                         iconGlyph: modelData.iconGlyph
                         text: modelData.label
                         visible: root.visibilityByEntry[index] === true
-                        highlighted: stack.currentIndex === 4 + index
-                        onClicked: stack.currentIndex = 4 + index
+                        highlighted: stack.currentIndex === 5 + index
+                        onClicked: stack.currentIndex = 5 + index
                     }
                 }
 
@@ -308,12 +317,19 @@ ApplicationWindow {
                     xmppClient: root.xmppClient
                 }
 
+                SettingsView {
+                    Layout.margins: 16
+                    xmppClient: root.xmppClient
+                    vfsEndpoints: root.vfsEndpoints
+                    vfsClient: root.vfsClient
+                }
+
                 // One dynamic page per WidgetRegistry registration, always
                 // instantiated regardless of current visibility - Repeater
                 // works as a direct StackLayout child the same way it
                 // already does inside a plain Layout, injecting each
-                // delegate as a StackLayout page in order (positions 4, 5,
-                // 6, ... after the four static pages above, stable
+                // delegate as a StackLayout page in order (positions 5, 6,
+                // 7, ... after the five static pages above, stable
                 // regardless of which are currently shown in the sidebar).
                 // A Loader is required here (not the widget directly)
                 // since each position needs a *different* Component picked
