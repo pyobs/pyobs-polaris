@@ -67,6 +67,10 @@ qt_add_executable(polaris
     src/util/CoordinateTransform.cpp
     src/fits/FitsImage.h
     src/fits/FitsImage.cpp
+    src/fits/FitsStretch.h
+    src/fits/FitsStretch.cpp
+    src/fits/FitsImageItem.h
+    src/fits/FitsImageItem.cpp
 )
 
 qt_add_qml_module(polaris
@@ -123,7 +127,7 @@ target_compile_definitions(polaris PRIVATE LIBNOVA_SHARED)
 # class), so every directory holding such a header needs to be on the include
 # path directly - add each new one here as later phases add QML_ELEMENT types
 # outside src/comm.
-target_include_directories(polaris PRIVATE src/comm src/config src/plot src/util)
+target_include_directories(polaris PRIVATE src/comm src/config src/plot src/util src/fits)
 
 enable_testing()
 add_subdirectory(tests)

@@ -211,3 +211,30 @@ target_include_directories(tst_fitsimage PRIVATE ${CMAKE_SOURCE_DIR}/src/fits)
 target_link_libraries(tst_fitsimage PRIVATE Qt6::Test cfitsio::cfitsio)
 
 add_test(NAME tst_fitsimage COMMAND tst_fitsimage)
+
+# Pure functions, no Qt-object/QML dependency - same shape as tst_fitsimage.
+add_executable(tst_fitsstretch
+    fits/tst_fitsstretch.cpp
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsStretch.h
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsStretch.cpp
+)
+target_include_directories(tst_fitsstretch PRIVATE ${CMAKE_SOURCE_DIR}/src/fits)
+target_link_libraries(tst_fitsstretch PRIVATE Qt6::Test Qt6::Gui)
+
+add_test(NAME tst_fitsstretch COMMAND tst_fitsstretch)
+
+# FitsImageItem is a QQuickPaintedItem - needs Quick/Qml like tst_plotitem,
+# plus FitsImage/FitsStretch/cfitsio underneath it.
+add_executable(tst_fitsimageitem
+    fits/tst_fitsimageitem.cpp
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsImageItem.h
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsImageItem.cpp
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsImage.h
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsImage.cpp
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsStretch.h
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsStretch.cpp
+)
+target_include_directories(tst_fitsimageitem PRIVATE ${CMAKE_SOURCE_DIR}/src/fits)
+target_link_libraries(tst_fitsimageitem PRIVATE Qt6::Test Qt6::Quick Qt6::Qml cfitsio::cfitsio)
+
+add_test(NAME tst_fitsimageitem COMMAND tst_fitsimageitem)

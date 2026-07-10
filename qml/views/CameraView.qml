@@ -20,6 +20,8 @@ ScrollView {
     id: root
 
     required property var xmppClient
+    required property var vfsEndpoints
+    required property var vfsClient
 
     clip: true
 
@@ -144,7 +146,10 @@ ScrollView {
                 onGainInterfaceChanged: refreshSubscriptions()
                 onImageFormatInterfaceChanged: refreshSubscriptions()
                 onCoolingInterfaceChanged: refreshSubscriptions()
-                Component.onCompleted: refreshSubscriptions()
+                Component.onCompleted: {
+                    refreshSubscriptions()
+                    checkForNewImage()
+                }
 
                 readonly property var exposureState: exposureSubscription ? exposureSubscription.value : undefined
                 readonly property var imageTypeState: imageTypeSubscription ? imageTypeSubscription.value : undefined
@@ -179,6 +184,121 @@ ScrollView {
                             cameraDelegate.grabOne()
                         }
                     })
+                }
+
+                // --- Image display: grab_data() -> NewImageEvent -> VFS
+                // fetch -> FITS decode, the flow TODO.md's "ICamera
+                // follow-up" split into three separately-shipped pieces
+                // (config::VfsEndpointsModel/comm::VfsClient, then
+                // fits::FitsImage/fits::FitsImageItem) - this is what
+                // finally wires them together. NewImageEvent delivery
+                // itself needs no new C++: EventManager already
+                // subscribes to every event a module's disco#info
+                // advertises (Phase 6), so this only needs to notice a
+                // new one arriving for *this* jid and drive the fetch.
+                property string lastImageFilename: ""
+                // "", "loading", or "error" - drives the status Label
+                // below; "" with fitsImageItem.hasImage true means the
+                // currently-shown image is up to date.
+                property string imageStatus: ""
+                property string imageError: ""
+                // Correlates an in-flight VfsClient fetch (and, before
+                // that, an in-flight VfsEndpointsModel password load)
+                // back to this delegate specifically - both are global
+                // per-instance signals, not scoped to one Repeater
+                // delegate, since multiple cameras can be fetching
+                // concurrently (possibly even from the same VFS
+                // endpoint, sharing its password-load request).
+                property string pendingRequestId: ""
+                property string pendingEndpointId: ""
+                property string pendingUrl: ""
+                property string pendingUsername: ""
+
+                function checkForNewImage() {
+                    const events = root.xmppClient.events.entriesOfType("NewImageEvent")
+                    for (let i = events.length - 1; i >= 0; --i) {
+                        if (events[i].module !== jid) {
+                            continue
+                        }
+                        const filename = events[i].data ? events[i].data.filename : undefined
+                        if (filename && filename !== cameraDelegate.lastImageFilename) {
+                            cameraDelegate.lastImageFilename = filename
+                            cameraDelegate.fetchImage(filename)
+                        }
+                        return
+                    }
+                }
+
+                function fetchImage(filename) {
+                    const resolved = root.vfsEndpoints.resolveVfsPath(filename)
+                    if (resolved.url === undefined) {
+                        cameraDelegate.imageStatus = "error"
+                        cameraDelegate.imageError = "No VFS endpoint configured for \"" + filename
+                            + "\" - add one on the Settings page."
+                        return
+                    }
+
+                    cameraDelegate.imageStatus = "loading"
+                    cameraDelegate.imageError = ""
+                    cameraDelegate.pendingRequestId = jid + "|" + filename
+                    cameraDelegate.pendingUrl = resolved.url
+                    cameraDelegate.pendingUsername = resolved.username
+
+                    if (resolved.hasStoredPassword) {
+                        cameraDelegate.pendingEndpointId = resolved.endpointId
+                        root.vfsEndpoints.loadPassword(resolved.endpointId)
+                    } else {
+                        root.vfsClient.fetchFile(cameraDelegate.pendingRequestId, resolved.url, resolved.username, "")
+                    }
+                }
+
+                Connections {
+                    target: root.xmppClient.events
+                    function onRowsInserted() { cameraDelegate.checkForNewImage() }
+                }
+
+                Connections {
+                    target: root.vfsEndpoints
+                    function onPasswordReady(id, password) {
+                        if (id !== cameraDelegate.pendingEndpointId || cameraDelegate.pendingEndpointId === "") {
+                            return
+                        }
+                        cameraDelegate.pendingEndpointId = ""
+                        root.vfsClient.fetchFile(
+                            cameraDelegate.pendingRequestId, cameraDelegate.pendingUrl,
+                            cameraDelegate.pendingUsername, password)
+                    }
+                    function onPasswordLoadFailed(id) {
+                        if (id !== cameraDelegate.pendingEndpointId || cameraDelegate.pendingEndpointId === "") {
+                            return
+                        }
+                        cameraDelegate.pendingEndpointId = ""
+                        cameraDelegate.imageStatus = "error"
+                        cameraDelegate.imageError = "Could not load the stored password for this VFS endpoint."
+                    }
+                }
+
+                Connections {
+                    target: root.vfsClient
+                    function onFileReady(requestId, data) {
+                        if (requestId !== cameraDelegate.pendingRequestId) {
+                            return
+                        }
+                        if (fitsImageItem.loadFitsBytes(data)) {
+                            cameraDelegate.imageStatus = ""
+                            cameraDelegate.imageError = ""
+                        } else {
+                            cameraDelegate.imageStatus = "error"
+                            cameraDelegate.imageError = fitsImageItem.lastError
+                        }
+                    }
+                    function onFileFailed(requestId, errorMessage) {
+                        if (requestId !== cameraDelegate.pendingRequestId) {
+                            return
+                        }
+                        cameraDelegate.imageStatus = "error"
+                        cameraDelegate.imageError = errorMessage
+                    }
                 }
 
                 // "was synced" idioms for every capability-gated control
@@ -696,6 +816,84 @@ ScrollView {
                                 + (parent.currentPower !== undefined && parent.currentPower !== null ? parent.currentPower : "?") + "%"
                             : "OFF"
                         color: "grey"
+                    }
+                }
+
+                // --- Image display: fits::FitsImageItem paints the last
+                // fetched/decoded frame (see checkForNewImage()/
+                // fetchImage() above for how it gets there). Zoom/pan
+                // are QML-side, not implemented in the item itself (see
+                // FitsImageItem.h's own comment) - Flickable gives pan
+                // for free, imageZoomSpin drives the item's own
+                // width/height, which FitsImageItem smoothly rescales
+                // its cached render into on every paint.
+                ColumnLayout {
+                    Layout.leftMargin: 8
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    RowLayout {
+                        Label { text: "Image"; font.bold: true }
+                        Item { Layout.fillWidth: true }
+                        Label { text: "Stretch:" }
+                        ComboBox {
+                            id: stretchCombo
+                            textRole: "label"
+                            valueRole: "value"
+                            model: [
+                                { label: "Percentile", value: "percentile" },
+                                { label: "Min/Max", value: "minmax" },
+                            ]
+                            onActivated: fitsImageItem.stretchMode = currentValue
+                        }
+                        Label { text: "Zoom:" }
+                        SpinBox {
+                            id: imageZoomSpin
+                            from: 10
+                            to: 400
+                            value: 100
+                            stepSize: 10
+                            editable: true
+                            textFromValue: (value) => value + "%"
+                            valueFromText: (text) => parseInt(text, 10)
+                        }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: cameraDelegate.imageStatus === "loading"
+                        text: "Loading image..."
+                        color: "grey"
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: cameraDelegate.imageStatus === "error"
+                        text: cameraDelegate.imageError
+                        color: "red"
+                        wrapMode: Text.WrapAnywhere
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: fitsImageItem.hasImage
+                        text: fitsImageItem.imageWidth + "x" + fitsImageItem.imageHeight
+                            + "  levels: " + fitsImageItem.blackLevel.toFixed(1) + " - " + fitsImageItem.whiteLevel.toFixed(1)
+                        color: "grey"
+                    }
+
+                    Flickable {
+                        Layout.preferredWidth: 480
+                        Layout.preferredHeight: 360
+                        visible: fitsImageItem.hasImage
+                        clip: true
+                        contentWidth: fitsImageItem.width
+                        contentHeight: fitsImageItem.height
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        FitsImageItem {
+                            id: fitsImageItem
+                            width: hasImage ? imageWidth * (imageZoomSpin.value / 100) : 0
+                            height: hasImage ? imageHeight * (imageZoomSpin.value / 100) : 0
+                        }
                     }
                 }
 

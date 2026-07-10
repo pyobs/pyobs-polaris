@@ -111,22 +111,16 @@ compass widget, the Filter/Focus/Temperatures sidebar.
 
 ---
 
-## `ICamera` follow-up: image display, VFS
+## `ICamera` follow-up: image display, VFS — done
 
-**Goal:** the actual image-preview half of `camerawidget.py`
-(`DataDisplayWidget`) — deliberately split out of the MVP above because
-each piece needs a genuinely new project-wide capability, not a widget-
-local addition. `FitsHeadersWidget` (the client-editable header-injection
-sidebar panel) is intentionally **not** included in this follow-up either
-— ignored for now, on direct instruction, not merely deferred alongside
-the rest of this list. Its own bullet below is kept only as a record of
-why it's a materially different problem (the GUI would have to answer an
-incoming RPC, not just issue outgoing ones) whenever it does come back
-into scope.
+**Goal (met):** the actual image-preview half of `camerawidget.py`
+(`DataDisplayWidget`) — shipped in three separate pieces since each
+needed a genuinely new project-wide capability, not a widget-local
+addition:
 
-- **VFS (virtual file system) client transport — done** (see
-  `DEVELOPMENT.md`'s "VFS transport" write-up): `config::VfsEndpointsModel`
-  (a new per-account, keychain-backed Settings page, mirroring
+- **VFS (virtual file system) client transport** (see `DEVELOPMENT.md`'s
+  "VFS transport" write-up): `config::VfsEndpointsModel` (a new
+  per-account, keychain-backed Settings page, mirroring
   `SavedAccountsModel`'s pattern) maps a VFS root name to an HTTP base
   URL, and `comm::VfsClient` fetches it via `QNetworkAccessManager`, live-
   verified byte-for-byte against a real `grab_data()`-produced file served
@@ -135,25 +129,34 @@ into scope.
   which this ported: a desktop/browser client can only ever reach
   `HttpFile`, never `LocalFile`/`SFTPFile`/`SMBFile`/etc. directly, so
   those aren't a "not yet" gap, they're permanently out of scope for a
-  client-side VFS reader. Nothing yet calls this from
-  `CameraView.qml`'s `NewImageEvent` flow — that's still blocked on FITS
-  decode below, since there's nothing useful to do with raw bytes without
-  it.
-- **FITS decode — done** (see `DEVELOPMENT.md`'s "FITS decode" write-up):
-  `fits::FitsImage` (new `src/fits/`, plain C++ class, no QML surface yet
-  — nothing consumes it until the display widget below exists) decodes a
-  complete in-memory FITS file via `cfitsio` (added as this project's
-  first real Conan dependency, `conanfile.txt`) into row-major `double`
-  pixel data + header cards, uniformly regardless of on-disk `BITPIX`.
-  Live-verified against a real `grab_data()` → `VfsClient::fetchFile()`
-  round trip: decoded dimensions/header values/pixel min-max all matched
-  an independent `astropy` read of the same bytes exactly. Still nothing
-  wires this into `CameraView.qml` — that's the display widget below.
-- **An actual astronomical image display widget** (stretch/zoom/pan,
-  `QFitsWidget`'s equivalent) — a genuinely new, non-trivial UI
-  component, not an extension of `PlotItem` (which draws scatter/line
-  plots of numeric points, not 2D pixel data).
-- **`FitsHeadersWidget` — ignored for now (see intro above), record only:**
+  client-side VFS reader.
+- **FITS decode** (see `DEVELOPMENT.md`'s "FITS decode" write-up):
+  `fits::FitsImage` (new `src/fits/`, plain C++ class, no QML surface of
+  its own) decodes a complete in-memory FITS file via `cfitsio` (added as
+  this project's first real Conan dependency, `conanfile.txt`) into
+  row-major `double` pixel data + header cards, uniformly regardless of
+  on-disk `BITPIX`. Live-verified against a real `grab_data()` →
+  `VfsClient::fetchFile()` round trip: decoded dimensions/header
+  values/pixel min-max all matched an independent `astropy` read of the
+  same bytes exactly.
+- **The image display widget** (see `DEVELOPMENT.md`'s "Image display
+  widget" write-up): `fits::FitsImageItem` (`QQuickPaintedItem`,
+  `src/fits/`, following `plot::PlotItem`'s existing precedent) decodes,
+  stretches (min/max or percentile-clip), and renders a `NewImageEvent`'s
+  image into `CameraView.qml`. Zoom/pan are QML-side (`Flickable` +
+  resizing the item), not reimplemented in C++. Wired end to end:
+  `grab_data()` → `NewImageEvent` → `VfsEndpointsModel::resolveVfsPath()`
+  → `VfsClient::fetchFile()` → `FitsImageItem::loadFitsBytes()`.
+  Live-verified with a rendered PNG of a real fetched frame visually
+  inspected, not just "didn't crash".
+
+**`FitsHeadersWidget` remains intentionally out of scope** — ignored on
+direct instruction, not merely deferred alongside the rest of this item.
+Kept as its own bullet only as a record of why it's a materially
+different problem (the GUI would have to answer an incoming RPC, not
+just issue outgoing ones) whenever it does come back into scope:
+
+- **`FitsHeadersWidget` — ignored for now, record only:**
   it inverts this project's client-only role. `get_fits_headers()` is
   called *on the GUI* by the exposing module (via `IFitsHeaderBefore`-
   style callback registration) to collect user-entered OBJECT/USER/

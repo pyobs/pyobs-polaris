@@ -115,7 +115,7 @@ ApplicationWindow {
         TelescopeView { xmppClient: root.xmppClient; appSettings: root.appSettings }
     }
     property Component cameraComponent: Component {
-        CameraView { xmppClient: root.xmppClient }
+        CameraView { xmppClient: root.xmppClient; vfsEndpoints: root.vfsEndpoints; vfsClient: root.vfsClient }
     }
 
     // Per-entry visibility (same order/length as widgetRegistry.entries),
