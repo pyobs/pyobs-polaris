@@ -2175,6 +2175,28 @@ prior widget's write-up in this file) - the rendered-PNG check is a
 stronger correctness signal for *this specific feature* (pixel data
 correctness, not layout) than a screenshot would have been anyway.
 
+**Addendum - a real GUI click-through (by the user, not automation) did
+catch a bug the wire-level harness above could not have**:
+`checkForNewImage()`'s `events[i].module !== jid` comparison never
+matched, so a fetch never even started - no loading/error label, nothing
+- while `grab_data()` itself succeeded and the `NewImageEvent` visibly
+appeared on the Events page, making it look like event delivery itself
+was broken. Root cause: `EventLogModel`'s `module` field is the *local
+part only* of the sender's JID (`EventManager.cpp` uses
+`QXmppUtils::jidToUser()`), but `cameraDelegate.jid` (from
+`ModuleListModel`) is the full bare JID (`"camera@localhost"`, per
+`ModuleInfo.h`'s own comment) - `"camera" !== "camera@localhost"` is
+always true. Fixed by comparing against `jid.split("@")[0]` instead.
+Purely a QML-side bug (a string-format mismatch between two existing,
+independently-correct C++ pieces), invisible to every headless C++
+harness used throughout this pass - the harnesses called
+`VfsEndpointsModel`/`VfsClient`/`FitsImage` directly with the right
+filename already in hand, never exercising the
+`EventLogModel`-to-`ModuleListModel` JID correlation this bug was in.
+Worth remembering for any *future* code that correlates an event's
+`module` field against a `ModuleListModel`-sourced `jid` - this is the
+first place in the project that did, and got it wrong the first time.
+
 ---
 
 ## Notes for whoever (human or Claude Code) picks this up next

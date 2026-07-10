@@ -215,9 +215,17 @@ ScrollView {
                 property string pendingUsername: ""
 
                 function checkForNewImage() {
+                    // EventLogModel's `module` is the *local part only* of
+                    // the sender's JID (EventManager.cpp uses
+                    // QXmppUtils::jidToUser()) - jid here is the full bare
+                    // JID (e.g. "camera@localhost", see ModuleInfo.h's own
+                    // comment), so comparing them directly never matches.
+                    // Caught live: NewImageEvent showed up correctly on
+                    // the Events page but never triggered a fetch here.
+                    const localJid = jid.split("@")[0]
                     const events = root.xmppClient.events.entriesOfType("NewImageEvent")
                     for (let i = events.length - 1; i >= 0; --i) {
-                        if (events[i].module !== jid) {
+                        if (events[i].module !== localJid) {
                             continue
                         }
                         const filename = events[i].data ? events[i].data.filename : undefined
