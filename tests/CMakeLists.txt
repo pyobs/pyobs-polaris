@@ -222,6 +222,14 @@ target_include_directories(tst_fitsstretch PRIVATE ${CMAKE_SOURCE_DIR}/src/fits)
 target_link_libraries(tst_fitsstretch PRIVATE Qt6::Test Qt6::Gui)
 
 add_test(NAME tst_fitsstretch COMMAND tst_fitsstretch)
+# Linking Qt6::Gui makes QTEST_MAIN instantiate a real QGuiApplication (it
+# expands differently based on whether QT_GUI_LIB is defined for the TU),
+# which needs a platform plugin same as tst_plotitem below - despite this
+# file's own "no Qt-object/QML dependency" comment above, it isn't actually
+# GUI-less at the QTEST_MAIN level. Only ever ran on a real display (dev
+# machines) until the CI build got past an unrelated failure for the first
+# time and exposed this.
+set_tests_properties(tst_fitsstretch PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # FitsImageItem is a QQuickPaintedItem - needs Quick/Qml like tst_plotitem,
 # plus FitsImage/FitsStretch/cfitsio underneath it.
@@ -238,6 +246,7 @@ target_include_directories(tst_fitsimageitem PRIVATE ${CMAKE_SOURCE_DIR}/src/fit
 target_link_libraries(tst_fitsimageitem PRIVATE Qt6::Test Qt6::Quick Qt6::Qml cfitsio::cfitsio)
 
 add_test(NAME tst_fitsimageitem COMMAND tst_fitsimageitem)
+set_tests_properties(tst_fitsimageitem PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # FitsFileWriter needs no QQuickItem/Quick scene graph itself, but its
 # QML_ELEMENT macro still needs qqmlintegration.h from Qt6::Qml - real
