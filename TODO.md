@@ -170,6 +170,62 @@ just issue outgoing ones) whenever it does come back into scope:
   explicitly out of scope here, worth a separate widget/TODO item of its
   own if ever needed, not folded into `ICamera`'s.
 
+**Follow-up, image controls — done:** ported the rest of
+`datadisplaywidget.py`/`.ui` and `qfitswidget`'s own toolbar
+(`fitswidget.ui`) that weren't part of the original wiring above, in two
+passes:
+
+- **Auto-update/Auto-save/Save-to** bottom row (`fits::FitsFileWriter`
+  for the actual disk I/O, `QtQuick.Dialogs`' `FileDialog`/`FolderDialog`
+  for picking the destination - Auto-update gates the *whole* fetch, not
+  just display, matching `_on_new_data()`'s own early-return exactly),
+  plus a "Custom" cuts mode (`fits::FitsImageItem::setManualLimits()`)
+  with editable Lo/Hi spin boxes mirroring `qfitswidget`'s
+  `spinLoCut`/`spinHiCut`.
+- **Direct follow-up request** ("make [cuts] the same as in pyobs-gui,
+  and also add tone-curve stretch, colormap and trimsec"), once the gap
+  from the first pass was pointed out live:
+  - **Cuts presets now match `comboCuts` exactly**
+    (100.0/99.9/99.0/95.0%/Custom, `FitsImageItem::setPercentilePreset()`/
+    `enterCustomMode()`) - the separate "Min/Max" mode from the first
+    pass was dropped entirely, since 100.0% percentile already *is* the
+    literal min/max (see `FitsStretch.h`), matching `comboCuts` having no
+    separate entry for it either.
+  - **Tone-curve `Stretch:` combo** (linear/log/sqrt/squared/asinh,
+    `fits::ToneCurve`) - applied to the already black/white-normalized
+    [0,1] value rather than the raw pixel value the way `qfitswidget`'s
+    `FuncNorm` does (same qualitative brightness-compression shape,
+    without needing its masked-array handling for non-positive raw
+    values - see `FitsStretch.h`'s own comment).
+  - **Colormap selection + reversed checkbox** (`fits::Colormap`) - a
+    small curated set (Gray/Viridis/Hot/Cool/Jet), not an attempt at
+    matplotlib's ~150-map library `comboColormap` offers - vendoring a
+    colormap library for that would be a lot of dependency weight for no
+    functional gain over a practical subset.
+  - **`trimsec` checkbox** (`fits::applyTrimSec()`, default on matching
+    `checkTrimSec`'s own `.ui` default) - zeroes pixels outside the
+    header's `TRIMSEC` rectangle before both stretch computation and
+    render, same as `qfitswidget`'s `_trim_image()`.
+  - **Real bug caught mid-pass, now fixed**: `computeStretch()` didn't
+    exclude non-positive pixels, so a `TRIMSEC`-zeroed border pulled the
+    black level down to 0 on every trimmed image - `qfitswidget`'s own
+    `_trim_image()` filters `trimmed_data > 0` for exactly this reason,
+    now matched here too (see `FitsStretch.h`'s comment on
+    `computeStretch()` for the full tradeoff this implies for
+    legitimately non-positive science pixels).
+  - **Also caught live** (not by a unit test): two QML scoping bugs -
+    `cutsComboIndexFor()` was accidentally defined on the wrong `id`-less
+    `ColumnLayout` rather than `cameraDelegate`, and `ComboBox.indexOfValue()`
+    turned out unreliable for these object-array models (silently left
+    `currentIndex` at -1, blank combo text, no QML warning at all) - see
+    `DEVELOPMENT.md`'s write-up for both.
+
+`fits::FitsStretch` now covers everything `qfitswidget`'s own toolbar
+does except full matplotlib colormap parity (deliberately out of scope,
+see above) and `qfitswidget`'s own live pixel-value/WCS mouse-hover
+readout (never in scope for this project's `ICamera` port at all - not
+listed as a gap anywhere above, and still isn't one now).
+
 ---
 
 ## Phase 8 — WebAssembly build

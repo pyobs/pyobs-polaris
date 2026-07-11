@@ -71,6 +71,8 @@ qt_add_executable(polaris
     src/fits/FitsStretch.cpp
     src/fits/FitsImageItem.h
     src/fits/FitsImageItem.cpp
+    src/fits/FitsFileWriter.h
+    src/fits/FitsFileWriter.cpp
 )
 
 qt_add_qml_module(polaris

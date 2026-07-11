@@ -2334,6 +2334,232 @@ the time.
 
 ---
 
+### `CameraView.qml` image controls follow-up: auto-save, custom cuts
+
+**Direct request**: "add the missing controls for the image, like
+auto-save, cuts, etc. See pyobs-gui." Ported the rest of
+`datadisplaywidget.py`/`.ui`'s bottom toolbar plus `qfitswidget`'s own
+cuts controls (`fitswidget.ui`, the third-party widget
+`DataDisplayWidget` embeds for the actual image pane) - see TODO.md's
+"Follow-up, image controls" entry for exactly what did and didn't come
+along.
+
+**New `fits::FitsFileWriter`** (`src/fits/FitsFileWriter.h/.cpp`): a thin
+`QObject` wrapping `QFile::write()`, taking a `file://` `QUrl` (what
+`QtQuick.Dialogs`' `FileDialog`/`FolderDialog` hand back, not a plain
+path) - `writeBytes()` for "Save to..." and `writeBytesToDirectory()`
+(joins a directory URL + filename) for auto-save. Needed at all because
+QML itself has no raw file-write API; a small dedicated class rather than
+bolting this onto `FitsImageItem` (an image *display* widget, not a
+generic file I/O helper) or `config::AppSettings` (settings storage, not
+data writes).
+
+**`fits::FitsImageItem` gained a third `stretchMode`: `"custom"`**
+(`FitsStretch.h`'s `StretchMode` enum grew a matching `Custom` value,
+never passed to `computeStretch()` itself - see that function's own
+guard clause). `setManualLimits(black, white)` switches to `"custom"`
+and repaints immediately with the exact given levels, bypassing
+`computeStretch()` entirely; critically, `rebuildRender()` skips
+recomputing limits whenever the mode is `Custom`, so a manually-set cut
+**persists across subsequent `loadFitsBytes()` calls** (a fresh exposure
+doesn't silently overwrite a user's manual cut) - this exactly matches
+`qfitswidget`'s own `_evaluate_cuts_preset()`, which only recomputes when
+the preset isn't `"Custom"`. Switching the `ComboBox` to "Custom" without
+touching the spin boxes yet deliberately *freezes* whatever was last
+computed (not a reset to defaults) - also matches the legacy widget
+exactly, confirmed from `qfitswidget.py` source before implementing, not
+assumed.
+
+**QML side** (`CameraView.qml`): `stretchCombo` gained a "Custom" entry;
+two new `loCutSpin`/`hiCutSpin` `SpinBox`es (visible only in custom mode)
+seeded once via a `Connections { target: fitsImageItem;
+onStretchModeChanged }` handler, then call `setManualLimits()` on every
+edit - no batching concern here (each edit is already a local repaint,
+no RPC), unlike Window/Gain/ExposureTime's staged-then-applied idiom
+elsewhere on this page. Auto-update (`cameraDelegate.autoUpdate`, default
+on) gates the *entire* fetch in `checkForNewImage()`, not just the
+display - confirmed against `datadisplaywidget.py`'s `_on_new_data()`,
+which returns early before even downloading if unchecked, meaning
+auto-save doesn't happen either while auto-update is off. That's the
+legacy's actual behavior, not an oversight worth "fixing" here.
+`autoSaveDirectory` is a `url` property, populated only via
+`FolderDialog` (unlike the legacy's directly-editable `QLineEdit`) -
+simpler, and the legacy's own text field was in practice only ever
+populated by its own browse dialog too.
+
+**Tests**: `tst_fitsimageitem` gained three cases for the custom-mode
+contract (exact levels applied, persistence across a new image, reset on
+switching away); a new `tst_fitsfilewriter` binary (real `QTemporaryDir`
+filesystem writes, not mocked - matches this project's "verify the real
+thing" bar even at unit-test scope) covers `writeBytes`/
+`writeBytesToDirectory`/the invalid-directory failure path. `Qt6::Qml` had
+to be linked into `tst_fitsfilewriter` even though the class itself needs
+no `QQuickItem`/scene graph - `QML_ELEMENT`'s `qqmlintegration.h` still
+needs it.
+
+**Live verification**: build + full `ctest` pass (18/18) confirmed before
+attempting a live check; then the app was reconnected via the AT-SPI
+technique above and the Camera page's full accessibility tree walked,
+confirming every new control (`Cuts:` combo, the two cut spin buttons,
+`Auto-update`/`Auto-save:` check boxes, the folder-path label, `...`
+browse button, `Save to...` button) exists in the right place, in the
+right order, alongside zero QML runtime warnings in the log. A pixel
+screenshot of the new controls specifically was **not** obtained this
+pass - the session's screen locked (`qdbus6
+org.freedesktop.ScreenSaver GetActive` → `true`) partway through, an
+environment/session state unrelated to Polaris, not attempted to bypass.
+Worth a follow-up screenshot once the session is unlocked, but the
+structural AT-SPI proof plus clean build/tests was judged sufficient to
+report the work as functionally done rather than block on it.
+
+**Also fixed along the way**: two stale zombie `admin@localhost` XMPP
+sessions had accumulated server-side from earlier `pkill`s of `polaris`
+during this same debugging session without a graceful
+`disconnectFromServer()` - exactly the Phase 3 gotcha this file already
+documented ("always fully quit prior test sessions before trusting a
+presence test"), just finally actually hit in practice. Fixed with
+`ejabberdctl kick_user admin localhost` before reconnecting - a real,
+previously-only-theoretical failure mode now confirmed live.
+
+---
+
+### `CameraView.qml` image controls, round 2: pyobs-gui-matching cuts, tone curve, colormap, trimsec
+
+**Direct follow-up request**, immediately after the previous entry's
+screenshot-blocked report: "how do I enter percentile? make it the same
+as in pyobs-gui please. and also add tone-curve stretch, colormap and
+trimsec." Two things going on here worth separating - a real gap in the
+prior pass (no way to actually pick a percentage, `FitsImageItem` only
+ever used a hardcoded 99.5 default), and the three pieces of
+`fitswidget.ui` explicitly deferred in that same prior pass's own
+TODO.md entry.
+
+**Cuts presets redesigned to match `comboCuts` exactly**, dropping the
+separate "Min/Max" mode from round 1 entirely: `qfitswidget`'s own
+`comboCuts` model is `["100.0%", "99.9%", "99.0%", "95.0%", "Custom"]` -
+no "Min/Max" entry, because percentile=100 *is* the literal min/max
+(`clipFraction` becomes 0, `computeStretch()`'s percentile branch reduces
+to exactly the old MinMax branch's arithmetic). Rather than keep a
+redundant third mode, `StretchMode::MinMax` was deleted outright and
+`FitsImageItem` gained `setPercentilePreset(double)` (switches to
+percentile mode with an exact percentage) and `enterCustomMode()`
+(switches to custom *without* changing the current limits - the "just
+clicked Custom in the combo, haven't touched Lo/Hi yet" case, split out
+from `setManualLimits()` which does both at once). `computeStretch()`'s
+default percentile also moved from 99.5 to 99.9, matching `comboCuts`'
+own default selection.
+
+**Tone curve, colormap, trimsec** - the three pieces round 1's own
+TODO.md entry listed as needing "new rendering infrastructure, not just
+control-wiring": added a `ToneCurve` enum (linear/log/sqrt/squared/
+asinh) applied to the black/white-normalized `[0,1]` value rather than
+the raw pixel value the way `qfitswidget`'s `FuncNorm` operates on it -
+same qualitative compression shape, but sidesteps `FuncNorm`'s masked-
+array handling for non-positive raw pixel values (sqrt/log of a value in
+`[0,1]` is always well-defined, no edge case to handle at all). A
+`Colormap` enum (Gray/Viridis/Hot/Cool/Jet) with hand-rolled
+piecewise-linear control-point interpolation - a deliberately small
+curated set, not an attempt at matplotlib's ~150-map `comboColormap`
+library (vendoring a colormap library for that would be real dependency
+weight for no functional gain over a practical subset an astronomer
+would actually reach for). `renderGrayscale()` was renamed `render()`
+and now always returns `Format_RGB32` (not `Format_Grayscale8`) so
+colormap output has somewhere to put non-gray channels - no back-compat
+shim kept for the old name/format, existing callers (`FitsImageItem`,
+all of `tst_fitsstretch.cpp`) were updated directly instead, per this
+project's own "don't keep unused back-compat hacks" convention. A new
+`applyTrimSec()` parses the header's `TRIMSEC` keyword ("[x0:x1,y0:y1]",
+FITS 1-based inclusive) and zeroes pixels outside it - not a crop
+(`FitsImageItem`'s width/height/every downstream assumption about pixel
+count stays put), matching `qfitswidget`'s own `_trimsec()` exactly.
+
+**A real bug, caught by a failing unit test before it ever reached a
+live check**: the first version of `applyTrimSec()` alone wasn't enough
+- `computeStretch()` still happily counted the newly-zeroed border
+pixels as real data, pulling the black level down to 0 on every single
+trimmed image regardless of what the actual trimmed region contained.
+Re-reading `qfitswidget.py`'s `_trim_image()` explained why this isn't a
+problem there: `self.trimmed_data[self.trimmed_data > 0]` filters out
+*all* non-positive pixels before ever computing cuts, not just as a
+trimsec side effect. Matched that filter in `computeStretch()` directly
+(excludes both non-finite *and* non-positive values now) - the tradeoff
+this implies for legitimately non-positive science pixels (e.g. noise
+dipping below zero in a background-subtracted frame) is `qfitswidget`'s
+own design choice, kept for parity rather than "improved on", since the
+whole point of this request was to match pyobs-gui's actual behavior,
+quirks included. Also had to fix `applyTrimSec()` itself to strip
+surrounding single quotes before parsing - `FitsImage::headerValue()`
+hands back the *raw* on-disk value for a FITS string keyword (still
+quoted, e.g. `'[1:512,1:512]'`), not the already-unquoted form a first
+guess at the test data assumed.
+
+**Two more real bugs, both QML, both caught only by an actual
+screenshot** (not by the build or by `ctest` - the whole reason this
+project's bar is "verified live", see the very top of this file):
+1. A newly-added `cutsComboIndexFor()` helper function was accidentally
+   declared inside the wrong `ColumnLayout` (the image column's own
+   anonymous, `id`-less one) instead of on `cameraDelegate`, but called
+   as `cameraDelegate.cutsComboIndexFor(...)` from the combo's
+   `currentIndex` binding. QML doesn't error loudly on this the way a
+   compiled language would - the binding just throws a caught-and-
+   logged `TypeError` ("Property 'cutsComboIndexFor' ... is not a
+   function") to the console (invisible unless you're watching stdout)
+   and silently leaves `currentIndex` at its pre-binding default of 0,
+   which happened to *look* like a plausible value (the combo showed
+   "100.0%" instead of the real default "99.9%") rather than an obvious
+   blank/broken state. Fixed by moving the function to `cameraDelegate`
+   properly, alongside its sibling `suggestedSaveFileName()`.
+2. `ComboBox.indexOfValue()` - used for the new `Stretch:`/`Colormap:`
+   combos' `currentIndex` bindings, the same idiom `stretchCombo` (now
+   `cutsCombo`) used successfully in round 1 - turned out unreliable for
+   these particular object-array models (`textRole`/`valueRole`, current
+   value read from a forward-referenced `fitsImageItem` property):
+   `currentIndex` silently stayed at `-1` (blank combo, no visible
+   selection at all), again with no QML warning printed anywhere. Rather
+   than debug `indexOfValue()`'s own internals further, replaced both
+   call sites with the same hand-written linear-search idiom
+   `cutsComboIndexFor()` already used (factored into a small
+   `indexOfStringValue(values, value)` helper) - proven to work
+   correctly, and one fewer built-in method to trust blindly next time a
+   similar combo gets added.
+
+**Live verification**: full `ctest` pass (18/18, up from round 1's 18 -
+`tst_fitsstretch`/`tst_fitsimageitem` both grew substantially: new cases
+for percentile=100≡min/max, non-positive-value filtering, each tone
+curve's brightness direction, reversed-colormap inversion, two
+colormaps' exact endpoint RGB values, `applyTrimSec()`'s rectangle math
+and quoted/malformed-header handling, and `FitsImageItem`'s own
+`trimSecEnabled` end-to-end integration) confirmed before every live
+attempt, exactly the discipline that caught bug 1 above via a failing
+`trimSecDefaultsToEnabledAndAffectsLevels` assertion before it ever
+reached a screenshot. The session's screen (locked at the end of the
+prior entry) was unlocked by the time this pass started
+(`qdbus6 org.freedesktop.ScreenSaver GetActive` → `false`), so this
+pass *did* get real screenshots - `Cuts:`/`Stretch:`/`Colormap:` all
+showing their correct live default values (`99.9%`/`Linear`/`Gray`),
+and a full round-trip `Expose` → real rendered grayscale noise image at
+the default settings, all via a real `grab_data()` RPC through the same
+AT-SPI-driven flow documented above. One AT-SPI-specific gotcha hit
+along the way: **every module's `CameraView.qml` delegate exists in the
+accessibility tree simultaneously** (the same "eagerly instantiated,
+`Repeater`-over-all-modules" shape every custom widget here uses, per
+`CLAUDE.md`), so a name-only button search for "Expose" matched *eight*
+buttons, one per module, only one of which was actually
+`ATSPI_STATE_SHOWING` - the first attempt fired `grab_data` at
+`autofocus@localhost` (a real RPC, real "Unknown command" error logged,
+no lasting harm) before switching the click helper to filter on that
+state. Interactively selecting a value from an *open* `ComboBox` popup
+was not attempted via AT-SPI - `ComboBox` only exposes a `SetFocus`
+action, nothing to open/select a popup item with, and this session
+already has one documented case of synthetic-keyboard input causing an
+unintended side effect (see the entry above) - judged not worth
+revisiting for marginal extra confidence when the exact same
+`onActivated: ... = currentValue` idiom is already proven live-working
+elsewhere on this same page, and every individual behavior it drives is
+covered by the unit tests above instead.
+
+---
+
 ## Notes for whoever (human or Claude Code) picks this up next
 
 - Re-clone/re-check the current branch state before resuming — don't

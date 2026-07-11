@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import pyobs.polaris
 
@@ -30,6 +31,21 @@ import pyobs.polaris
 // when not being edited, but showing both side by side removes any
 // ambiguity while a user is mid-edit, exactly the problem WatchedLabel
 // solves in the original.
+//
+// Image controls, ported from datadisplaywidget.py/.ui and
+// qfitswidget's fitswidget.ui (the third-party widget
+// DataDisplayWidget embeds for the actual image pane): "Cuts:" combo
+// (100.0/99.9/99.0/95.0%/Custom, matching qfitswidget's own comboCuts
+// presets exactly - fits::FitsImageItem::setPercentilePreset()/
+// enterCustomMode()) plus manual Lo/Hi level spin boxes when "Custom"
+// is selected (fits::FitsImageItem::setManualLimits()), "Stretch:"
+// tone curve + "Colormap:" + reversed + trimsec (all four backed by
+// fits::FitsStretch's ToneCurve/Colormap/applyTrimSec - see that
+// header's own comments, including why the colormap set is a small
+// curated one rather than matplotlib's full library), and the bottom
+// Auto-update/Auto-save/Save-to row (fits::FitsFileWriter does the
+// actual disk I/O, QtQuick.Dialogs' FileDialog/FolderDialog pick the
+// destination).
 ScrollView {
     id: root
 
@@ -277,7 +293,73 @@ ScrollView {
                 property string pendingUrl: ""
                 property string pendingUsername: ""
 
+                // Auto-update/auto-save, ported from datadisplaywidget.py's
+                // own checkAutoUpdate/checkAutoSave/textAutoSavePath -
+                // auto-update gates the *entire* fetch, not just the
+                // display (confirmed from source: _on_new_data() returns
+                // early before even downloading if unchecked, so a
+                // disabled auto-update also disables auto-save for that
+                // image, matching here). autoSaveDirectory is a url (not a
+                // free-text path) - only ever set via the FolderDialog
+                // below, unlike the legacy's directly-editable QLineEdit;
+                // simpler, and the legacy's own text field was only ever
+                // populated by its own browse dialog in practice anyway.
+                property bool autoUpdate: true
+                property bool autoSaveEnabled: false
+                property url autoSaveDirectory: ""
+                // Raw bytes of the last successfully fetched image, kept
+                // around purely for "Save to..." (see saveImageDialog
+                // below) - VfsClient's fileReady(requestId, data) already
+                // hands this to us for the auto-save/decode path, no
+                // extra fetch needed to save what's already on screen.
+                property var lastImageBytes: null
+
+                // Basename with ".fits.gz" collapsed to ".fits", matching
+                // datadisplaywidget.py's save_data()/_on_new_data() own
+                // `os.path.basename(...).replace(".fits.gz", ".fits")`.
+                function suggestedSaveFileName() {
+                    const base = cameraDelegate.lastImageFilename.split("/").pop()
+                    return base.replace(".fits.gz", ".fits")
+                }
+
+                // Cuts presets match qfitswidget's own comboCuts exactly
+                // (100.0/99.9/99.0/95.0%, then Custom) - no separate
+                // "Min/Max" entry, since 100.0% cuts already means the
+                // literal min/max (see FitsStretch.h's own comment on
+                // why that's not its own mode here).
+                function cutsComboIndexFor(mode, percentile) {
+                    if (mode === "custom") {
+                        return 4
+                    }
+                    const presets = [100.0, 99.9, 99.0, 95.0]
+                    for (let i = 0; i < presets.length; ++i) {
+                        if (presets[i] === percentile) {
+                            return i
+                        }
+                    }
+                    return 1 // 99.9%, matching FitsImageItem's own default
+                }
+
+                // ComboBox.indexOfValue() turned out unreliable for these
+                // object-array models (`textRole`/`valueRole`, current
+                // value read from a forward-referenced fitsImageItem
+                // property) - it silently left currentIndex at -1 (blank
+                // combo text, no QML warning) for toneCurve/colormap,
+                // even though the exact same model shape works fine for
+                // cutsComboIndexFor's own hand-written lookup above.
+                // Caught live from a screenshot showing empty Stretch/
+                // Colormap combos, not obvious from reading the QML -
+                // same class of bug as the CameraView.qml layout pass's
+                // own RowLayout-overflow gotcha (see DEVELOPMENT.md).
+                function indexOfStringValue(values, value) {
+                    const idx = values.indexOf(value)
+                    return idx >= 0 ? idx : 0
+                }
+
                 function checkForNewImage() {
+                    if (!cameraDelegate.autoUpdate) {
+                        return
+                    }
                     // EventLogModel's `module` is the *local part only* of
                     // the sender's JID (EventManager.cpp uses
                     // QXmppUtils::jidToUser()) - jid here is the full bare
@@ -355,6 +437,18 @@ ScrollView {
                         if (requestId !== cameraDelegate.pendingRequestId) {
                             return
                         }
+                        cameraDelegate.lastImageBytes = data
+
+                        if (cameraDelegate.autoSaveEnabled) {
+                            const ok = fitsFileWriter.writeBytesToDirectory(
+                                cameraDelegate.autoSaveDirectory, cameraDelegate.suggestedSaveFileName(), data)
+                            if (!ok) {
+                                cameraDelegate.imageStatus = "error"
+                                cameraDelegate.imageError = "Auto-save failed: " + fitsFileWriter.lastError
+                                return
+                            }
+                        }
+
                         if (fitsImageItem.loadFitsBytes(data)) {
                             cameraDelegate.imageStatus = ""
                             cameraDelegate.imageError = ""
@@ -369,6 +463,28 @@ ScrollView {
                         }
                         cameraDelegate.imageStatus = "error"
                         cameraDelegate.imageError = errorMessage
+                    }
+                }
+
+                FitsFileWriter {
+                    id: fitsFileWriter
+                }
+
+                FolderDialog {
+                    id: autoSaveFolderDialog
+                    onAccepted: cameraDelegate.autoSaveDirectory = selectedFolder
+                }
+
+                FileDialog {
+                    id: saveImageDialog
+                    fileMode: FileDialog.SaveFile
+                    nameFilters: ["FITS files (*.fits *.fits.gz)", "All files (*)"]
+                    onAccepted: {
+                        if (cameraDelegate.lastImageBytes !== null
+                                && !fitsFileWriter.writeBytes(selectedFile, cameraDelegate.lastImageBytes)) {
+                            cameraDelegate.imageStatus = "error"
+                            cameraDelegate.imageError = "Save failed: " + fitsFileWriter.lastError
+                        }
                     }
                 }
 
@@ -904,16 +1020,62 @@ ScrollView {
                             Layout.fillWidth: true
                             Label { text: "Image"; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Label { text: "Stretch:" }
+                            Label { text: "Cuts:" }
                             ComboBox {
-                                id: stretchCombo
+                                id: cutsCombo
                                 textRole: "label"
                                 valueRole: "value"
                                 model: [
-                                    { label: "Percentile", value: "percentile" },
-                                    { label: "Min/Max", value: "minmax" },
+                                    { label: "100.0%", value: 100.0 },
+                                    { label: "99.9%", value: 99.9 },
+                                    { label: "99.0%", value: 99.0 },
+                                    { label: "95.0%", value: 95.0 },
+                                    { label: "Custom", value: -1 },
                                 ]
-                                onActivated: fitsImageItem.stretchMode = currentValue
+                                // Reflects fitsImageItem's own state rather
+                                // than only ever being set by this combo -
+                                // typing in loCutSpin/hiCutSpin below also
+                                // switches the item into "custom" mode (see
+                                // FitsImageItem::setManualLimits()), which
+                                // should move this combo's selection to
+                                // match, not just the spin boxes' enabled
+                                // state.
+                                currentIndex: cameraDelegate.cutsComboIndexFor(
+                                    fitsImageItem.stretchMode, fitsImageItem.percentile)
+                                onActivated: {
+                                    if (currentValue === -1) {
+                                        fitsImageItem.enterCustomMode()
+                                    } else {
+                                        fitsImageItem.setPercentilePreset(currentValue)
+                                    }
+                                }
+                            }
+                            // Manual black/white level override -
+                            // qfitswidget's spinLoCut/spinHiCut equivalent.
+                            // Seeded from the item's own computed levels the
+                            // moment "Custom" becomes active (see the
+                            // Connections block below), then left entirely
+                            // to the user - same fetch-once-then-explicit-
+                            // apply idiom as Window/Gain/ExposureTime above,
+                            // just applied on every edit rather than behind
+                            // a separate "apply" action, since there's no
+                            // batching concern here (each edit is already
+                            // its own independent RPC-free local repaint).
+                            SpinBox {
+                                id: loCutSpin
+                                visible: fitsImageItem.stretchMode === "custom"
+                                from: -1000000
+                                to: 1000000
+                                editable: true
+                                onValueModified: fitsImageItem.setManualLimits(loCutSpin.value, hiCutSpin.value)
+                            }
+                            SpinBox {
+                                id: hiCutSpin
+                                visible: fitsImageItem.stretchMode === "custom"
+                                from: -1000000
+                                to: 1000000
+                                editable: true
+                                onValueModified: fitsImageItem.setManualLimits(loCutSpin.value, hiCutSpin.value)
                             }
                             Label { text: "Zoom:" }
                             SpinBox {
@@ -925,6 +1087,74 @@ ScrollView {
                                 editable: true
                                 textFromValue: (value) => value + "%"
                                 valueFromText: (text) => parseInt(text, 10)
+                            }
+                        }
+
+                        Connections {
+                            target: fitsImageItem
+                            function onStretchModeChanged() {
+                                if (fitsImageItem.stretchMode === "custom") {
+                                    loCutSpin.value = Math.round(fitsImageItem.blackLevel)
+                                    hiCutSpin.value = Math.round(fitsImageItem.whiteLevel)
+                                }
+                            }
+                        }
+
+                        // Tone curve / colormap / trimsec - the rest of
+                        // qfitswidget's own toolbar (fitswidget.ui's
+                        // comboStretch/comboColormap/checkColormapReverse/
+                        // checkTrimSec), split onto its own row rather
+                        // than crammed into the Cuts/Zoom row above -
+                        // this page's columns are narrower than
+                        // qfitswidget's own standalone window, and a
+                        // RowLayout child wider than its column already
+                        // bit this exact page once (see
+                        // DEVELOPMENT.md's CameraView.qml layout-pass
+                        // write-up).
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "Stretch:" }
+                            ComboBox {
+                                id: toneCurveCombo
+                                textRole: "label"
+                                valueRole: "value"
+                                model: [
+                                    { label: "Linear", value: "linear" },
+                                    { label: "Log", value: "log" },
+                                    { label: "Sqrt", value: "sqrt" },
+                                    { label: "Squared", value: "squared" },
+                                    { label: "Asinh", value: "asinh" },
+                                ]
+                                currentIndex: cameraDelegate.indexOfStringValue(
+                                    ["linear", "log", "sqrt", "squared", "asinh"], fitsImageItem.toneCurve)
+                                onActivated: fitsImageItem.toneCurve = currentValue
+                            }
+                            Label { text: "Colormap:" }
+                            ComboBox {
+                                id: colormapCombo
+                                textRole: "label"
+                                valueRole: "value"
+                                model: [
+                                    { label: "Gray", value: "gray" },
+                                    { label: "Viridis", value: "viridis" },
+                                    { label: "Hot", value: "hot" },
+                                    { label: "Cool", value: "cool" },
+                                    { label: "Jet", value: "jet" },
+                                ]
+                                currentIndex: cameraDelegate.indexOfStringValue(
+                                    ["gray", "viridis", "hot", "cool", "jet"], fitsImageItem.colormap)
+                                onActivated: fitsImageItem.colormap = currentValue
+                            }
+                            CheckBox {
+                                text: "reversed"
+                                checked: fitsImageItem.reversedColormap
+                                onToggled: fitsImageItem.reversedColormap = checked
+                            }
+                            Item { Layout.fillWidth: true }
+                            CheckBox {
+                                text: "trimsec"
+                                checked: fitsImageItem.trimSecEnabled
+                                onToggled: fitsImageItem.trimSecEnabled = checked
                             }
                         }
 
@@ -976,6 +1206,53 @@ ScrollView {
                                     id: fitsImageItem
                                     width: hasImage ? imageWidth * (imageZoomSpin.value / 100) : 0
                                     height: hasImage ? imageHeight * (imageZoomSpin.value / 100) : 0
+                                }
+                            }
+                        }
+
+                        // Auto-update/auto-save/save-to, ported from
+                        // datadisplaywidget.ui's own bottom row
+                        // (checkAutoUpdate, checkAutoSave + textAutoSavePath
+                        // + butAutoSave, butSaveTo) - see checkForNewImage()/
+                        // onFileReady() above for the actual behavior; this
+                        // is just the controls for it.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            CheckBox {
+                                text: "Auto-update"
+                                checked: cameraDelegate.autoUpdate
+                                onToggled: cameraDelegate.autoUpdate = checked
+                            }
+                            Item { Layout.fillWidth: true }
+                            CheckBox {
+                                text: "Auto-save:"
+                                checked: cameraDelegate.autoSaveEnabled
+                                onToggled: cameraDelegate.autoSaveEnabled = checked
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.maximumWidth: 220
+                                elide: Text.ElideMiddle
+                                enabled: cameraDelegate.autoSaveEnabled
+                                text: cameraDelegate.autoSaveDirectory.toString().length > 0
+                                    ? cameraDelegate.autoSaveDirectory.toString().replace("file://", "")
+                                    : "(no folder selected)"
+                                color: "grey"
+                            }
+                            ToolButton {
+                                text: "..."
+                                enabled: cameraDelegate.autoSaveEnabled
+                                onClicked: autoSaveFolderDialog.open()
+                            }
+                            Item { Layout.fillWidth: true }
+                            Button {
+                                text: "Save to..."
+                                enabled: cameraDelegate.lastImageBytes !== null
+                                onClicked: {
+                                    saveImageDialog.currentFile = cameraDelegate.suggestedSaveFileName()
+                                    saveImageDialog.open()
                                 }
                             }
                         }

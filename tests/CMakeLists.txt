@@ -238,3 +238,17 @@ target_include_directories(tst_fitsimageitem PRIVATE ${CMAKE_SOURCE_DIR}/src/fit
 target_link_libraries(tst_fitsimageitem PRIVATE Qt6::Test Qt6::Quick Qt6::Qml cfitsio::cfitsio)
 
 add_test(NAME tst_fitsimageitem COMMAND tst_fitsimageitem)
+
+# FitsFileWriter needs no QQuickItem/Quick scene graph itself, but its
+# QML_ELEMENT macro still needs qqmlintegration.h from Qt6::Qml - real
+# filesystem writes via QTemporaryDir, not mocked, matching this
+# project's "verify the real thing" bar even at unit-test scope.
+add_executable(tst_fitsfilewriter
+    fits/tst_fitsfilewriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsFileWriter.h
+    ${CMAKE_SOURCE_DIR}/src/fits/FitsFileWriter.cpp
+)
+target_include_directories(tst_fitsfilewriter PRIVATE ${CMAKE_SOURCE_DIR}/src/fits)
+target_link_libraries(tst_fitsfilewriter PRIVATE Qt6::Test Qt6::Qml)
+
+add_test(NAME tst_fitsfilewriter COMMAND tst_fitsfilewriter)
