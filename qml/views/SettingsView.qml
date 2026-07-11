@@ -14,7 +14,19 @@ import pyobs.polaris
 // VfsEndpointsModel.currentJid: xmppClient.jid), so this view never
 // touches that itself.
 ScrollView {
-    id: root
+    // Named settingsRoot, not root: VfsEndpointsModel::Role registers a
+    // "root" role (the VFS root name, e.g. "cache") via roleNames(), and
+    // QML auto-exposes every model role as a bare identifier inside a
+    // ListView delegate's scope, not just via `model.<role>` - that bare
+    // "root" shadows an outer `id: root` for any unqualified reference
+    // written inside the endpoint-list delegate below. A real, previously
+    // shipped bug caught live: the endpoint list's `onClicked:
+    // root.selectEndpoint(...)` silently called `.selectEndpoint()` on
+    // the role's *string value* instead, throwing a caught-and-logged
+    // TypeError - clicking an endpoint appeared to do nothing at all. See
+    // CLAUDE.md's own `Main.qml` id/property-shadowing gotcha for the
+    // same family of trap.
+    id: settingsRoot
 
     required property var xmppClient
     required property var vfsEndpoints
@@ -28,8 +40,8 @@ ScrollView {
     property string testResult: ""
 
     function selectEndpoint(id) {
-        root.selectedEndpointId = id
-        root.testResult = ""
+        settingsRoot.selectedEndpointId = id
+        settingsRoot.testResult = ""
         passwordField.text = ""
 
         if (id.length === 0) {
@@ -40,7 +52,7 @@ ScrollView {
             return
         }
 
-        const endpoint = root.vfsEndpoints.endpointById(id)
+        const endpoint = settingsRoot.vfsEndpoints.endpointById(id)
         if (endpoint.root === undefined) {
             return
         }
@@ -49,53 +61,63 @@ ScrollView {
         usernameField.text = endpoint.username
         storePasswordCheckBox.checked = endpoint.hasStoredPassword
         if (storePasswordCheckBox.checked) {
-            root.vfsEndpoints.loadPassword(id)
+            settingsRoot.vfsEndpoints.loadPassword(id)
         }
     }
 
     Connections {
-        target: root.vfsEndpoints
+        target: settingsRoot.vfsEndpoints
         function onPasswordReady(id, password) {
-            if (id === root.selectedEndpointId) {
+            if (id === settingsRoot.selectedEndpointId) {
                 passwordField.text = password
             }
         }
         function onCredentialsSaveFailed(id) {
-            root.keychainNotice = "Could not save the password to the system keychain."
+            settingsRoot.keychainNotice = "Could not save the password to the system keychain."
         }
         function onCredentialsForgetFailed(id) {
-            root.keychainNotice = "Could not remove the saved password from the system keychain."
+            settingsRoot.keychainNotice = "Could not remove the saved password from the system keychain."
         }
         function onCredentialsSaved(id) {
-            root.keychainNotice = ""
+            settingsRoot.keychainNotice = ""
         }
         function onCredentialsForgotten(id) {
-            root.keychainNotice = ""
+            settingsRoot.keychainNotice = ""
         }
     }
 
     Connections {
-        target: root.vfsClient
+        target: settingsRoot.vfsClient
         function onFileReady(requestId, data) {
             if (requestId !== "settings-test") {
                 return
             }
-            root.testResult = "OK - received " + data.length + " byte(s)"
+            // /ping always 200s with a fixed {"status": "ok"} body -
+            // reaching fileReady at all is the signal, no need to parse
+            // the body (which arrives as an ArrayBuffer, not a JS string,
+            // so JSON.parse() on it would need an extra decode step).
+            settingsRoot.testResult = "OK - server is reachable"
         }
         function onFileFailed(requestId, errorMessage) {
             if (requestId !== "settings-test") {
                 return
             }
-            root.testResult = "Failed: " + errorMessage
+            settingsRoot.testResult = "Failed: " + errorMessage
         }
     }
 
     RowLayout {
-        width: root.availableWidth
-        height: Math.max(root.availableHeight, 400)
+        width: settingsRoot.availableWidth
+        height: Math.max(settingsRoot.availableHeight, 400)
         spacing: 0
 
         ColumnLayout {
+            // Nested RowLayout/ColumnLayout children default
+            // Layout.fillWidth to true (unlike plain Items/Controls,
+            // which default to false) - without this explicit override,
+            // this column silently claimed a share of the trailing
+            // spacer's leftover space instead of staying at 220.
+            Layout.fillWidth: false
             Layout.preferredWidth: 220
             Layout.fillHeight: true
             spacing: 0
@@ -111,28 +133,43 @@ ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                model: root.vfsEndpoints
+                model: settingsRoot.vfsEndpoints
 
                 delegate: ItemDelegate {
+                    id: endpointDelegate
                     width: endpointListView.width
-                    highlighted: model.id === root.selectedEndpointId
+                    highlighted: model.id === settingsRoot.selectedEndpointId
                     text: model.root
-                    onClicked: root.selectEndpoint(model.id)
+
+                    // Gets Accessible.role ListItem by default even inside
+                    // a real ListView, same as MainWindow.qml's sidebar
+                    // ItemDelegates - the AT-SPI bridge doesn't synthesize
+                    // a "Press" action for that role. See DEVELOPMENT.md's
+                    // "AT-SPI-driven live verification" section.
+                    Accessible.role: Accessible.Button
+                    Accessible.onPressAction: endpointDelegate.clicked()
+
+                    onClicked: settingsRoot.selectEndpoint(model.id)
                 }
             }
 
             ItemDelegate {
                 Layout.fillWidth: true
                 text: "+ New endpoint"
-                highlighted: root.selectedEndpointId.length === 0
-                onClicked: root.selectEndpoint("")
+                highlighted: settingsRoot.selectedEndpointId.length === 0
+                onClicked: settingsRoot.selectEndpoint("")
             }
         }
 
         Rectangle { Layout.fillHeight: true; width: 1; color: "#2d3035" }
 
         ColumnLayout {
-            Layout.fillWidth: true
+            // Fixed, not Layout.fillWidth - a form this narrow (five short
+            // fields) reading edge-to-edge across the whole window is hard
+            // to scan; leave the rest of the page blank instead of
+            // stretching input fields to fill it.
+            Layout.fillWidth: false
+            Layout.preferredWidth: 420
             Layout.fillHeight: true
             Layout.margins: 16
             spacing: 12
@@ -147,35 +184,59 @@ ScrollView {
 
             Label {
                 Layout.fillWidth: true
-                visible: root.keychainNotice.length > 0
+                visible: settingsRoot.keychainNotice.length > 0
                 color: "orange"
                 wrapMode: Text.Wrap
-                text: root.keychainNotice
+                text: settingsRoot.keychainNotice
             }
 
-            TextField {
-                id: rootField
+            ColumnLayout {
                 Layout.fillWidth: true
-                placeholderText: "VFS root name (e.g. cache)"
+                spacing: 4
+
+                Label { text: "VFS root name" }
+                TextField {
+                    id: rootField
+                    Layout.fillWidth: true
+                    placeholderText: "e.g. cache"
+                }
             }
 
-            TextField {
-                id: baseUrlField
+            ColumnLayout {
                 Layout.fillWidth: true
-                placeholderText: "Base URL (e.g. http://localhost:37075/)"
+                spacing: 4
+
+                Label { text: "Base URL" }
+                TextField {
+                    id: baseUrlField
+                    Layout.fillWidth: true
+                    placeholderText: "e.g. http://localhost:37075/"
+                }
             }
 
-            TextField {
-                id: usernameField
+            ColumnLayout {
                 Layout.fillWidth: true
-                placeholderText: "Username (optional)"
+                spacing: 4
+
+                Label { text: "Username" }
+                TextField {
+                    id: usernameField
+                    Layout.fillWidth: true
+                    placeholderText: "optional"
+                }
             }
 
-            TextField {
-                id: passwordField
+            ColumnLayout {
                 Layout.fillWidth: true
-                placeholderText: "Password (optional)"
-                echoMode: TextInput.Password
+                spacing: 4
+
+                Label { text: "Password" }
+                TextField {
+                    id: passwordField
+                    Layout.fillWidth: true
+                    placeholderText: "optional"
+                    echoMode: TextInput.Password
+                }
             }
 
             CheckBox {
@@ -197,62 +258,75 @@ ScrollView {
 
                 Button {
                     Layout.fillWidth: true
-                    text: root.selectedEndpointId.length === 0 ? "Save as new endpoint" : "Save changes"
+                    text: settingsRoot.selectedEndpointId.length === 0 ? "Save as new endpoint" : "Save changes"
                     enabled: rootField.text.length > 0 && baseUrlField.text.length > 0
                     onClicked: {
-                        let id = root.selectedEndpointId
+                        let id = settingsRoot.selectedEndpointId
                         if (id.length === 0) {
-                            id = root.vfsEndpoints.addEndpoint(rootField.text, baseUrlField.text, usernameField.text)
-                            root.selectedEndpointId = id
+                            id = settingsRoot.vfsEndpoints.addEndpoint(rootField.text, baseUrlField.text, usernameField.text)
+                            settingsRoot.selectedEndpointId = id
                         } else {
-                            root.vfsEndpoints.updateEndpoint(id, rootField.text, baseUrlField.text, usernameField.text)
+                            settingsRoot.vfsEndpoints.updateEndpoint(id, rootField.text, baseUrlField.text, usernameField.text)
                         }
 
                         if (storePasswordCheckBox.checked && passwordField.text.length > 0) {
-                            root.vfsEndpoints.storePassword(id, passwordField.text)
+                            settingsRoot.vfsEndpoints.storePassword(id, passwordField.text)
                         } else if (!storePasswordCheckBox.checked) {
-                            root.vfsEndpoints.clearStoredPassword(id)
+                            settingsRoot.vfsEndpoints.clearStoredPassword(id)
                         }
                     }
                 }
 
                 Button {
                     text: "Delete"
-                    visible: root.selectedEndpointId.length > 0
+                    visible: settingsRoot.selectedEndpointId.length > 0
                     onClicked: {
-                        root.vfsEndpoints.removeEndpoint(root.selectedEndpointId)
-                        root.selectEndpoint("")
+                        settingsRoot.vfsEndpoints.removeEndpoint(settingsRoot.selectedEndpointId)
+                        settingsRoot.selectEndpoint("")
                     }
                 }
             }
 
-            // Fetches the base URL itself, not a real VFS file - there's
-            // no filename to test against until a real grab_data() has
-            // happened elsewhere. Proves reachability/auth wiring works
-            // (any HTTP response, even a 404, distinguishes "the server
-            // answered" from "connection refused/timed out") - see
-            // DEVELOPMENT.md's VFS transport write-up.
+            // Hits the server's /ping health-check endpoint (pyobs-core
+            // >= 2.0.0.dev17's HttpFileCache/BaseVideo) rather than a real
+            // VFS file - there's no filename to test against until a real
+            // grab_data() has happened elsewhere, and /ping needs no auth
+            // and always 200s, unlike the base URL itself (which 404s and
+            // is reported as fileFailed the same as a refused connection -
+            // see DEVELOPMENT.md's VFS transport write-up).
             RowLayout {
                 Layout.fillWidth: true
-                visible: root.selectedEndpointId.length > 0
+                visible: settingsRoot.selectedEndpointId.length > 0
                 spacing: 8
 
                 Button {
                     text: "Test connection"
                     onClicked: {
-                        root.testResult = "Testing..."
-                        root.vfsClient.fetchFile("settings-test", baseUrlField.text, usernameField.text, passwordField.text)
+                        settingsRoot.testResult = "Testing..."
+                        let base = baseUrlField.text
+                        if (!base.endsWith("/")) {
+                            base += "/"
+                        }
+                        settingsRoot.vfsClient.fetchFile("settings-test", base + "ping", usernameField.text, passwordField.text)
                     }
                 }
 
                 Label {
                     Layout.fillWidth: true
-                    text: root.testResult
+                    text: settingsRoot.testResult
                     wrapMode: Text.WrapAnywhere
                 }
             }
 
             Item { Layout.fillHeight: true }
         }
+
+        // Absorbs whatever width is left over in the RowLayout: with
+        // neither the endpoint list nor the form column set to
+        // Layout.fillWidth, RowLayout redistributes the leftover space
+        // onto them anyway rather than leaving it blank - an explicit
+        // filler makes the leftover space go somewhere deterministic
+        // instead of relying on that default.
+        Item { Layout.fillWidth: true; Layout.fillHeight: true }
     }
 }

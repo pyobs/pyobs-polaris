@@ -72,12 +72,14 @@ def log(message: str) -> None:
 
 def is_process_running(literal_substring: str) -> bool:
     # `pgrep -f` matches its pattern as an extended regex, not a literal
-    # substring - this repo's own directory is named "pyobs-gui++",
-    # whose "++" is a regex metacharacter sequence that pgrep silently
-    # fails to match against (no error, just a false "not running"). Hit
-    # live: two duplicate polaris instances got launched before this was
-    # caught, see DEVELOPMENT.md. re.escape() every caller unconditionally
-    # so a literal path is always what actually gets matched.
+    # substring - this repo's directory was originally named
+    # "pyobs-gui++" (since renamed to "pyobs-polaris"), whose "++" is a
+    # regex metacharacter sequence that pgrep silently fails to match
+    # against (no error, just a false "not running"). Hit live: two
+    # duplicate polaris instances got launched before this was caught,
+    # see DEVELOPMENT.md. re.escape() every caller unconditionally so a
+    # literal path is always what actually gets matched, regardless of
+    # what special characters a future rename might introduce.
     pattern = re.escape(literal_substring)
     return subprocess.run(["pgrep", "-f", pattern], capture_output=True).returncode == 0
 
