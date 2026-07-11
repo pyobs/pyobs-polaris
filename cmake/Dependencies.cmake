@@ -126,6 +126,24 @@ target_include_directories(libnova PUBLIC ${libnova_SOURCE_DIR}/src)
 # (glibc, macOS, MSVC 2013+) - defining HAVE_ROUND ourselves is the
 # correct fix, not a workaround for something actually missing.
 target_compile_definitions(libnova PRIVATE HAVE_ROUND)
+# On MSVC, src/CMakeLists.txt's own PREFIX/IMPORT_PREFIX overrides (its
+# BUILD_SHARED_LIBRARY-guarded branch, now actually taken now that we set
+# that variable above) hard-code paths like "../../bin/" and "../" -
+# relative to wherever upstream's own (skipped) top-level file's
+# add_subdirectory(src) would have placed this target's binary dir. Our
+# SOURCE_SUBDIR src FetchContent usage is one directory level shallower
+# than that (src's own CMakeLists.txt IS the build root here, not a
+# subdirectory of it), so those hard-coded ".."-relative paths land
+# somewhere that collides instead of upstream's intended non-colliding
+# DLL/import-library split - Ninja reports it as "multiple rules generate
+# .../libnova.dll". Clearing both back to CMake's own ordinary Windows
+# shared-library defaults (empty prefix, default .dll/.lib suffixes,
+# output alongside this target's own binary dir) sidesteps the mismatch
+# entirely - this project doesn't need libnova's own bin/lib install
+# layout preference, just a working build.
+if(MSVC)
+    set_target_properties(libnova PROPERTIES PREFIX "" IMPORT_PREFIX "")
+endif()
 # julian_day.c also has its own unconditional `#include "config.h"` -
 # normally generated into the build tree by the autotools configure
 # script (autoheader, from config.h.in), which - same as HAVE_ROUND above
