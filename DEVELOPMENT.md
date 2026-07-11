@@ -2726,6 +2726,30 @@ problem.
 
 ---
 
+## Retrospective: QML vs QtWidgets
+
+Asked after the fact whether QML was the right call over a QtWidgets
+rewrite (the more literal port of pyobs-gui, which is PySide6/QtWidgets):
+yes, and not close. The deciding factor is that the wire protocol is
+schema-less and discovered live (disco#info, not compile-time) — the
+generic-first rendering path (`KeyValueCard.qml`, the module-list
+`Repeater`s) depends on the UI reacting declaratively to whatever schema
+and state arrive over PubSub. QtWidgets would mean imperatively
+creating/destroying widgets and rewiring signals every time a module's
+schema changes, instead of a binding just re-evaluating. The plugin
+mechanism (see "Plugin mechanism, step 2" above) leans on this too:
+`PluginLoader.qml` loads external `.qml` files as plain text at runtime
+with no recompilation, which a C++/QtWidgets plugin story couldn't match
+without embedding a scripting layer of its own.
+
+The cost was real but narrow: a handful of interface-specific widgets
+needed hand-rolling to match what pyobs-gui got for free from QtWidgets —
+e.g. the shell's autocomplete popup (`QCompleter` lives in `QtWidgets`,
+not usable from QML; see "Shell rewrite" above) and `CameraView.qml`'s
+cuts/tone-curve/colormap controls (see the two `CameraView.qml` image
+controls entries above). That's a one-time tax on a few custom views, not
+a structural problem with the generic path that covers most of the app.
+
 ## Notes for whoever (human or Claude Code) picks this up next
 
 - Re-clone/re-check the current branch state before resuming — don't
