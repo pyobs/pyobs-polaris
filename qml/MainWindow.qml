@@ -182,6 +182,32 @@ ApplicationWindow {
 
     onClosing: Qt.quit()
 
+    // Current account + sign-out, moved here from a block at the bottom
+    // of the sidebar - frees up sidebar height for the Tools/Modules
+    // list to grow into, and keeps account context visible regardless of
+    // how tall the sidebar's own content gets.
+    header: ToolBar {
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 12
+            anchors.rightMargin: 12
+            spacing: 8
+
+            Item { Layout.fillWidth: true }
+
+            Label {
+                text: root.xmppClient.jid
+                color: "grey"
+                elide: Text.ElideMiddle
+            }
+
+            Button {
+                text: "Sign out"
+                onClicked: root.xmppClient.disconnectFromServer()
+            }
+        }
+    }
+
     // Vertical split between the normal nav+content area and a persistent
     // log tail docked below it on every page - ports pyobs-gui's
     // MainWindow (mainwindow.py's splitterLog, always showing tableLog
@@ -276,27 +302,6 @@ ApplicationWindow {
                 }
 
                 Item { Layout.fillHeight: true }
-
-                Rectangle { Layout.fillWidth: true; height: 1; color: "#2d3035" }
-
-                ColumnLayout {
-                    Layout.margins: 12
-                    Layout.fillWidth: true
-                    spacing: 4
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.xmppClient.jid
-                        color: "grey"
-                        elide: Text.ElideMiddle
-                    }
-
-                    Button {
-                        Layout.fillWidth: true
-                        text: "Sign out"
-                        onClicked: root.xmppClient.disconnectFromServer()
-                    }
-                }
             }
 
             StackLayout {
