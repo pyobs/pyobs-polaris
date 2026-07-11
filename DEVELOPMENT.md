@@ -459,6 +459,16 @@ single-login version is gone, not kept alongside this.
   without one, and `WritePasswordJob`s fail cleanly rather than silently
   falling back to plaintext (no `setInsecureFallback(true)` anywhere - not
   worth the risk for a password).
+- **Windows/macOS are untested, not unsupported.** QtKeychain ships a
+  Windows Credential Manager (`wincred`) backend and a macOS Keychain
+  backend alongside the Linux Secret Service one, and none of
+  `SavedAccountsModel`'s code is Linux-specific — it only ever calls the
+  generic `QKeychain::isAvailable()`/job API. But CI (`.github/workflows/
+  build.yml`) only builds/tests on `ubuntu-26.04`, so that Windows/macOS
+  path has never actually been exercised live, only relied on by
+  inference from QtKeychain's own cross-platform support — doesn't meet
+  this project's usual "verified against the real thing" bar until
+  someone actually runs it on those platforms.
 - **Transactional commit, not optimistic:** `storePassword()` only flips
   `hasStoredPassword` to `true` *after* the keychain write succeeds
   (`credentialsSaved(id)`), never before - the same reasoning as the
