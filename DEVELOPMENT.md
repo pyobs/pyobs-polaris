@@ -157,6 +157,15 @@ page happened to already be showing — never actually driven. That gap is
 now closed for anything with a real accessible action, via the AT-SPI
 (Linux accessibility) bus rather than any input-injection tool:
 
+**`scripts/screenshot_page.py`** packages the whole flow below (start
+fixtures/polaris if needed, connect, kick stale zombie sessions, click
+to a named sidebar page, optionally `--click` further visible buttons,
+screenshot) into one reusable, idempotent command - see its own
+docstring for usage. Written after re-deriving these exact steps by
+hand across two separate sessions; reach for it instead of re-deriving
+them a third time. The steps themselves, for anything the script
+doesn't cover:
+
 1. Launch `polaris` with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
    QT_ACCESSIBILITY=1` in its environment — without this, Qt only
    registers the app on the AT-SPI bus lazily (once a real screen reader
