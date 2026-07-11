@@ -161,10 +161,35 @@ jobs:
           conan install . --build=missing
           ${{ runner.os != 'Linux' && '-c tools.cmake.cmaketoolchain:generator=Ninja' || '' }}
 
+      # The two caches above only cover vendored dependencies
+      # (build/Release/_deps) - this project's own ~40 source files and 18
+      # test binaries recompile from scratch on every single run regardless,
+      # since there's no cache for incremental first-party builds across
+      # separate CI jobs. ccache closes that gap: unlike the directory-
+      # snapshot caching above (all-or-nothing, invalidated by a
+      # conanfile.txt/Dependencies.cmake hash), it caches per translation
+      # unit (hashed preprocessed source + flags), so touching one file
+      # doesn't invalidate the rest - a run that only changes a handful of
+      # .cpp files should reuse cached objects for everything else. Using
+      # the hendrikmuhs/ccache-action rather than hand-rolling per-OS
+      # install/cache-directory logic - this project's own history of
+      # getting Windows/macOS specifics wrong without being able to test
+      # them locally (Qt arch strings, DLL discovery, libnova's MSVC
+      # quirks) argues for leaning on a well-established, actively
+      # maintained action instead for exactly this class of "can't verify
+      # it myself" cross-platform tooling.
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ccache-${{ runner.os }}
+          max-size: 500M
+
       - name: Configure
         run: >
           cmake --preset conan-release
           -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build --preset conan-release
