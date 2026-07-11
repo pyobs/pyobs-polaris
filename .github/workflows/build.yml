@@ -111,11 +111,21 @@ jobs:
       - name: Detect Conan profile
         run: conan profile detect --force
 
+      # Split into restore (here) + save (near the end, if: always()) -
+      # the combined actions/cache action only saves in its post step if
+      # every step in the job succeeded, so every Windows/macOS run that
+      # failed partway through Build or Test (several did, while getting
+      # these two platforms working) wasted its *entire* qxmpp/QtKeychain/
+      # libnova/cfitsio rebuild instead of banking it for next time.
+      # actions/cache did have a save-always input for exactly this, but
+      # it's deprecated ("does not work as intended") - restore+save is
+      # the currently-documented replacement.
+      #
       # Conan's package cache: mostly future-proofing until a real Conan
       # dependency (e.g. cfitsio) shows up - conanfile.txt has no requires
       # yet, see conanfile.txt for why (qxmpp is deliberately not one).
-      - name: Cache Conan packages
-        uses: actions/cache@v4
+      - name: Restore Conan packages cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.conan2
           key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt') }}
@@ -131,8 +141,8 @@ jobs:
       # every commit), silently costing a full rebuild-from-scratch each
       # time. A real GIT_TAG bump still invalidates it correctly since that
       # only lives in cmake/Dependencies.cmake now.
-      - name: Cache FetchContent-vendored dependency builds
-        uses: actions/cache@v4
+      - name: Restore FetchContent-vendored dependency builds cache
+        uses: actions/cache/restore@v4
         with:
           path: build/Release/_deps
           key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
@@ -162,9 +172,34 @@ jobs:
       # file's own git history) - on the user's direct call, this is
       # dev-machine-only coverage for those two tests rather than chasing
       # a mock D-Bus Secret Service just for CI.
+      # --timeout: a hung test (e.g. Windows silently blocking forever on
+      # a missing-DLL Windows Error Reporting dialog, with no interactive
+      # session to dismiss it - see CMakeLists.txt's CMAKE_RUNTIME_OUTPUT_DIRECTORY
+      # comment) would otherwise burn the entire job timeout instead of
+      # failing fast with a clear signal.
       - name: Test
-        run: ctest --output-on-failure
+        run: ctest --output-on-failure --timeout 120
         working-directory: build/Release
+
+      # Save half of the restore/save split above - if: always() so a
+      # failure anywhere before this point (Build, Test, ...) still banks
+      # whatever got built for next time, instead of the combined action's
+      # default of only saving when the whole job succeeds. A no-op if the
+      # exact key was already saved by an earlier successful run (cache
+      # keys are immutable; actions/cache/save just skips with a notice).
+      - name: Save Conan packages cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.conan2
+          key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt') }}
+
+      - name: Save FetchContent-vendored dependency builds cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: build/Release/_deps
+          key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
 
       # Only on a version tag push. The plain build/Release/polaris
       # binary is not redistributable as-is: it links libQXmppQt6.so.5 and

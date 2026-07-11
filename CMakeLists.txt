@@ -6,6 +6,27 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
+if(WIN32)
+    # Windows has no RPATH equivalent for locating dependency DLLs at
+    # runtime (unlike Linux/macOS, where CMake's build-tree RPATH already
+    # points every executable straight at wherever each FetchContent
+    # dependency's .so/.dylib actually lives) - a .exe only searches its
+    # own directory (plus PATH/System32) by default. Left at CMake's
+    # per-target default, every test binary and the vendored qxmpp/
+    # QtKeychain/libnova DLLs each land in their own separate build
+    # subdirectory, so nothing can find its dependencies at runtime -
+    # not a build failure, but a silent hang (a failed-to-load-DLL
+    # executable can trigger a Windows Error Reporting dialog that
+    # blocks forever with no interactive session to dismiss it, rather
+    # than a fast, obvious error). Funnelling every executable and shared
+    # library this project builds into one shared output directory - set
+    # before qt_add_executable()/include(cmake/Dependencies.cmake) so it
+    # also applies to the FetchContent-vendored targets - means each
+    # .exe finds its dependency DLLs right next to itself, no separate
+    # copy step needed.
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Xml Network)
 # Conan dependency (conanfile.txt), unlike qxmpp/QtKeychain below - see
 # that file's own comment on why cfitsio doesn't need the FetchContent/
