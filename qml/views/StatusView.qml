@@ -6,9 +6,12 @@ import pyobs.polaris
 // Ports pyobs-gui's StatusWidget (statuswidget.py): a flat table of every
 // connected module's name, version and live presence state (ready/error/
 // local), with a one-click "Clear error" for modules currently in error.
-// Interface/capability/state drill-down already lives in DashboardView -
-// this page is specifically the "is everything OK" overview, not a
-// duplicate of it.
+// statuswidget.py itself is a QTreeWidget with expandable per-module rows
+// (interfaces/capabilities/live state) - that generic drill-down doesn't
+// exist on this page. It used to live in DashboardView.qml, deliberately
+// removed on direct request (see the "remove Dashboard" commit) as
+// unwanted scope, not an oversight - nothing has picked it back up since.
+// This page is intentionally just the "is everything OK" overview.
 ColumnLayout {
     id: root
 
