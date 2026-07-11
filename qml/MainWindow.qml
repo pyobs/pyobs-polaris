@@ -238,70 +238,90 @@ ApplicationWindow {
                     font.bold: true
                 }
 
-                SidebarItem {
-                    iconGlyph: "●"
-                    text: "Status"
-                    highlighted: stack.currentIndex === 0
-                    onClicked: stack.currentIndex = 0
-                }
+                // The nav list alone (not the "Polaris" title above) is
+                // scrollable: with enough registered module widgets, its
+                // content can outgrow whatever height the horizontal
+                // SplitView's top pane is dragged/shrunk down to. Without
+                // this, the ColumnLayout below just overflowed its own
+                // bounds - nothing here clipped it - and visually spilled
+                // into LogFooter's area beneath, a real bug caught live
+                // on a shorter window. Same fix idiom as SettingsView.qml's
+                // own ScrollView.
+                ScrollView {
+                    id: sidebarScroll
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
 
-                SidebarSectionLabel { text: "TOOLS" }
+                    ColumnLayout {
+                        width: sidebarScroll.availableWidth
+                        spacing: 0
 
-                SidebarItem {
-                    iconGlyph: "❯"
-                    text: "Shell"
-                    highlighted: stack.currentIndex === 1
-                    onClicked: stack.currentIndex = 1
-                }
+                        SidebarItem {
+                            iconGlyph: "●"
+                            text: "Status"
+                            highlighted: stack.currentIndex === 0
+                            onClicked: stack.currentIndex = 0
+                        }
 
-                SidebarItem {
-                    iconGlyph: "▤"
-                    text: "Logs"
-                    highlighted: stack.currentIndex === 2
-                    onClicked: stack.currentIndex = 2
-                }
+                        SidebarSectionLabel { text: "TOOLS" }
 
-                SidebarItem {
-                    iconGlyph: "⚡"
-                    text: "Events"
-                    highlighted: stack.currentIndex === 3
-                    onClicked: stack.currentIndex = 3
-                }
+                        SidebarItem {
+                            iconGlyph: "❯"
+                            text: "Shell"
+                            highlighted: stack.currentIndex === 1
+                            onClicked: stack.currentIndex = 1
+                        }
 
-                SidebarItem {
-                    iconGlyph: "⚙"
-                    text: "Settings"
-                    highlighted: stack.currentIndex === 4
-                    onClicked: stack.currentIndex = 4
-                }
+                        SidebarItem {
+                            iconGlyph: "▤"
+                            text: "Logs"
+                            highlighted: stack.currentIndex === 2
+                            onClicked: stack.currentIndex = 2
+                        }
 
-                SidebarSectionLabel {
-                    text: "MODULES"
-                    visible: root.visibilityByEntry.some((v) => v)
-                }
+                        SidebarItem {
+                            iconGlyph: "⚡"
+                            text: "Events"
+                            highlighted: stack.currentIndex === 3
+                            onClicked: stack.currentIndex = 3
+                        }
 
-                // One entry per WidgetRegistry registration (not filtered
-                // to currently-visible ones - see WidgetRegistry.qml's own
-                // doc comment on `entries`) - position N here always
-                // corresponds to StackLayout's dynamic page N below (index
-                // 4 + N), since both Repeaters iterate the exact same
-                // widgetRegistry.entries array in the same order.
-                Repeater {
-                    model: widgetRegistry.entries
+                        SidebarItem {
+                            iconGlyph: "⚙"
+                            text: "Settings"
+                            highlighted: stack.currentIndex === 4
+                            onClicked: stack.currentIndex = 4
+                        }
 
-                    delegate: SidebarItem {
-                        required property var modelData
-                        required property int index
+                        SidebarSectionLabel {
+                            text: "MODULES"
+                            visible: root.visibilityByEntry.some((v) => v)
+                        }
 
-                        iconGlyph: modelData.iconGlyph
-                        text: modelData.label
-                        visible: root.visibilityByEntry[index] === true
-                        highlighted: stack.currentIndex === 5 + index
-                        onClicked: stack.currentIndex = 5 + index
+                        // One entry per WidgetRegistry registration (not
+                        // filtered to currently-visible ones - see
+                        // WidgetRegistry.qml's own doc comment on
+                        // `entries`) - position N here always corresponds
+                        // to StackLayout's dynamic page N below (index 4 +
+                        // N), since both Repeaters iterate the exact same
+                        // widgetRegistry.entries array in the same order.
+                        Repeater {
+                            model: widgetRegistry.entries
+
+                            delegate: SidebarItem {
+                                required property var modelData
+                                required property int index
+
+                                iconGlyph: modelData.iconGlyph
+                                text: modelData.label
+                                visible: root.visibilityByEntry[index] === true
+                                highlighted: stack.currentIndex === 5 + index
+                                onClicked: stack.currentIndex = 5 + index
+                            }
+                        }
                     }
                 }
-
-                Item { Layout.fillHeight: true }
             }
 
             StackLayout {
