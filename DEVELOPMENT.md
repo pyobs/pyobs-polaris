@@ -466,16 +466,29 @@ single-login version is gone, not kept alongside this.
   without one, and `WritePasswordJob`s fail cleanly rather than silently
   falling back to plaintext (no `setInsecureFallback(true)` anywhere - not
   worth the risk for a password).
-- **Windows/macOS are untested, not unsupported.** QtKeychain ships a
-  Windows Credential Manager (`wincred`) backend and a macOS Keychain
-  backend alongside the Linux Secret Service one, and none of
-  `SavedAccountsModel`'s code is Linux-specific — it only ever calls the
-  generic `QKeychain::isAvailable()`/job API. But CI (`.github/workflows/
-  build.yml`) only builds/tests on `ubuntu-26.04`, so that Windows/macOS
-  path has never actually been exercised live, only relied on by
-  inference from QtKeychain's own cross-platform support — doesn't meet
-  this project's usual "verified against the real thing" bar until
-  someone actually runs it on those platforms.
+- **Windows/macOS build+test in CI now; the real keychain round-trip is
+  still dev-machine-only.** QtKeychain ships a Windows Credential Manager
+  (`wincred`) backend and a macOS Keychain backend alongside the Linux
+  Secret Service one, and none of `SavedAccountsModel`'s code is
+  Linux-specific — it only ever calls the generic
+  `QKeychain::isAvailable()`/job API. CI (`.github/workflows/build.yml`)
+  now runs the full build+test matrix on `windows-latest` and
+  `macos-latest` too, not just `ubuntu-26.04` (getting there took several
+  rounds of genuinely platform-specific fixes — wrong Qt `arch` for
+  aqtinstall, macOS's Xcode SDK dropping the `AGL` framework, three
+  separate libnova/MSVC CMake quirks, and Windows DLL discoverability
+  causing tests to hang rather than fail — see this file's own git
+  history on that workflow and on `CMakeLists.txt`/`cmake/
+  Dependencies.cmake` for the details). That proves the code builds,
+  links, and the rest of the test suite passes on both platforms. It does
+  *not* prove the real keychain round-trip works there: `
+  storeAndLoadPasswordRoundTripsThroughKeychain`/
+  `removeAccountDeletesItsKeychainEntry` skip themselves under CI on
+  every OS (`realKeychainBackendAvailable()` checks the same `CI` env var
+  everywhere, not just Linux), so actually exercising Windows Credential
+  Manager or macOS Keychain still requires someone running the app by
+  hand on those platforms — doesn't meet this project's usual "verified
+  against the real thing" bar until that happens.
 - **Transactional commit, not optimistic:** `storePassword()` only flips
   `hasStoredPassword` to `true` *after* the keychain write succeeds
   (`credentialsSaved(id)`), never before - the same reasoning as the
