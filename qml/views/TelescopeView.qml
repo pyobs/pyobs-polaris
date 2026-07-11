@@ -6,14 +6,29 @@ import pyobs.polaris
 // Dedicated page for ITelescope modules, ported from pyobs-gui's
 // telescopewidget.py - MVP scope only (see TODO.md for what's
 // deliberately out of scope: sexagesimal RA/Dec parsing, solar-frame
-// pointing, SIMBAD/Horizons/MPC lookups, jog control, Filter/Focus/
-// Temperatures). ITelescope itself is a bare IMotion marker (confirmed
-// against pyobs.interfaces.ITelescope source), so the base block below is
-// identical to RoofView.qml's; Move and Offsets stack under it, each
-// gated on the module actually implementing the relevant capability
-// interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/IOffsetsAltAz) -
-// see DEVELOPMENT.md for the live-verification caveat around
-// IOffsetsAltAz specifically.
+// pointing, SIMBAD/Horizons/MPC/orbit-elements lookups, the jog/compass
+// widget, Filter/Focus/Temperatures). ITelescope itself is a bare
+// IMotion marker (confirmed against pyobs.interfaces.ITelescope source),
+// so the base block below is identical to RoofView.qml's; Status/Move/
+// Offsets stack under it, each gated on the module actually implementing
+// the relevant capability interface (IPointingRaDec/IPointingAltAz/
+// IOffsetsRaDec/IOffsetsAltAz) - see DEVELOPMENT.md for the
+// live-verification caveat around IOffsetsAltAz specifically.
+//
+// Layout: three GroupBoxes side by side (Status/Move/Offsets), ported
+// from telescopewidget.ui's own QHBoxLayout structure (read directly) -
+// that file has a fourth column (CompassMoveWidget, the jog control) and
+// a separate sidebar (Filter/Focus/Temperatures), both already out of
+// scope here, so this only carries the three columns Polaris actually
+// implements. Status now also shows the live current-pointing readout
+// (RA/Dec and/or Alt/Az, decimal degrees) via labelCurRA/Dec/Alt/Az's
+// own IPointingRaDec/IPointingAltAz state subscriptions - a real gap
+// this pass filled in, not just a visual port; Polaris previously only
+// checked those interfaces' *presence* for gating Move, never actually
+// displayed where the telescope currently points. Move consolidates
+// telescopewidget.ui's own single shared "Move" button below the
+// coordinate-type pages, rather than one Move button duplicated per
+// page.
 //
 // Move also includes a destination-coordinate preview (typed RA/Dec <->
 // Alt/Az, computed via the CoordinateTransform QML singleton - see
@@ -52,6 +67,7 @@ ScrollView {
             delegate: ColumnLayout {
                 id: telescopeDelegate
                 Layout.fillWidth: true
+                spacing: 4
 
                 required property string jid
                 required property string name
@@ -80,14 +96,18 @@ ScrollView {
                 readonly property var motionInterface: findInterface("IMotion")
                 readonly property var raDecOffsetsInterface: findInterface("IOffsetsRaDec")
                 readonly property var altAzOffsetsInterface: findInterface("IOffsetsAltAz")
-                readonly property bool hasRaDecPointing: findInterface("IPointingRaDec") !== null
-                readonly property bool hasAltAzPointing: findInterface("IPointingAltAz") !== null
+                readonly property var raDecPointingInterface: findInterface("IPointingRaDec")
+                readonly property var altAzPointingInterface: findInterface("IPointingAltAz")
+                readonly property bool hasRaDecPointing: raDecPointingInterface !== null
+                readonly property bool hasAltAzPointing: altAzPointingInterface !== null
 
                 visible: findInterface("ITelescope") !== null
 
                 property var motionSubscription: null
                 property var raDecOffsetsSubscription: null
                 property var altAzOffsetsSubscription: null
+                property var raDecPointingSubscription: null
+                property var altAzPointingSubscription: null
 
                 function refreshSubscriptions() {
                     if (motionSubscription) {
@@ -102,6 +122,14 @@ ScrollView {
                         altAzOffsetsSubscription.unsubscribe()
                         altAzOffsetsSubscription = null
                     }
+                    if (raDecPointingSubscription) {
+                        raDecPointingSubscription.unsubscribe()
+                        raDecPointingSubscription = null
+                    }
+                    if (altAzPointingSubscription) {
+                        altAzPointingSubscription.unsubscribe()
+                        altAzPointingSubscription = null
+                    }
                     if (visible && motionInterface) {
                         motionSubscription = root.xmppClient.subscribeState(
                             jid, "IMotion", motionInterface.version, telescopeDelegate)
@@ -114,17 +142,29 @@ ScrollView {
                         altAzOffsetsSubscription = root.xmppClient.subscribeState(
                             jid, "IOffsetsAltAz", altAzOffsetsInterface.version, telescopeDelegate)
                     }
+                    if (visible && raDecPointingInterface) {
+                        raDecPointingSubscription = root.xmppClient.subscribeState(
+                            jid, "IPointingRaDec", raDecPointingInterface.version, telescopeDelegate)
+                    }
+                    if (visible && altAzPointingInterface) {
+                        altAzPointingSubscription = root.xmppClient.subscribeState(
+                            jid, "IPointingAltAz", altAzPointingInterface.version, telescopeDelegate)
+                    }
                 }
 
                 onVisibleChanged: refreshSubscriptions()
                 onMotionInterfaceChanged: refreshSubscriptions()
                 onRaDecOffsetsInterfaceChanged: refreshSubscriptions()
                 onAltAzOffsetsInterfaceChanged: refreshSubscriptions()
+                onRaDecPointingInterfaceChanged: refreshSubscriptions()
+                onAltAzPointingInterfaceChanged: refreshSubscriptions()
                 Component.onCompleted: refreshSubscriptions()
 
                 readonly property var motionState: motionSubscription ? motionSubscription.value : undefined
                 readonly property var raDecOffsetsState: raDecOffsetsSubscription ? raDecOffsetsSubscription.value : undefined
                 readonly property var altAzOffsetsState: altAzOffsetsSubscription ? altAzOffsetsSubscription.value : undefined
+                readonly property var raDecPointingState: raDecPointingSubscription ? raDecPointingSubscription.value : undefined
+                readonly property var altAzPointingState: altAzPointingSubscription ? altAzPointingSubscription.value : undefined
 
                 readonly property string motionStatus: fieldOf(motionState, "status") || ""
                 // Wire value is the lowercase enum member (confirmed live -
@@ -137,6 +177,15 @@ ScrollView {
                 // unknown members that stay disabled.
                 readonly property bool motionReady: motionStatus === "slewing" || motionStatus === "tracking"
                     || motionStatus === "idle" || motionStatus === "positioned"
+
+                // Current-pointing readout (telescopewidget.ui's own
+                // labelCurRA/Dec/Alt/Az) - decimal degrees, not the
+                // legacy's sexagesimal formatting (TODO.md's own scope
+                // cut for this project, unchanged here).
+                readonly property var currentRa: fieldOf(raDecPointingState, "ra")
+                readonly property var currentDec: fieldOf(raDecPointingState, "dec")
+                readonly property var currentAlt: fieldOf(altAzPointingState, "alt")
+                readonly property var currentAz: fieldOf(altAzPointingState, "az")
 
                 property string running: "" // action currently in flight, "" if none
                 property string lastError: ""
@@ -232,30 +281,6 @@ ScrollView {
                     }
                 }
 
-                KeyValueCard {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 8
-                    value: telescopeDelegate.motionState
-                }
-
-                RowLayout {
-                    Button {
-                        text: "Init"
-                        enabled: telescopeDelegate.running === ""
-                        onClicked: telescopeDelegate.run("init", 0)
-                    }
-                    Button {
-                        text: "Park"
-                        enabled: telescopeDelegate.running === ""
-                        onClicked: telescopeDelegate.run("park", 0)
-                    }
-                    Button {
-                        text: "Stop"
-                        enabled: telescopeDelegate.running === ""
-                        onClicked: telescopeDelegate.run("stop_motion", 1)
-                    }
-                }
-
                 Label {
                     Layout.fillWidth: true
                     visible: telescopeDelegate.lastError.length > 0
@@ -264,279 +289,428 @@ ScrollView {
                     wrapMode: Text.WrapAnywhere
                 }
 
-                // --- Move: visible if the module can point at RA/Dec
-                // and/or Alt/Az. Fire-and-forget command fields, not
-                // persistent state - no "was synced" idiom needed here
-                // (unlike Offsets below), since there's no server-pushed
-                // value these fields ever need to reflect.
-                ColumnLayout {
-                    Layout.leftMargin: 8
+                RowLayout {
                     Layout.fillWidth: true
-                    visible: telescopeDelegate.hasRaDecPointing || telescopeDelegate.hasAltAzPointing
-                    spacing: 4
+                    spacing: 12
 
-                    Label {
-                        text: "Move"
-                        font.bold: true
-                    }
+                    // --- Status: motion state, Init/Park/Stop, and the
+                    // live current-pointing readout - telescopewidget.ui's
+                    // own groupStatus (labelStatus, buttonInit/Park/Stop,
+                    // labelCurRA/Dec/Alt/Az).
+                    GroupBox {
+                        title: "Status"
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: 220
 
-                    // Client-side only - see the file header comment for
-                    // why this can't be fetched from the module. Plain
-                    // "controlled component" TextFields (same idiom as
-                    // CameraView.qml's broadcastCheck): text is set once
-                    // from the persisted AppSettings value, then the user
-                    // freely edits it, writing back on editingFinished.
-                    RowLayout {
-                        Label { text: "Observer:" }
-                        Label { text: "Lat [deg]:" }
-                        TextField {
-                            id: obsLatField
-                            implicitWidth: 70
-                            text: root.appSettings.observerLatitude.toFixed(4)
-                            validator: DoubleValidator { bottom: -90; top: 90 }
-                            onEditingFinished: {
-                                const value = parseFloat(text)
-                                if (!isNaN(value)) {
-                                    root.appSettings.observerLatitude = value
+                        ColumnLayout {
+                            width: parent.width
+                            spacing: 6
+
+                            Label {
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                                text: telescopeDelegate.motionStatus.toUpperCase()
+                                font.bold: true
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Button {
+                                    Layout.fillWidth: true
+                                    text: "Init"
+                                    enabled: telescopeDelegate.running === ""
+                                    onClicked: telescopeDelegate.run("init", 0)
+                                }
+                                Button {
+                                    Layout.fillWidth: true
+                                    text: "Park"
+                                    enabled: telescopeDelegate.running === ""
+                                    onClicked: telescopeDelegate.run("park", 0)
+                                }
+                                Button {
+                                    Layout.fillWidth: true
+                                    text: "Stop"
+                                    enabled: telescopeDelegate.running === ""
+                                    onClicked: telescopeDelegate.run("stop_motion", 1)
+                                }
+                            }
+
+                            GridLayout {
+                                columns: 2
+                                columnSpacing: 8
+                                rowSpacing: 4
+                                Layout.fillWidth: true
+                                visible: telescopeDelegate.hasRaDecPointing || telescopeDelegate.hasAltAzPointing
+
+                                Label { visible: telescopeDelegate.hasRaDecPointing; text: "RA:" }
+                                Label {
+                                    visible: telescopeDelegate.hasRaDecPointing
+                                    Layout.fillWidth: true
+                                    text: telescopeDelegate.currentRa !== undefined && telescopeDelegate.currentRa !== null
+                                        ? telescopeDelegate.currentRa.toFixed(3) + "°" : "-"
+                                    color: "grey"
+                                }
+                                Label { visible: telescopeDelegate.hasRaDecPointing; text: "Dec:" }
+                                Label {
+                                    visible: telescopeDelegate.hasRaDecPointing
+                                    Layout.fillWidth: true
+                                    text: telescopeDelegate.currentDec !== undefined && telescopeDelegate.currentDec !== null
+                                        ? telescopeDelegate.currentDec.toFixed(3) + "°" : "-"
+                                    color: "grey"
+                                }
+                                Label { visible: telescopeDelegate.hasAltAzPointing; text: "Alt:" }
+                                Label {
+                                    visible: telescopeDelegate.hasAltAzPointing
+                                    Layout.fillWidth: true
+                                    text: telescopeDelegate.currentAlt !== undefined && telescopeDelegate.currentAlt !== null
+                                        ? telescopeDelegate.currentAlt.toFixed(3) + "°" : "-"
+                                    color: "grey"
+                                }
+                                Label { visible: telescopeDelegate.hasAltAzPointing; text: "Az:" }
+                                Label {
+                                    visible: telescopeDelegate.hasAltAzPointing
+                                    Layout.fillWidth: true
+                                    text: telescopeDelegate.currentAz !== undefined && telescopeDelegate.currentAz !== null
+                                        ? telescopeDelegate.currentAz.toFixed(3) + "°" : "-"
+                                    color: "grey"
                                 }
                             }
                         }
-                        Label { text: "Lon [deg]:" }
-                        TextField {
-                            id: obsLonField
-                            implicitWidth: 70
-                            text: root.appSettings.observerLongitude.toFixed(4)
-                            validator: DoubleValidator { bottom: -180; top: 180 }
-                            onEditingFinished: {
-                                const value = parseFloat(text)
-                                if (!isNaN(value)) {
-                                    root.appSettings.observerLongitude = value
+                    }
+
+                    // --- Move: visible if the module can point at RA/Dec
+                    // and/or Alt/Az. Fire-and-forget command fields, not
+                    // persistent state - no "was synced" idiom needed here
+                    // (unlike Offsets below), since there's no server-pushed
+                    // value these fields ever need to reflect. One shared
+                    // Move button below the active page, matching
+                    // telescopewidget.ui's own buttonMove (not one button
+                    // duplicated per coordinate-type page).
+                    GroupBox {
+                        title: "Move"
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: 320
+                        visible: telescopeDelegate.hasRaDecPointing || telescopeDelegate.hasAltAzPointing
+
+                        ColumnLayout {
+                            width: parent.width
+                            spacing: 6
+
+                            // Client-side only - see the file header comment
+                            // for why this can't be fetched from the
+                            // module. Plain "controlled component"
+                            // TextFields (same idiom as CameraView.qml's
+                            // broadcastCheck): text is set once from the
+                            // persisted AppSettings value, then the user
+                            // freely edits it, writing back on
+                            // editingFinished.
+                            Label { text: "Observer location"; color: "grey" }
+                            GridLayout {
+                                columns: 2
+                                columnSpacing: 8
+                                rowSpacing: 4
+                                Layout.fillWidth: true
+
+                                Label { text: "Lat [deg]:" }
+                                TextField {
+                                    id: obsLatField
+                                    Layout.fillWidth: true
+                                    text: root.appSettings.observerLatitude.toFixed(4)
+                                    validator: DoubleValidator { bottom: -90; top: 90 }
+                                    onEditingFinished: {
+                                        const value = parseFloat(text)
+                                        if (!isNaN(value)) {
+                                            root.appSettings.observerLatitude = value
+                                        }
+                                    }
+                                }
+                                Label { text: "Lon [deg]:" }
+                                TextField {
+                                    id: obsLonField
+                                    Layout.fillWidth: true
+                                    text: root.appSettings.observerLongitude.toFixed(4)
+                                    validator: DoubleValidator { bottom: -180; top: 180 }
+                                    onEditingFinished: {
+                                        const value = parseFloat(text)
+                                        if (!isNaN(value)) {
+                                            root.appSettings.observerLongitude = value
+                                        }
+                                    }
+                                }
+                                Label { text: "Elev [m]:" }
+                                TextField {
+                                    id: obsElevField
+                                    Layout.fillWidth: true
+                                    text: root.appSettings.observerElevation.toFixed(1)
+                                    validator: DoubleValidator {}
+                                    onEditingFinished: {
+                                        const value = parseFloat(text)
+                                        if (!isNaN(value)) {
+                                            root.appSettings.observerElevation = value
+                                        }
+                                    }
                                 }
                             }
-                        }
-                        Label { text: "Elev [m]:" }
-                        TextField {
-                            id: obsElevField
-                            implicitWidth: 60
-                            text: root.appSettings.observerElevation.toFixed(1)
-                            validator: DoubleValidator {}
-                            onEditingFinished: {
-                                const value = parseFloat(text)
-                                if (!isNaN(value)) {
-                                    root.appSettings.observerElevation = value
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Coordinates:" }
+                                ComboBox {
+                                    id: moveTypeCombo
+                                    Layout.fillWidth: true
+                                    model: {
+                                        const types = []
+                                        if (telescopeDelegate.hasRaDecPointing) types.push("RA/Dec")
+                                        if (telescopeDelegate.hasAltAzPointing) types.push("Alt/Az")
+                                        return types
+                                    }
                                 }
                             }
-                        }
-                    }
 
-                    RowLayout {
-                        Label { text: "Coordinates:" }
-                        ComboBox {
-                            id: moveTypeCombo
-                            model: {
-                                const types = []
-                                if (telescopeDelegate.hasRaDecPointing) types.push("RA/Dec")
-                                if (telescopeDelegate.hasAltAzPointing) types.push("Alt/Az")
-                                return types
+                            GridLayout {
+                                columns: 2
+                                columnSpacing: 8
+                                rowSpacing: 4
+                                Layout.fillWidth: true
+                                visible: moveTypeCombo.currentText === "RA/Dec"
+
+                                Label { text: "RA [deg]:" }
+                                TextField {
+                                    id: raField
+                                    Layout.fillWidth: true
+                                    placeholderText: "0.0"
+                                    validator: DoubleValidator {}
+                                }
+                                Label { text: "Dec [deg]:" }
+                                TextField {
+                                    id: decField
+                                    Layout.fillWidth: true
+                                    placeholderText: "0.0"
+                                    validator: DoubleValidator {}
+                                }
                             }
-                        }
-                    }
 
-                    RowLayout {
-                        visible: moveTypeCombo.currentText === "RA/Dec"
+                            GridLayout {
+                                columns: 2
+                                columnSpacing: 8
+                                rowSpacing: 4
+                                Layout.fillWidth: true
+                                visible: moveTypeCombo.currentText === "Alt/Az"
 
-                        Label { text: "RA [deg]:" }
-                        TextField {
-                            id: raField
-                            implicitWidth: 90
-                            placeholderText: "0.0"
-                            validator: DoubleValidator {}
-                        }
-                        Label { text: "Dec [deg]:" }
-                        TextField {
-                            id: decField
-                            implicitWidth: 90
-                            placeholderText: "0.0"
-                            validator: DoubleValidator {}
-                        }
-                        Button {
-                            text: "Move"
-                            enabled: telescopeDelegate.motionReady && raField.acceptableInput && decField.acceptableInput
-                            onClicked: telescopeDelegate.runWithParams(
-                                "move_radec", [parseFloat(raField.text), parseFloat(decField.text)])
-                        }
-                    }
-
-                    // Destination-coordinate preview: shows what the
-                    // *other* coordinate system's values would be for
-                    // whichever page is currently active, computed via
-                    // the CoordinateTransform QML singleton (libnova-
-                    // backed, see src/util/CoordinateTransform.h).
-                    // Read-only, informational only - the Move buttons
-                    // above/below always send exactly the user's typed/
-                    // spun values, unchanged.
-                    Label {
-                        Layout.leftMargin: 8
-                        color: "grey"
-                        text: {
-                            // Read these unconditionally, before any
-                            // early return - real bug caught live: a
-                            // Q_INVOKABLE call like hasObserverLocation()
-                            // below creates no QML binding dependency by
-                            // itself. The first evaluation of this binding
-                            // happens while location is still unset, so it
-                            // used to return before ever reading
-                            // observerLatitude/observerLongitude as
-                            // properties - meaning this binding never
-                            // re-evaluated once the user actually set a
-                            // location, since no dependency on those
-                            // properties had ever been established.
-                            // Reading them here every time, regardless of
-                            // branch, fixes that.
-                            const lat = root.appSettings.observerLatitude
-                            const lon = root.appSettings.observerLongitude
-                            const elev = root.appSettings.observerElevation
-                            if (!root.appSettings.hasObserverLocation()) {
-                                return "Set observer location above to preview"
+                                Label { text: "Alt [deg]:" }
+                                SpinBox {
+                                    id: altSpin
+                                    Layout.fillWidth: true
+                                    from: -90
+                                    to: 90
+                                    value: 0
+                                    editable: true
+                                }
+                                Label { text: "Az [deg]:" }
+                                SpinBox {
+                                    id: azSpin
+                                    Layout.fillWidth: true
+                                    from: 0
+                                    to: 360
+                                    value: 0
+                                    editable: true
+                                }
                             }
-                            if (moveTypeCombo.currentText === "RA/Dec") {
-                                const ra = parseFloat(raField.text)
-                                const dec = parseFloat(decField.text)
-                                if (isNaN(ra) || isNaN(dec)) {
+
+                            // Destination-coordinate preview: shows what the
+                            // *other* coordinate system's values would be for
+                            // whichever page is currently active, computed via
+                            // the CoordinateTransform QML singleton (libnova-
+                            // backed, see src/util/CoordinateTransform.h).
+                            // Read-only, informational only - the Move button
+                            // below always sends exactly the user's typed/
+                            // spun values, unchanged.
+                            Label {
+                                Layout.fillWidth: true
+                                color: "grey"
+                                wrapMode: Text.WordWrap
+                                text: {
+                                    // Read these unconditionally, before any
+                                    // early return - real bug caught live: a
+                                    // Q_INVOKABLE call like hasObserverLocation()
+                                    // below creates no QML binding dependency by
+                                    // itself. The first evaluation of this binding
+                                    // happens while location is still unset, so it
+                                    // used to return before ever reading
+                                    // observerLatitude/observerLongitude as
+                                    // properties - meaning this binding never
+                                    // re-evaluated once the user actually set a
+                                    // location, since no dependency on those
+                                    // properties had ever been established.
+                                    // Reading them here every time, regardless of
+                                    // branch, fixes that.
+                                    const lat = root.appSettings.observerLatitude
+                                    const lon = root.appSettings.observerLongitude
+                                    const elev = root.appSettings.observerElevation
+                                    if (!root.appSettings.hasObserverLocation()) {
+                                        return "Set observer location above to preview"
+                                    }
+                                    if (moveTypeCombo.currentText === "RA/Dec") {
+                                        const ra = parseFloat(raField.text)
+                                        const dec = parseFloat(decField.text)
+                                        if (isNaN(ra) || isNaN(dec)) {
+                                            return ""
+                                        }
+                                        const result = CoordinateTransform.equatorialToHorizontal(ra, dec, lat, lon, elev)
+                                        return "→ Alt: " + result.alt.toFixed(2) + "°, Az: " + result.az.toFixed(2) + "°"
+                                    }
+                                    if (moveTypeCombo.currentText === "Alt/Az") {
+                                        const result = CoordinateTransform.horizontalToEquatorial(
+                                            altSpin.value, azSpin.value, lat, lon, elev)
+                                        return "→ RA: " + result.ra.toFixed(2) + "°, Dec: " + result.dec.toFixed(2) + "°"
+                                    }
                                     return ""
                                 }
-                                const result = CoordinateTransform.equatorialToHorizontal(ra, dec, lat, lon, elev)
-                                return "→ Alt: " + result.alt.toFixed(2) + "°, Az: " + result.az.toFixed(2) + "°"
                             }
-                            if (moveTypeCombo.currentText === "Alt/Az") {
-                                const result = CoordinateTransform.horizontalToEquatorial(
-                                    altSpin.value, azSpin.value, lat, lon, elev)
-                                return "→ RA: " + result.ra.toFixed(2) + "°, Dec: " + result.dec.toFixed(2) + "°"
-                            }
-                            return ""
-                        }
-                    }
 
-                    RowLayout {
-                        visible: moveTypeCombo.currentText === "Alt/Az"
-
-                        Label { text: "Alt [deg]:" }
-                        SpinBox {
-                            id: altSpin
-                            from: -90
-                            to: 90
-                            value: 0
-                            editable: true
-                        }
-                        Label { text: "Az [deg]:" }
-                        SpinBox {
-                            id: azSpin
-                            from: 0
-                            to: 360
-                            value: 0
-                            editable: true
-                        }
-                        Button {
-                            text: "Move"
-                            enabled: telescopeDelegate.motionReady
-                            onClicked: telescopeDelegate.runWithParams(
-                                "move_altaz", [altSpin.value, azSpin.value])
-                        }
-                    }
-                }
-
-                // --- Offsets: visible if the module reports IOffsetsRaDec
-                // and/or IOffsetsAltAz, one sub-row per interface present.
-                // Each SpinBox mirrors AutoGuidingView.qml's exposure-time
-                // "was synced" idiom: only overwritten by a fresh server
-                // push if it still shows the last value *this page* last
-                // synced from the server, so an in-progress edit isn't
-                // clobbered by an unrelated state update. That doubles as
-                // the "shows the current offset" display TODO.md asks
-                // for - no separate read-only label needed.
-                ColumnLayout {
-                    Layout.leftMargin: 8
-                    Layout.fillWidth: true
-                    visible: telescopeDelegate.raDecOffsetsInterface !== null || telescopeDelegate.altAzOffsetsInterface !== null
-                    spacing: 4
-
-                    Label {
-                        text: "Offsets"
-                        font.bold: true
-                    }
-
-                    RowLayout {
-                        visible: telescopeDelegate.raDecOffsetsInterface !== null
-
-                        Label { text: "RA/Dec [arcsec]:" }
-                        SpinBox {
-                            id: raOffsetSpin
-                            from: -3600
-                            to: 3600
-                            value: 0
-                            editable: true
-                        }
-                        SpinBox {
-                            id: decOffsetSpin
-                            from: -3600
-                            to: 3600
-                            value: 0
-                            editable: true
-                        }
-                        Button {
-                            text: "Set"
-                            enabled: telescopeDelegate.motionReady
-                            onClicked: telescopeDelegate.runWithParams(
-                                "set_offsets_radec", [raOffsetSpin.value / 3600, decOffsetSpin.value / 3600])
-                        }
-                        Button {
-                            text: "Reset to 0"
-                            enabled: telescopeDelegate.motionReady
-                            onClicked: {
-                                raOffsetSpin.value = 0
-                                decOffsetSpin.value = 0
-                                telescopeDelegate.runWithParams("set_offsets_radec", [0, 0])
+                            Button {
+                                Layout.fillWidth: true
+                                text: "Move"
+                                enabled: telescopeDelegate.motionReady && (
+                                    (moveTypeCombo.currentText === "RA/Dec" && raField.acceptableInput && decField.acceptableInput)
+                                    || moveTypeCombo.currentText === "Alt/Az")
+                                onClicked: {
+                                    if (moveTypeCombo.currentText === "RA/Dec") {
+                                        telescopeDelegate.runWithParams(
+                                            "move_radec", [parseFloat(raField.text), parseFloat(decField.text)])
+                                    } else if (moveTypeCombo.currentText === "Alt/Az") {
+                                        telescopeDelegate.runWithParams(
+                                            "move_altaz", [altSpin.value, azSpin.value])
+                                    }
+                                }
                             }
                         }
                     }
 
-                    // Schema-verified only, not live-pixel-verified - no
-                    // built-in Dummy* module implements IOffsetsAltAz (see
-                    // DEVELOPMENT.md).
-                    RowLayout {
-                        visible: telescopeDelegate.altAzOffsetsInterface !== null
+                    // --- Offsets: visible if the module reports IOffsetsRaDec
+                    // and/or IOffsetsAltAz, one sub-row per interface present.
+                    // Each SpinBox mirrors AutoGuidingView.qml's exposure-time
+                    // "was synced" idiom: only overwritten by a fresh server
+                    // push if it still shows the last value *this page* last
+                    // synced from the server, so an in-progress edit isn't
+                    // clobbered by an unrelated state update. That doubles as
+                    // the "shows the current offset" display TODO.md asks
+                    // for - no separate read-only label needed. Unlike
+                    // CameraView.qml's Window/Gain (fetch-once, apply-on-
+                    // Expose), offsets keep their own immediate Set/Reset
+                    // buttons - there's no equivalent "shutter action" here
+                    // to batch onto, matching telescopewidget.ui's own
+                    // per-row set/reset buttons.
+                    GroupBox {
+                        title: "Offsets"
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: 220
+                        visible: telescopeDelegate.raDecOffsetsInterface !== null || telescopeDelegate.altAzOffsetsInterface !== null
 
-                        Label { text: "Alt/Az [arcsec]:" }
-                        SpinBox {
-                            id: altOffsetSpin
-                            from: -3600
-                            to: 3600
-                            value: 0
-                            editable: true
-                        }
-                        SpinBox {
-                            id: azOffsetSpin
-                            from: -3600
-                            to: 3600
-                            value: 0
-                            editable: true
-                        }
-                        Button {
-                            text: "Set"
-                            enabled: telescopeDelegate.motionReady
-                            onClicked: telescopeDelegate.runWithParams(
-                                "set_offsets_altaz", [altOffsetSpin.value / 3600, azOffsetSpin.value / 3600])
-                        }
-                        Button {
-                            text: "Reset to 0"
-                            enabled: telescopeDelegate.motionReady
-                            onClicked: {
-                                altOffsetSpin.value = 0
-                                azOffsetSpin.value = 0
-                                telescopeDelegate.runWithParams("set_offsets_altaz", [0, 0])
+                        ColumnLayout {
+                            width: parent.width
+                            spacing: 10
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: telescopeDelegate.raDecOffsetsInterface !== null
+                                spacing: 4
+
+                                Label { text: "RA/Dec [arcsec]"; color: "grey" }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    SpinBox {
+                                        id: raOffsetSpin
+                                        Layout.fillWidth: true
+                                        from: -3600
+                                        to: 3600
+                                        value: 0
+                                        editable: true
+                                    }
+                                    SpinBox {
+                                        id: decOffsetSpin
+                                        Layout.fillWidth: true
+                                        from: -3600
+                                        to: 3600
+                                        value: 0
+                                        editable: true
+                                    }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Button {
+                                        Layout.fillWidth: true
+                                        text: "Set"
+                                        enabled: telescopeDelegate.motionReady
+                                        onClicked: telescopeDelegate.runWithParams(
+                                            "set_offsets_radec", [raOffsetSpin.value / 3600, decOffsetSpin.value / 3600])
+                                    }
+                                    Button {
+                                        Layout.fillWidth: true
+                                        text: "Reset"
+                                        enabled: telescopeDelegate.motionReady
+                                        onClicked: {
+                                            raOffsetSpin.value = 0
+                                            decOffsetSpin.value = 0
+                                            telescopeDelegate.runWithParams("set_offsets_radec", [0, 0])
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Schema-verified only, not live-pixel-verified - no
+                            // built-in Dummy* module implements IOffsetsAltAz (see
+                            // DEVELOPMENT.md).
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: telescopeDelegate.altAzOffsetsInterface !== null
+                                spacing: 4
+
+                                Label { text: "Alt/Az [arcsec]"; color: "grey" }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    SpinBox {
+                                        id: altOffsetSpin
+                                        Layout.fillWidth: true
+                                        from: -3600
+                                        to: 3600
+                                        value: 0
+                                        editable: true
+                                    }
+                                    SpinBox {
+                                        id: azOffsetSpin
+                                        Layout.fillWidth: true
+                                        from: -3600
+                                        to: 3600
+                                        value: 0
+                                        editable: true
+                                    }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Button {
+                                        Layout.fillWidth: true
+                                        text: "Set"
+                                        enabled: telescopeDelegate.motionReady
+                                        onClicked: telescopeDelegate.runWithParams(
+                                            "set_offsets_altaz", [altOffsetSpin.value / 3600, azOffsetSpin.value / 3600])
+                                    }
+                                    Button {
+                                        Layout.fillWidth: true
+                                        text: "Reset"
+                                        enabled: telescopeDelegate.motionReady
+                                        onClicked: {
+                                            altOffsetSpin.value = 0
+                                            azOffsetSpin.value = 0
+                                            telescopeDelegate.runWithParams("set_offsets_altaz", [0, 0])
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
+
+                    Item { Layout.fillWidth: true }
                 }
             }
         }
