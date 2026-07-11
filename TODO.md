@@ -225,29 +225,3 @@ does except full matplotlib colormap parity (deliberately out of scope,
 see above) and `qfitswidget`'s own live pixel-value/WCS mouse-hover
 readout (never in scope for this project's `ICamera` port at all - not
 listed as a gap anywhere above, and still isn't one now).
-
----
-
-## Phase 8 — WebAssembly build
-
-**Goal:** the same client, browser-deployable.
-
-- Second Conan profile (Emscripten toolchain) alongside the native one —
-  don't retrofit the native CMake setup for this later; get the second
-  profile building (even just "hello world" Qt Quick in a canvas) before
-  porting any XMPP code, to isolate WASM-specific build pain from protocol
-  pain.
-- Networking: raw `QXmppClient::connectToServer` (the native TCP path)
-  does not work in a browser sandbox — this is where the WebSocket
-  transport actually becomes necessary, same reasoning as `useXmpp.ts`'s
-  `buildWsUrl()`/`wss://` handling.
-- Threading: decide single-threaded vs. multithreaded WASM now, since it
-  determines whether the deployment needs `Cross-Origin-Opener-Policy`/
-  `Cross-Origin-Embedder-Policy` headers (`SharedArrayBuffer` requirement)
-  — a hosting-environment constraint worth confirming works with wherever
-  this actually gets deployed (SAAO's infrastructure) before committing to
-  the multithreaded path.
-
-**Acceptance:** the built `.wasm`/`.js`/`.html` bundle, served statically,
-connects to the same ejabberd server the native build uses and renders the
-same module list.
