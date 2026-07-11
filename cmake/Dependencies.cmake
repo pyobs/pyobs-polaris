@@ -144,6 +144,21 @@ target_compile_definitions(libnova PRIVATE HAVE_ROUND)
 if(MSVC)
     set_target_properties(libnova PROPERTIES PREFIX "" IMPORT_PREFIX "")
 endif()
+# Unlike a Unix .so (exports every global symbol by default), a Windows
+# DLL exports nothing unless explicitly annotated - libnova's own headers
+# have no __declspec(dllexport)/dllimport markup at all (an old, Linux/
+# autotools-centric C library, never written with Windows DLL export in
+# mind), so its import library ends up with no export entries and
+# anything linking against it (e.g. polaris.exe via CoordinateTransform.cpp)
+# fails with "unresolved external symbol ln_get_julian_from_sys" etc. -
+# a link error, not a missing-header/missing-function problem.
+# WINDOWS_EXPORT_ALL_SYMBOLS is CMake's own documented answer for exactly
+# this (wrapping a legacy C library with no export annotations): it makes
+# the MSVC toolchain auto-export every global symbol, matching a Unix
+# .so's default behavior, without touching any of libnova's own source.
+if(MSVC)
+    set_target_properties(libnova PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 # julian_day.c also has its own unconditional `#include "config.h"` -
 # normally generated into the build tree by the autotools configure
 # script (autoheader, from config.h.in), which - same as HAVE_ROUND above
