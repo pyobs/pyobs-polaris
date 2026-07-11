@@ -1,9 +1,13 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQuickStyle>
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+
+    // EXPERIMENTAL - trying Fusion instead of Material, not committed yet.
+    QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
     // QSettings (config::AppSettings) resolves its on-disk location from
     // these - e.g. ~/.config/pyobs/Polaris.conf on Linux. Must be set

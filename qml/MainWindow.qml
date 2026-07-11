@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
 import pyobs.polaris
 
@@ -15,11 +14,9 @@ import pyobs.polaris
 // terminal prompt, a lined page, a house, a focus-ring target.
 ApplicationWindow {
     id: root
-    width: 900
-    height: 700
+    width: 1366
+    height: 994
     title: "Polaris"
-
-    Material.theme: Material.Dark
 
     // A sidebar entry: an icon glyph before the label, matching
     // AppLayout.vue's `d-flex align-items-center gap-2` links. Kept as an

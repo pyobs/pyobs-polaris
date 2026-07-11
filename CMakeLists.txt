@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick Xml Network)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Xml Network)
 # Conan dependency (conanfile.txt), unlike qxmpp/QtKeychain below - see
 # that file's own comment on why cfitsio doesn't need the FetchContent/
 # system-Qt workaround qxmpp does (no Qt dependency of its own to
@@ -101,6 +101,7 @@ qt_add_qml_module(polaris
 
 target_link_libraries(polaris PRIVATE
     Qt6::Quick
+    Qt6::QuickControls2
     Qt6::Xml
     Qt6::Network
     QXmppQt6

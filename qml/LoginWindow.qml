@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
 
 // Ports pyobs-web-client's LoginView.vue / App.vue's status-driven
@@ -20,8 +19,6 @@ ApplicationWindow {
     width: 640
     height: 640
     title: "Polaris - Sign in"
-
-    Material.theme: Material.Dark
 
     required property var xmppClient
     required property var accountsModel

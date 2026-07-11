@@ -4,18 +4,32 @@ import QtQuick.Layouts
 import pyobs.polaris
 
 // Dedicated page for ICamera modules, ported from pyobs-gui's
-// camerawidget.py - MVP scope only (control, no image display; see
-// TODO.md's "ICamera follow-up" for the deferred VFS/FITS/image-viewer
-// half). ICamera itself is IData + IExposure (confirmed from source) -
-// IExposure's state class is inherited by ICamera the same way IMotion's
-// is inherited by ITelescope (TelescopeView.qml), so this subscribes to
-// "IExposure" specifically (the interface that actually originates the
-// state), gating visibility on "ICamera" (the specific marker), same
-// split RoofView.qml/TelescopeView.qml already use. Everything below
-// IExposure is capability-gated per interface, following the exact
-// findInterface()/visible/refreshSubscriptions() shape every custom
-// widget here already uses, just with more of them at once than any
-// prior widget (up to eight simultaneous StateSubscriptions per module).
+// camerawidget.py. ICamera itself is IData + IExposure (confirmed from
+// source) - IExposure's state class is inherited by ICamera the same way
+// IMotion's is inherited by ITelescope (TelescopeView.qml), so this
+// subscribes to "IExposure" specifically (the interface that actually
+// originates the state), gating visibility on "ICamera" (the specific
+// marker), same split RoofView.qml/TelescopeView.qml already use.
+// Everything below IExposure is capability-gated per interface,
+// following the exact findInterface()/visible/refreshSubscriptions()
+// shape every custom widget here already uses, just with more of them at
+// once than any prior widget (up to eight simultaneous StateSubscriptions
+// per module).
+//
+// Layout: sidebar-of-GroupBoxes + dominant image area, matching
+// pyobs-gui's own camerawidget.ui (QHBoxLayout stretch="0,1,0": a narrow
+// scrollable control sidebar, a dominant DataDisplayWidget, and a third
+// filter/temperature sidebar this project doesn't have - see TODO.md's
+// deliberate scope cut). GroupBox titles ("Exposure"/"Window"/"Gain"/...)
+// replace the legacy's title-less bordered boxes (which relied on
+// position/context alone) - a real, justified improvement over a 1:1
+// port, not a generic default. Settable Window/Gain/ExpTime fields show
+// a small grey "current value" label next to their SpinBox, mirroring
+// camerawidget.ui's WatchedLabel pattern - the live-sync-into-spinbox
+// idiom below already tracks the current value into the SpinBox itself
+// when not being edited, but showing both side by side removes any
+// ambiguity while a user is mid-edit, exactly the problem WatchedLabel
+// solves in the original.
 ScrollView {
     id: root
 
@@ -44,6 +58,7 @@ ScrollView {
             delegate: ColumnLayout {
                 id: cameraDelegate
                 Layout.fillWidth: true
+                spacing: 4
 
                 required property string jid
                 required property string name
@@ -319,7 +334,9 @@ ScrollView {
                 // exposureTimeSpin/leftSpin.../gainSpin/offsetSpin are
                 // forward id references into this same delegate's object
                 // tree, resolved once the state actually changes (well
-                // after Component.onCompleted).
+                // after Component.onCompleted) - nesting them inside
+                // GroupBoxes/GridLayouts below doesn't change that, ids
+                // are scoped to the whole Component regardless of depth.
                 property string lastSyncedImageType: ""
 
                 onCurrentImageTypeChanged: {
@@ -406,512 +423,669 @@ ScrollView {
                     }
                 }
 
-                KeyValueCard {
+                // --- Body: narrow control sidebar + dominant image area,
+                // matching camerawidget.ui's own QHBoxLayout stretch
+                // ratio (0 for the sidebar, 1 for the image) - see this
+                // file's own header comment.
+                RowLayout {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 8
-                    value: cameraDelegate.exposureState
-                }
+                    spacing: 12
 
-                ColumnLayout {
-                    Layout.leftMargin: 8
-                    Layout.fillWidth: true
-                    spacing: 4
+                    ColumnLayout {
+                        Layout.preferredWidth: 220
+                        Layout.maximumWidth: 220
+                        Layout.alignment: Qt.AlignTop
+                        spacing: 8
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        ProgressBar {
+                        // --- IWindow: four live-sync SpinBoxes bounded by
+                        // windowExtent adjusted for the current binning
+                        // factor - set_window()'s own param names are
+                        // left/top/width/height, even though WindowState's
+                        // fields are named x/y (a real wire naming
+                        // mismatch, not a typo - see DEVELOPMENT.md).
+                        GroupBox {
+                            title: "Window"
                             Layout.fillWidth: true
-                            from: 0
-                            to: 100
-                            value: cameraDelegate.exposureProgress
+                            visible: cameraDelegate.windowInterface !== null
+
+                            ColumnLayout {
+                                id: windowSection
+                                width: parent.width
+                                spacing: 6
+
+                                readonly property int maxWidth: Math.max(1, Math.floor((cameraDelegate.windowExtent.fullFrameWidth || 0) / cameraDelegate.currentBinX))
+                                readonly property int maxHeight: Math.max(1, Math.floor((cameraDelegate.windowExtent.fullFrameHeight || 0) / cameraDelegate.currentBinY))
+
+                                GridLayout {
+                                    columns: 3
+                                    columnSpacing: 8
+                                    rowSpacing: 4
+                                    Layout.fillWidth: true
+
+                                    Label { text: "Left:" }
+                                    Label { text: cameraDelegate.lastSyncedLeft >= 0 ? String(cameraDelegate.lastSyncedLeft) : "-"; color: "grey" }
+                                    SpinBox { id: leftSpin; Layout.fillWidth: true; from: 0; to: windowSection.maxWidth; editable: true }
+
+                                    Label { text: "Top:" }
+                                    Label { text: cameraDelegate.lastSyncedTop >= 0 ? String(cameraDelegate.lastSyncedTop) : "-"; color: "grey" }
+                                    SpinBox { id: topSpin; Layout.fillWidth: true; from: 0; to: windowSection.maxHeight; editable: true }
+
+                                    Label { text: "Width:" }
+                                    Label { text: cameraDelegate.lastSyncedWidth >= 0 ? String(cameraDelegate.lastSyncedWidth) : "-"; color: "grey" }
+                                    SpinBox { id: widthSpin; Layout.fillWidth: true; from: 1; to: windowSection.maxWidth; editable: true }
+
+                                    Label { text: "Height:" }
+                                    Label { text: cameraDelegate.lastSyncedHeight >= 0 ? String(cameraDelegate.lastSyncedHeight) : "-"; color: "grey" }
+                                    SpinBox { id: heightSpin; Layout.fillWidth: true; from: 1; to: windowSection.maxHeight; editable: true }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Button {
+                                        Layout.fillWidth: true
+                                        text: "Set Window"
+                                        onClicked: {
+                                            cameraDelegate.lastError = ""
+                                            root.xmppClient.executeMethod(
+                                                jid, "set_window", [leftSpin.value, topSpin.value, widthSpin.value, heightSpin.value],
+                                                function (result) {
+                                                    if (!result.success) {
+                                                        cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                                    }
+                                                })
+                                        }
+                                    }
+                                    Button {
+                                        Layout.fillWidth: true
+                                        text: "Full Frame"
+                                        onClicked: {
+                                            leftSpin.value = 0
+                                            topSpin.value = 0
+                                            widthSpin.value = windowSection.maxWidth
+                                            heightSpin.value = windowSection.maxHeight
+                                            cameraDelegate.lastError = ""
+                                            root.xmppClient.executeMethod(
+                                                jid, "set_window", [0, 0, widthSpin.value, heightSpin.value],
+                                                function (result) {
+                                                    if (!result.success) {
+                                                        cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                                    }
+                                                })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        GroupBox {
+                            title: "Binning & Format"
+                            Layout.fillWidth: true
+                            visible: cameraDelegate.binningInterface !== null || cameraDelegate.imageFormatInterface !== null
+
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: 6
+
+                                // --- IBinning: ComboBox over the
+                                // binningOptions role ("{x}x{y}" strings),
+                                // same live-sync/onActivated shape as
+                                // ModeView.qml's mode ComboBox.
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    visible: cameraDelegate.binningInterface !== null
+
+                                    readonly property string currentBinning: cameraDelegate.binningState !== undefined
+                                        ? cameraDelegate.currentBinX + "x" + cameraDelegate.currentBinY : ""
+                                    property string lastSyncedBinning: ""
+
+                                    onCurrentBinningChanged: {
+                                        if (currentBinning === "") {
+                                            return
+                                        }
+                                        const wasSynced = lastSyncedBinning === "" || binningCombo.currentText === lastSyncedBinning
+                                        lastSyncedBinning = currentBinning
+                                        if (wasSynced) {
+                                            const idx = binningCombo.find(currentBinning)
+                                            if (idx >= 0) {
+                                                binningCombo.currentIndex = idx
+                                            }
+                                        }
+                                    }
+
+                                    Label { text: "Binning:" }
+                                    ComboBox {
+                                        id: binningCombo
+                                        Layout.fillWidth: true
+                                        model: cameraDelegate.binningOptions || []
+                                        onActivated: {
+                                            const parts = currentText.split("x")
+                                            if (parts.length !== 2) {
+                                                return
+                                            }
+                                            cameraDelegate.lastError = ""
+                                            root.xmppClient.executeMethod(
+                                                jid, "set_binning", [parseInt(parts[0], 10), parseInt(parts[1], 10)],
+                                                function (result) {
+                                                    if (!result.success) {
+                                                        cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                                    }
+                                                })
+                                        }
+                                    }
+                                }
+
+                                // --- IImageFormat: ComboBox over the
+                                // imageFormats role.
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    visible: cameraDelegate.imageFormatInterface !== null
+
+                                    readonly property string currentImageFormat: cameraDelegate.fieldOf(cameraDelegate.imageFormatState, "image_format") || ""
+                                    property string lastSyncedImageFormat: ""
+
+                                    onCurrentImageFormatChanged: {
+                                        if (currentImageFormat === "") {
+                                            return
+                                        }
+                                        const wasSynced = lastSyncedImageFormat === "" || imageFormatCombo.currentText === lastSyncedImageFormat
+                                        lastSyncedImageFormat = currentImageFormat
+                                        if (wasSynced) {
+                                            const idx = imageFormatCombo.find(currentImageFormat)
+                                            if (idx >= 0) {
+                                                imageFormatCombo.currentIndex = idx
+                                            }
+                                        }
+                                    }
+
+                                    Label { text: "Format:" }
+                                    ComboBox {
+                                        id: imageFormatCombo
+                                        Layout.fillWidth: true
+                                        model: cameraDelegate.imageFormats || []
+                                        onActivated: {
+                                            cameraDelegate.lastError = ""
+                                            root.xmppClient.executeMethod(jid, "set_image_format", [currentText], function (result) {
+                                                if (!result.success) {
+                                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                                }
+                                            })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // --- IGain: two live-sync SpinBoxes (no declared
+                        // range - generous fixed bounds), one "Set" button
+                        // firing both set_gain/set_offset (two separate
+                        // RPCs, no combined command exists). Real fix vs.
+                        // camerawidget.py, not a faithful port - see
+                        // DEVELOPMENT.md.
+                        GroupBox {
+                            title: "Gain"
+                            Layout.fillWidth: true
+                            visible: cameraDelegate.gainInterface !== null
+
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: 6
+
+                                GridLayout {
+                                    columns: 3
+                                    columnSpacing: 8
+                                    rowSpacing: 4
+                                    Layout.fillWidth: true
+
+                                    Label { text: "Gain:" }
+                                    Label { text: isNaN(cameraDelegate.lastSyncedGain) ? "-" : cameraDelegate.lastSyncedGain.toFixed(2); color: "grey" }
+                                    SpinBox {
+                                        id: gainSpin
+                                        Layout.fillWidth: true
+                                        from: -1000000
+                                        to: 1000000
+                                        editable: true
+                                        textFromValue: (value) => (value / 100).toFixed(2)
+                                        valueFromText: (text) => Math.round(parseFloat(text) * 100)
+                                    }
+
+                                    Label { text: "Offset:" }
+                                    Label { text: isNaN(cameraDelegate.lastSyncedOffset) ? "-" : cameraDelegate.lastSyncedOffset.toFixed(2); color: "grey" }
+                                    SpinBox {
+                                        id: offsetSpin
+                                        Layout.fillWidth: true
+                                        from: -1000000
+                                        to: 1000000
+                                        editable: true
+                                        textFromValue: (value) => (value / 100).toFixed(2)
+                                        valueFromText: (text) => Math.round(parseFloat(text) * 100)
+                                    }
+                                }
+
+                                Button {
+                                    Layout.fillWidth: true
+                                    text: "Set"
+                                    onClicked: {
+                                        cameraDelegate.lastError = ""
+                                        root.xmppClient.executeMethod(jid, "set_gain", [gainSpin.value / 100], function (result) {
+                                            if (!result.success) {
+                                                cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                            }
+                                        })
+                                        root.xmppClient.executeMethod(jid, "set_offset", [offsetSpin.value / 100], function (result) {
+                                            if (!result.success) {
+                                                cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                            }
+                                        })
+                                    }
+                                }
+                            }
+                        }
+
+                        GroupBox {
+                            title: "Exposure"
+                            Layout.fillWidth: true
+
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: 6
+
+                                // --- IImageType: static ImageType enum,
+                                // not a capability - BIAS disables/zeroes
+                                // the exposure-time control below
+                                // (camerawidget.py's own
+                                // image_type_changed nicety).
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    visible: cameraDelegate.imageTypeInterface !== null
+
+                                    Label { text: "Type:" }
+                                    ComboBox {
+                                        id: imageTypeCombo
+                                        Layout.fillWidth: true
+                                        textRole: "label"
+                                        valueRole: "value"
+                                        model: [
+                                            { label: "Bias", value: "bias" },
+                                            { label: "Dark", value: "dark" },
+                                            { label: "Object", value: "object" },
+                                            { label: "Sky Flat", value: "skyflat" },
+                                            { label: "Focus", value: "focus" },
+                                            { label: "Acquisition", value: "acquisition" },
+                                            { label: "Guiding", value: "guiding" },
+                                        ]
+                                        onActivated: {
+                                            cameraDelegate.lastError = ""
+                                            root.xmppClient.executeMethod(jid, "set_image_type", [currentValue], function (result) {
+                                                if (!result.success) {
+                                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                                }
+                                            })
+                                        }
+                                    }
+                                }
+
+                                // --- IExposureTime: AutoGuidingView.qml's
+                                // exposure-time SpinBox idiom, verbatim
+                                // (integer milliseconds, was-synced guard)
+                                // - disabled while BIAS is selected. Grey
+                                // current-value label mirrors
+                                // camerawidget.ui's boxed labelExpTime.
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    visible: cameraDelegate.exposureTimeInterface !== null
+                                    spacing: 2
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label { text: "Exp. time:" }
+                                        Label {
+                                            text: isNaN(cameraDelegate.lastSyncedExposureTime)
+                                                ? "-" : cameraDelegate.lastSyncedExposureTime.toFixed(3) + "s"
+                                            color: "grey"
+                                        }
+                                    }
+                                    SpinBox {
+                                        id: exposureTimeSpin
+                                        Layout.fillWidth: true
+                                        from: 0
+                                        to: 3600000
+                                        value: 1000
+                                        editable: true
+                                        enabled: cameraDelegate.currentImageType !== "bias"
+                                        textFromValue: (value) => (value / 1000).toFixed(3)
+                                        valueFromText: (text) => Math.round(parseFloat(text) * 1000)
+                                        onValueModified: {
+                                            root.xmppClient.executeMethod(jid, "set_exposure_time", [value / 1000], function (result) {
+                                                if (!result.success) {
+                                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                                }
+                                            })
+                                        }
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label { text: "Count:" }
+                                    SpinBox {
+                                        id: countSpin
+                                        from: 1
+                                        to: 999
+                                        value: 1
+                                        editable: true
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    CheckBox {
+                                        id: broadcastCheck
+                                        text: "Broadcast"
+                                        checked: cameraDelegate.broadcastEnabled
+                                        onToggled: {
+                                            if (checked) {
+                                                cameraDelegate.broadcastEnabled = true
+                                            } else {
+                                                broadcastConfirmDialog.open()
+                                            }
+                                        }
+                                    }
+                                    Dialog {
+                                        id: broadcastConfirmDialog
+                                        title: "Disable broadcast?"
+                                        modal: true
+                                        standardButtons: Dialog.Yes | Dialog.No
+                                        anchors.centerIn: Overlay.overlay
+                                        Label {
+                                            text: "New images will not be processed or saved. Are you sure?"
+                                            wrapMode: Text.WordWrap
+                                        }
+                                        onAccepted: cameraDelegate.broadcastEnabled = false
+                                        onRejected: broadcastCheck.checked = true
+                                    }
+                                }
+
+                                // Color-coded Expose/Abort, matching
+                                // camerawidget.ui's own green/red buttons.
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Button {
+                                        Layout.fillWidth: true
+                                        text: "Expose"
+                                        palette.button: "#2e7d32"
+                                        palette.buttonText: "white"
+                                        enabled: cameraDelegate.remainingExposures === 0
+                                        onClicked: {
+                                            cameraDelegate.lastError = ""
+                                            cameraDelegate.remainingExposures = countSpin.value
+                                            cameraDelegate.grabOne()
+                                        }
+                                    }
+                                    Button {
+                                        Layout.fillWidth: true
+                                        text: cameraDelegate.remainingExposures > 1 ? "Abort Seq." : "Abort"
+                                        visible: cameraDelegate.hasAbort
+                                        palette.button: "#c62828"
+                                        palette.buttonText: "white"
+                                        enabled: cameraDelegate.remainingExposures > 0
+                                        onClicked: {
+                                            if (cameraDelegate.remainingExposures > 1) {
+                                                // Mid-sequence: just stop the
+                                                // client-side loop, don't
+                                                // interrupt the exposure
+                                                // that's already in flight.
+                                                cameraDelegate.remainingExposures = 0
+                                            } else {
+                                                cameraDelegate.remainingExposures = 0
+                                                root.xmppClient.executeMethod(jid, "abort", 0, function (result) {
+                                                    if (!result.success) {
+                                                        cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                                    }
+                                                })
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // --- Status/progress, at the very bottom of the
+                        // sidebar below every control group - matches
+                        // camerawidget.ui's own layout exactly (labelStatus/
+                        // progressExposure are the last items in its
+                        // sidebar's QVBoxLayout, after a vertical spacer),
+                        // not mixed in with the Type/Count/Expose controls.
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+
+                            Label {
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                                text: cameraDelegate.exposureStatus.toUpperCase()
+                                    + (cameraDelegate.exposureTimeLeft !== undefined && cameraDelegate.exposureTimeLeft !== null
+                                       ? " (" + cameraDelegate.exposureTimeLeft.toFixed(1) + "s left)" : "")
+                            }
+                            ProgressBar {
+                                Layout.fillWidth: true
+                                from: 0
+                                to: 100
+                                value: cameraDelegate.exposureProgress
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: cameraDelegate.lastError.length > 0
+                            text: cameraDelegate.lastError
+                            color: "red"
+                            wrapMode: Text.WrapAnywhere
+                        }
+                    }
+
+                    // --- Image display: fits::FitsImageItem paints the
+                    // last fetched/decoded frame (see checkForNewImage()/
+                    // fetchImage() above for how it gets there). Zoom/pan
+                    // are QML-side, not implemented in the item itself
+                    // (see FitsImageItem.h's own comment) - Flickable
+                    // gives pan for free, imageZoomSpin drives the item's
+                    // own width/height, which FitsImageItem smoothly
+                    // rescales its cached render into on every paint.
+                    // Dominant, fills the remaining width - matches
+                    // camerawidget.ui's own stretch="0,1,0" ratio (this
+                    // project has no third filter/temperature sidebar,
+                    // see TODO.md).
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
+                        spacing: 4
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "Image"; font.bold: true }
+                            Item { Layout.fillWidth: true }
+                            Label { text: "Stretch:" }
+                            ComboBox {
+                                id: stretchCombo
+                                textRole: "label"
+                                valueRole: "value"
+                                model: [
+                                    { label: "Percentile", value: "percentile" },
+                                    { label: "Min/Max", value: "minmax" },
+                                ]
+                                onActivated: fitsImageItem.stretchMode = currentValue
+                            }
+                            Label { text: "Zoom:" }
+                            SpinBox {
+                                id: imageZoomSpin
+                                from: 10
+                                to: 400
+                                value: 100
+                                stepSize: 10
+                                editable: true
+                                textFromValue: (value) => value + "%"
+                                valueFromText: (text) => parseInt(text, 10)
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: cameraDelegate.imageStatus === "loading"
+                            text: "Loading image..."
+                            color: "grey"
                         }
                         Label {
-                            text: cameraDelegate.exposureStatus
-                                + (cameraDelegate.exposureTimeLeft !== undefined && cameraDelegate.exposureTimeLeft !== null
-                                   ? " (" + cameraDelegate.exposureTimeLeft.toFixed(1) + "s left)" : "")
+                            Layout.fillWidth: true
+                            visible: cameraDelegate.imageStatus === "error"
+                            text: cameraDelegate.imageError
+                            color: "red"
+                            wrapMode: Text.WrapAnywhere
                         }
-                    }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: fitsImageItem.hasImage
+                            text: fitsImageItem.imageWidth + "x" + fitsImageItem.imageHeight
+                                + "  levels: " + fitsImageItem.blackLevel.toFixed(1) + " - " + fitsImageItem.whiteLevel.toFixed(1)
+                            color: "grey"
+                        }
 
-                    RowLayout {
-                        Label { text: "Count:" }
-                        SpinBox {
-                            id: countSpin
-                            from: 1
-                            to: 999
-                            value: 1
-                            editable: true
-                        }
-                        Button {
-                            text: "Expose"
-                            enabled: cameraDelegate.remainingExposures === 0
-                            onClicked: {
-                                cameraDelegate.lastError = ""
-                                cameraDelegate.remainingExposures = countSpin.value
-                                cameraDelegate.grabOne()
-                            }
-                        }
-                        Button {
-                            text: cameraDelegate.remainingExposures > 1 ? "Abort Sequence" : "Abort Exposure"
-                            visible: cameraDelegate.hasAbort
-                            enabled: cameraDelegate.remainingExposures > 0
-                            onClicked: {
-                                if (cameraDelegate.remainingExposures > 1) {
-                                    // Mid-sequence: just stop the client-side
-                                    // loop, don't interrupt the exposure
-                                    // that's already in flight.
-                                    cameraDelegate.remainingExposures = 0
-                                } else {
-                                    cameraDelegate.remainingExposures = 0
-                                    root.xmppClient.executeMethod(jid, "abort", 0, function (result) {
-                                        if (!result.success) {
-                                            cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                        }
-                                    })
-                                }
-                            }
-                        }
-                    }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 560
+                            color: "#101214"
+                            border.color: "#2d3035"
+                            border.width: 1
 
-                    RowLayout {
-                        CheckBox {
-                            id: broadcastCheck
-                            text: "Broadcast"
-                            checked: cameraDelegate.broadcastEnabled
-                            onToggled: {
-                                if (checked) {
-                                    cameraDelegate.broadcastEnabled = true
-                                } else {
-                                    broadcastConfirmDialog.open()
-                                }
-                            }
-                        }
-                        Dialog {
-                            id: broadcastConfirmDialog
-                            title: "Disable broadcast?"
-                            modal: true
-                            standardButtons: Dialog.Yes | Dialog.No
-                            anchors.centerIn: Overlay.overlay
                             Label {
-                                text: "New images will not be processed or saved. Are you sure?"
-                                wrapMode: Text.WordWrap
+                                anchors.centerIn: parent
+                                visible: !fitsImageItem.hasImage && cameraDelegate.imageStatus === ""
+                                text: "No image yet - click Expose to capture one."
+                                color: "grey"
                             }
-                            onAccepted: cameraDelegate.broadcastEnabled = false
-                            onRejected: broadcastCheck.checked = true
-                        }
-                    }
-                }
 
-                // --- IImageType: static ImageType enum, not a capability -
-                // BIAS disables/zeroes the exposure-time control below
-                // (camerawidget.py's own image_type_changed nicety).
-                RowLayout {
-                    Layout.leftMargin: 8
-                    visible: cameraDelegate.imageTypeInterface !== null
+                            Flickable {
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                visible: fitsImageItem.hasImage
+                                clip: true
+                                contentWidth: fitsImageItem.width
+                                contentHeight: fitsImageItem.height
+                                boundsBehavior: Flickable.StopAtBounds
 
-                    Label { text: "Image type:" }
-                    ComboBox {
-                        id: imageTypeCombo
-                        textRole: "label"
-                        valueRole: "value"
-                        model: [
-                            { label: "Bias", value: "bias" },
-                            { label: "Dark", value: "dark" },
-                            { label: "Object", value: "object" },
-                            { label: "Sky Flat", value: "skyflat" },
-                            { label: "Focus", value: "focus" },
-                            { label: "Acquisition", value: "acquisition" },
-                            { label: "Guiding", value: "guiding" },
-                        ]
-                        onActivated: {
-                            cameraDelegate.lastError = ""
-                            root.xmppClient.executeMethod(jid, "set_image_type", [currentValue], function (result) {
-                                if (!result.success) {
-                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                FitsImageItem {
+                                    id: fitsImageItem
+                                    width: hasImage ? imageWidth * (imageZoomSpin.value / 100) : 0
+                                    height: hasImage ? imageHeight * (imageZoomSpin.value / 100) : 0
                                 }
-                            })
-                        }
-                    }
-                }
-
-                // --- IExposureTime: AutoGuidingView.qml's exposure-time
-                // SpinBox idiom, verbatim (integer milliseconds, was-synced
-                // guard) - disabled while BIAS is selected.
-                RowLayout {
-                    Layout.leftMargin: 8
-                    visible: cameraDelegate.exposureTimeInterface !== null
-
-                    Label { text: "Exposure time:" }
-                    SpinBox {
-                        id: exposureTimeSpin
-                        from: 0
-                        to: 3600000
-                        value: 1000
-                        editable: true
-                        enabled: cameraDelegate.currentImageType !== "bias"
-                        textFromValue: (value) => (value / 1000).toFixed(3)
-                        valueFromText: (text) => Math.round(parseFloat(text) * 1000)
-                        onValueModified: {
-                            root.xmppClient.executeMethod(jid, "set_exposure_time", [value / 1000], function (result) {
-                                if (!result.success) {
-                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                }
-                            })
-                        }
-                    }
-                    Label { text: "s" }
-                }
-
-                // --- IBinning: ComboBox over the binningOptions role
-                // ("{x}x{y}" strings), same live-sync/onActivated shape as
-                // ModeView.qml's mode ComboBox.
-                RowLayout {
-                    Layout.leftMargin: 8
-                    visible: cameraDelegate.binningInterface !== null
-
-                    readonly property string currentBinning: cameraDelegate.binningState !== undefined
-                        ? cameraDelegate.currentBinX + "x" + cameraDelegate.currentBinY : ""
-                    property string lastSyncedBinning: ""
-
-                    onCurrentBinningChanged: {
-                        if (currentBinning === "") {
-                            return
-                        }
-                        const wasSynced = lastSyncedBinning === "" || binningCombo.currentText === lastSyncedBinning
-                        lastSyncedBinning = currentBinning
-                        if (wasSynced) {
-                            const idx = binningCombo.find(currentBinning)
-                            if (idx >= 0) {
-                                binningCombo.currentIndex = idx
                             }
                         }
                     }
 
-                    Label { text: "Binning:" }
-                    ComboBox {
-                        id: binningCombo
-                        model: cameraDelegate.binningOptions || []
-                        onActivated: {
-                            const parts = currentText.split("x")
-                            if (parts.length !== 2) {
-                                return
-                            }
-                            cameraDelegate.lastError = ""
-                            root.xmppClient.executeMethod(
-                                jid, "set_binning", [parseInt(parts[0], 10), parseInt(parts[1], 10)],
-                                function (result) {
-                                    if (!result.success) {
-                                        cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                    // --- Third column: ICooling alone so far (CoolingState -
+                    // setpoint/power/enabled; current measured temperature
+                    // lives on the separately-inherited ITemperatures state,
+                    // out of scope here, see TODO.md's ITelescope-MVP
+                    // deferral of IFilters/ITemperatures, unchanged for this
+                    // pass). Mirrors camerawidget.ui's own right-hand
+                    // sidebar position for Cooling/Temperatures/FITS
+                    // headers - this project only has Cooling of those so
+                    // far, but keeping it its own column leaves room for
+                    // Temperatures to land alongside it later rather than
+                    // needing another reshuffle.
+                    ColumnLayout {
+                        Layout.preferredWidth: 220
+                        Layout.maximumWidth: 220
+                        Layout.alignment: Qt.AlignTop
+                        spacing: 8
+                        visible: cameraDelegate.coolingInterface !== null
+
+                        GroupBox {
+                            title: "Cooling"
+                            Layout.fillWidth: true
+
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: 6
+
+                                readonly property bool currentEnabled: !!cameraDelegate.fieldOf(cameraDelegate.coolingState, "enabled")
+                                readonly property var currentSetpoint: cameraDelegate.fieldOf(cameraDelegate.coolingState, "setpoint")
+                                readonly property var currentPower: cameraDelegate.fieldOf(cameraDelegate.coolingState, "power")
+
+                                property bool lastSyncedEnabled: false
+                                property real lastSyncedSetpoint: NaN
+
+                                onCurrentEnabledChanged: {
+                                    const wasSynced = coolingCheck.checked === lastSyncedEnabled
+                                    lastSyncedEnabled = currentEnabled
+                                    if (wasSynced) {
+                                        coolingCheck.checked = currentEnabled
                                     }
-                                })
-                        }
-                    }
-                }
-
-                // --- IWindow: four live-sync SpinBoxes bounded by
-                // windowExtent adjusted for the current binning factor -
-                // set_window()'s own param names are left/top/width/height,
-                // even though WindowState's fields are named x/y (a real
-                // wire naming mismatch, not a typo - see DEVELOPMENT.md).
-                ColumnLayout {
-                    id: windowSection
-                    Layout.leftMargin: 8
-                    visible: cameraDelegate.windowInterface !== null
-                    spacing: 4
-
-                    readonly property int maxWidth: Math.max(1, Math.floor((cameraDelegate.windowExtent.fullFrameWidth || 0) / cameraDelegate.currentBinX))
-                    readonly property int maxHeight: Math.max(1, Math.floor((cameraDelegate.windowExtent.fullFrameHeight || 0) / cameraDelegate.currentBinY))
-
-                    Label { text: "Window" }
-
-                    RowLayout {
-                        Label { text: "Left:" }
-                        SpinBox { id: leftSpin; from: 0; to: windowSection.maxWidth; editable: true }
-                        Label { text: "Top:" }
-                        SpinBox { id: topSpin; from: 0; to: windowSection.maxHeight; editable: true }
-                        Label { text: "Width:" }
-                        SpinBox { id: widthSpin; from: 1; to: windowSection.maxWidth; editable: true }
-                        Label { text: "Height:" }
-                        SpinBox { id: heightSpin; from: 1; to: windowSection.maxHeight; editable: true }
-                    }
-
-                    RowLayout {
-                        Button {
-                            text: "Set Window"
-                            onClicked: {
-                                cameraDelegate.lastError = ""
-                                root.xmppClient.executeMethod(
-                                    jid, "set_window", [leftSpin.value, topSpin.value, widthSpin.value, heightSpin.value],
-                                    function (result) {
-                                        if (!result.success) {
-                                            cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                        }
-                                    })
-                            }
-                        }
-                        Button {
-                            text: "Full Frame"
-                            onClicked: {
-                                leftSpin.value = 0
-                                topSpin.value = 0
-                                widthSpin.value = windowSection.maxWidth
-                                heightSpin.value = windowSection.maxHeight
-                                cameraDelegate.lastError = ""
-                                root.xmppClient.executeMethod(
-                                    jid, "set_window", [0, 0, widthSpin.value, heightSpin.value],
-                                    function (result) {
-                                        if (!result.success) {
-                                            cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                        }
-                                    })
-                            }
-                        }
-                    }
-                }
-
-                // --- IGain: two live-sync SpinBoxes (no declared range -
-                // generous fixed bounds), one "Set" button firing both
-                // set_gain/set_offset (two separate RPCs, no combined
-                // command exists). Real fix vs. camerawidget.py, not a
-                // faithful port - see DEVELOPMENT.md.
-                RowLayout {
-                    Layout.leftMargin: 8
-                    visible: cameraDelegate.gainInterface !== null
-
-                    Label { text: "Gain:" }
-                    SpinBox {
-                        id: gainSpin
-                        from: -1000000
-                        to: 1000000
-                        editable: true
-                        textFromValue: (value) => (value / 100).toFixed(2)
-                        valueFromText: (text) => Math.round(parseFloat(text) * 100)
-                    }
-                    Label { text: "Offset:" }
-                    SpinBox {
-                        id: offsetSpin
-                        from: -1000000
-                        to: 1000000
-                        editable: true
-                        textFromValue: (value) => (value / 100).toFixed(2)
-                        valueFromText: (text) => Math.round(parseFloat(text) * 100)
-                    }
-                    Button {
-                        text: "Set"
-                        onClicked: {
-                            cameraDelegate.lastError = ""
-                            root.xmppClient.executeMethod(jid, "set_gain", [gainSpin.value / 100], function (result) {
-                                if (!result.success) {
-                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
                                 }
-                            })
-                            root.xmppClient.executeMethod(jid, "set_offset", [offsetSpin.value / 100], function (result) {
-                                if (!result.success) {
-                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+
+                                onCurrentSetpointChanged: {
+                                    if (currentSetpoint === undefined || currentSetpoint === null) {
+                                        return
+                                    }
+                                    const wasSynced = isNaN(lastSyncedSetpoint) || Math.round(setpointSpin.value) === Math.round(lastSyncedSetpoint * 10)
+                                    lastSyncedSetpoint = currentSetpoint
+                                    if (wasSynced) {
+                                        setpointSpin.value = Math.round(currentSetpoint * 10)
+                                    }
                                 }
-                            })
-                        }
-                    }
-                }
 
-                // --- IImageFormat: ComboBox over the imageFormats role.
-                RowLayout {
-                    Layout.leftMargin: 8
-                    visible: cameraDelegate.imageFormatInterface !== null
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    CheckBox {
+                                        id: coolingCheck
+                                        text: "Enabled"
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    Label {
+                                        text: parent.parent.currentEnabled
+                                            ? (parent.parent.currentPower !== undefined && parent.parent.currentPower !== null
+                                               ? parent.parent.currentPower + "%" : "")
+                                            : "OFF"
+                                        color: "grey"
+                                    }
+                                }
 
-                    readonly property string currentImageFormat: cameraDelegate.fieldOf(cameraDelegate.imageFormatState, "image_format") || ""
-                    property string lastSyncedImageFormat: ""
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label { text: "Setpoint:" }
+                                    Label {
+                                        text: parent.parent.currentEnabled && parent.parent.currentSetpoint !== undefined && parent.parent.currentSetpoint !== null
+                                            ? parent.parent.currentSetpoint.toFixed(1) + "°C" : "-"
+                                        color: "grey"
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    SpinBox {
+                                        id: setpointSpin
+                                        from: -1000
+                                        to: 500
+                                        editable: true
+                                        textFromValue: (value) => (value / 10).toFixed(1)
+                                        valueFromText: (text) => Math.round(parseFloat(text) * 10)
+                                    }
+                                    Label { text: "°C" }
+                                }
 
-                    onCurrentImageFormatChanged: {
-                        if (currentImageFormat === "") {
-                            return
-                        }
-                        const wasSynced = lastSyncedImageFormat === "" || imageFormatCombo.currentText === lastSyncedImageFormat
-                        lastSyncedImageFormat = currentImageFormat
-                        if (wasSynced) {
-                            const idx = imageFormatCombo.find(currentImageFormat)
-                            if (idx >= 0) {
-                                imageFormatCombo.currentIndex = idx
+                                Button {
+                                    Layout.fillWidth: true
+                                    text: "Apply"
+                                    onClicked: {
+                                        cameraDelegate.lastError = ""
+                                        root.xmppClient.executeMethod(
+                                            jid, "set_cooling", [coolingCheck.checked, setpointSpin.value / 10],
+                                            function (result) {
+                                                if (!result.success) {
+                                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                                }
+                                            })
+                                    }
+                                }
                             }
                         }
                     }
-
-                    Label { text: "Image format:" }
-                    ComboBox {
-                        id: imageFormatCombo
-                        model: cameraDelegate.imageFormats || []
-                        onActivated: {
-                            cameraDelegate.lastError = ""
-                            root.xmppClient.executeMethod(jid, "set_image_format", [currentText], function (result) {
-                                if (!result.success) {
-                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                }
-                            })
-                        }
-                    }
-                }
-
-                // --- ICooling: CoolingState alone (setpoint/power/enabled)
-                // - current measured temperature lives on the separately-
-                // inherited ITemperatures state, out of scope here (see
-                // TODO.md's ITelescope-MVP deferral of IFilters/
-                // ITemperatures, unchanged for this pass).
-                ColumnLayout {
-                    Layout.leftMargin: 8
-                    visible: cameraDelegate.coolingInterface !== null
-                    spacing: 4
-
-                    readonly property bool currentEnabled: !!cameraDelegate.fieldOf(cameraDelegate.coolingState, "enabled")
-                    readonly property var currentSetpoint: cameraDelegate.fieldOf(cameraDelegate.coolingState, "setpoint")
-                    readonly property var currentPower: cameraDelegate.fieldOf(cameraDelegate.coolingState, "power")
-
-                    property bool lastSyncedEnabled: false
-                    property real lastSyncedSetpoint: NaN
-
-                    onCurrentEnabledChanged: {
-                        const wasSynced = coolingCheck.checked === lastSyncedEnabled
-                        lastSyncedEnabled = currentEnabled
-                        if (wasSynced) {
-                            coolingCheck.checked = currentEnabled
-                        }
-                    }
-
-                    onCurrentSetpointChanged: {
-                        if (currentSetpoint === undefined || currentSetpoint === null) {
-                            return
-                        }
-                        const wasSynced = isNaN(lastSyncedSetpoint) || Math.round(setpointSpin.value) === Math.round(lastSyncedSetpoint * 10)
-                        lastSyncedSetpoint = currentSetpoint
-                        if (wasSynced) {
-                            setpointSpin.value = Math.round(currentSetpoint * 10)
-                        }
-                    }
-
-                    Label { text: "Cooling"; font.bold: true }
-
-                    RowLayout {
-                        CheckBox {
-                            id: coolingCheck
-                            text: "Enabled"
-                        }
-                        Label { text: "Setpoint:" }
-                        SpinBox {
-                            id: setpointSpin
-                            from: -1000
-                            to: 500
-                            editable: true
-                            textFromValue: (value) => (value / 10).toFixed(1)
-                            valueFromText: (text) => Math.round(parseFloat(text) * 10)
-                        }
-                        Label { text: "°C" }
-                        Button {
-                            text: "Apply"
-                            onClicked: {
-                                cameraDelegate.lastError = ""
-                                root.xmppClient.executeMethod(
-                                    jid, "set_cooling", [coolingCheck.checked, setpointSpin.value / 10],
-                                    function (result) {
-                                        if (!result.success) {
-                                            cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                        }
-                                    })
-                            }
-                        }
-                    }
-
-                    Label {
-                        text: parent.currentEnabled
-                            ? "Setpoint: " + (parent.currentSetpoint !== undefined && parent.currentSetpoint !== null ? parent.currentSetpoint.toFixed(1) : "?") + "°C, Power: "
-                                + (parent.currentPower !== undefined && parent.currentPower !== null ? parent.currentPower : "?") + "%"
-                            : "OFF"
-                        color: "grey"
-                    }
-                }
-
-                // --- Image display: fits::FitsImageItem paints the last
-                // fetched/decoded frame (see checkForNewImage()/
-                // fetchImage() above for how it gets there). Zoom/pan
-                // are QML-side, not implemented in the item itself (see
-                // FitsImageItem.h's own comment) - Flickable gives pan
-                // for free, imageZoomSpin drives the item's own
-                // width/height, which FitsImageItem smoothly rescales
-                // its cached render into on every paint.
-                ColumnLayout {
-                    Layout.leftMargin: 8
-                    Layout.fillWidth: true
-                    spacing: 4
-
-                    RowLayout {
-                        Label { text: "Image"; font.bold: true }
-                        Item { Layout.fillWidth: true }
-                        Label { text: "Stretch:" }
-                        ComboBox {
-                            id: stretchCombo
-                            textRole: "label"
-                            valueRole: "value"
-                            model: [
-                                { label: "Percentile", value: "percentile" },
-                                { label: "Min/Max", value: "minmax" },
-                            ]
-                            onActivated: fitsImageItem.stretchMode = currentValue
-                        }
-                        Label { text: "Zoom:" }
-                        SpinBox {
-                            id: imageZoomSpin
-                            from: 10
-                            to: 400
-                            value: 100
-                            stepSize: 10
-                            editable: true
-                            textFromValue: (value) => value + "%"
-                            valueFromText: (text) => parseInt(text, 10)
-                        }
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        visible: cameraDelegate.imageStatus === "loading"
-                        text: "Loading image..."
-                        color: "grey"
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: cameraDelegate.imageStatus === "error"
-                        text: cameraDelegate.imageError
-                        color: "red"
-                        wrapMode: Text.WrapAnywhere
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: fitsImageItem.hasImage
-                        text: fitsImageItem.imageWidth + "x" + fitsImageItem.imageHeight
-                            + "  levels: " + fitsImageItem.blackLevel.toFixed(1) + " - " + fitsImageItem.whiteLevel.toFixed(1)
-                        color: "grey"
-                    }
-
-                    Flickable {
-                        Layout.preferredWidth: 480
-                        Layout.preferredHeight: 360
-                        visible: fitsImageItem.hasImage
-                        clip: true
-                        contentWidth: fitsImageItem.width
-                        contentHeight: fitsImageItem.height
-                        boundsBehavior: Flickable.StopAtBounds
-
-                        FitsImageItem {
-                            id: fitsImageItem
-                            width: hasImage ? imageWidth * (imageZoomSpin.value / 100) : 0
-                            height: hasImage ? imageHeight * (imageZoomSpin.value / 100) : 0
-                        }
-                    }
-                }
-
-                Label {
-                    Layout.leftMargin: 8
-                    Layout.fillWidth: true
-                    visible: cameraDelegate.lastError.length > 0
-                    text: cameraDelegate.lastError
-                    color: "red"
-                    wrapMode: Text.WrapAnywhere
                 }
             }
         }
