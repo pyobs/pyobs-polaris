@@ -277,14 +277,24 @@ jobs:
       # otherwise detect from the binary alone. CMAKE_RUNTIME_OUTPUT_DIRECTORY
       # (CMakeLists.txt, WIN32-guarded) already funnels polaris.exe and the
       # vendored qt6keychain.dll/QXmppQt6.dll/libnova.dll into one directory
-      # - windeployqt only needs to add Qt's own pieces to that same folder.
+      # - windeployqt only needs to add Qt's own pieces to that same folder,
+      # it doesn't need to (and can't) deploy those vendored DLLs itself.
+      # --ignore-library-errors: windeployqt doesn't inspect this project's
+      # build tree - it resolves an executable's dependencies assuming
+      # everything lives under the Qt install prefix, and errors out
+      # trying (and failing) to find qt6keychain.dll there specifically,
+      # since its name looks Qt-associated even though it's our own
+      # vendored copy (confirmed as a known windeployqt limitation with
+      # third-party DLLs, not specific to this project - see e.g.
+      # QTBUG-39177). Harmless to ignore: that DLL is already correctly
+      # placed, windeployqt just can't find it in the one place it looks.
       # Unlike Linux, the whole point here is a self-contained artifact - a
       # typical Windows user has no "install Qt6" equivalent to apt.
       - name: Package release artifact (Windows)
         if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
         shell: pwsh
         run: |
-          windeployqt --qmldir qml build\Release\bin\polaris.exe
+          windeployqt --qmldir qml --ignore-library-errors build\Release\bin\polaris.exe
           Compress-Archive -Path build\Release\bin\* -DestinationPath polaris-windows-x86_64.zip
 
       # macdeployqt only knows how to deploy into a real .app bundle
