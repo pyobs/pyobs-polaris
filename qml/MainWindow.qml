@@ -247,79 +247,111 @@ ApplicationWindow {
                 // into LogFooter's area beneath, a real bug caught live
                 // on a shorter window. Same fix idiom as SettingsView.qml's
                 // own ScrollView.
-                ScrollView {
-                    id: sidebarScroll
+                Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    clip: true
 
-                    ColumnLayout {
-                        width: sidebarScroll.availableWidth
-                        spacing: 0
+                    ScrollView {
+                        id: sidebarScroll
+                        anchors.fill: parent
+                        clip: true
 
-                        SidebarItem {
-                            iconGlyph: "●"
-                            text: "Status"
-                            highlighted: stack.currentIndex === 0
-                            onClicked: stack.currentIndex = 0
-                        }
+                        ScrollBar.vertical: ScrollBar { id: sidebarScrollBar; policy: ScrollBar.AsNeeded }
 
-                        SidebarSectionLabel { text: "TOOLS" }
+                        ColumnLayout {
+                            width: sidebarScroll.availableWidth
+                            spacing: 0
 
-                        SidebarItem {
-                            iconGlyph: "❯"
-                            text: "Shell"
-                            highlighted: stack.currentIndex === 1
-                            onClicked: stack.currentIndex = 1
-                        }
+                            SidebarItem {
+                                iconGlyph: "●"
+                                text: "Status"
+                                highlighted: stack.currentIndex === 0
+                                onClicked: stack.currentIndex = 0
+                            }
 
-                        SidebarItem {
-                            iconGlyph: "▤"
-                            text: "Logs"
-                            highlighted: stack.currentIndex === 2
-                            onClicked: stack.currentIndex = 2
-                        }
+                            SidebarSectionLabel { text: "TOOLS" }
 
-                        SidebarItem {
-                            iconGlyph: "⚡"
-                            text: "Events"
-                            highlighted: stack.currentIndex === 3
-                            onClicked: stack.currentIndex = 3
-                        }
+                            SidebarItem {
+                                iconGlyph: "❯"
+                                text: "Shell"
+                                highlighted: stack.currentIndex === 1
+                                onClicked: stack.currentIndex = 1
+                            }
 
-                        SidebarItem {
-                            iconGlyph: "⚙"
-                            text: "Settings"
-                            highlighted: stack.currentIndex === 4
-                            onClicked: stack.currentIndex = 4
-                        }
+                            SidebarItem {
+                                iconGlyph: "▤"
+                                text: "Logs"
+                                highlighted: stack.currentIndex === 2
+                                onClicked: stack.currentIndex = 2
+                            }
 
-                        SidebarSectionLabel {
-                            text: "MODULES"
-                            visible: root.visibilityByEntry.some((v) => v)
-                        }
+                            SidebarItem {
+                                iconGlyph: "⚡"
+                                text: "Events"
+                                highlighted: stack.currentIndex === 3
+                                onClicked: stack.currentIndex = 3
+                            }
 
-                        // One entry per WidgetRegistry registration (not
-                        // filtered to currently-visible ones - see
-                        // WidgetRegistry.qml's own doc comment on
-                        // `entries`) - position N here always corresponds
-                        // to StackLayout's dynamic page N below (index 4 +
-                        // N), since both Repeaters iterate the exact same
-                        // widgetRegistry.entries array in the same order.
-                        Repeater {
-                            model: widgetRegistry.entries
+                            SidebarItem {
+                                iconGlyph: "⚙"
+                                text: "Settings"
+                                highlighted: stack.currentIndex === 4
+                                onClicked: stack.currentIndex = 4
+                            }
 
-                            delegate: SidebarItem {
-                                required property var modelData
-                                required property int index
+                            SidebarSectionLabel {
+                                text: "MODULES"
+                                visible: root.visibilityByEntry.some((v) => v)
+                            }
 
-                                iconGlyph: modelData.iconGlyph
-                                text: modelData.label
-                                visible: root.visibilityByEntry[index] === true
-                                highlighted: stack.currentIndex === 5 + index
-                                onClicked: stack.currentIndex = 5 + index
+                            // One entry per WidgetRegistry registration (not
+                            // filtered to currently-visible ones - see
+                            // WidgetRegistry.qml's own doc comment on
+                            // `entries`) - position N here always corresponds
+                            // to StackLayout's dynamic page N below (index 4 +
+                            // N), since both Repeaters iterate the exact same
+                            // widgetRegistry.entries array in the same order.
+                            Repeater {
+                                model: widgetRegistry.entries
+
+                                delegate: SidebarItem {
+                                    required property var modelData
+                                    required property int index
+
+                                    iconGlyph: modelData.iconGlyph
+                                    text: modelData.label
+                                    visible: root.visibilityByEntry[index] === true
+                                    highlighted: stack.currentIndex === 5 + index
+                                    onClicked: stack.currentIndex = 5 + index
+                                }
                             }
                         }
+                    }
+
+                    // Fusion's own ScrollBar (attached above) is
+                    // transient - only fades in on hover/drag - and thin/
+                    // low-contrast against this dark sidebar even then; a
+                    // real user reported it as "barely visible", and a
+                    // static screenshot with no synthetic hover showed it
+                    // as fully invisible. Rather than fight Fusion's
+                    // ScrollBar template internals (overriding its
+                    // background/contentItem rendered *behind* the
+                    // sidebar items' own opaque backgrounds instead of as
+                    // a true overlay, tried and abandoned - see
+                    // DEVELOPMENT.md), draw a small always-visible
+                    // indicator directly from the attached ScrollBar's own
+                    // documented `position`/`size` (0..1 fractions of the
+                    // scrollable range) - independent of how the real
+                    // ScrollBar renders or whether it's currently faded.
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 2
+                        y: sidebarScroll.height * sidebarScrollBar.position
+                        width: 4
+                        radius: 2
+                        height: sidebarScroll.height * sidebarScrollBar.size
+                        color: "#8a8f96"
+                        visible: sidebarScrollBar.size < 1.0
                     }
                 }
             }
