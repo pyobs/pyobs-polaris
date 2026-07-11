@@ -28,6 +28,16 @@ ApplicationWindow {
 
         Layout.fillWidth: true
 
+        // A plain ItemDelegate outside a real list-selection view gets
+        // Accessible.role Qt.AccessibleListItem by default, which the
+        // AT-SPI bridge doesn't expose a "Press" action for - only a
+        // Button-ish role does. Declared explicitly so both real screen
+        // readers and AT-SPI-driven test automation (see DEVELOPMENT.md's
+        // "AT-SPI-driven live verification" section) can actually activate
+        // sidebar navigation, not just read it.
+        Accessible.role: Accessible.Button
+        Accessible.onPressAction: sidebarItem.clicked()
+
         contentItem: RowLayout {
             spacing: 8
 

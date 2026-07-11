@@ -148,6 +148,65 @@ up on a new machine:
    visibility on a real compositor — see the Phase 7.5 note below for why
    that matters.
 
+### AT-SPI-driven live verification (real clicks, not just screenshots)
+
+Every prior phase's write-up notes the same gap: no `xdotool`/`wmctrl`/
+`ydotool`/`wtype`/`dotool` in this dev environment, so a live-running GUI
+could only be screenshotted (`spectacle -b -n -a -o <path>`) on whatever
+page happened to already be showing — never actually driven. That gap is
+now closed for anything with a real accessible action, via the AT-SPI
+(Linux accessibility) bus rather than any input-injection tool:
+
+1. Launch `polaris` with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
+   QT_ACCESSIBILITY=1` in its environment — without this, Qt only
+   registers the app on the AT-SPI bus lazily (once a real screen reader
+   client asks), and it never shows up for a script to find.
+2. Use `python3` + `gi.repository.Atspi` (`gi.require_version('Atspi',
+   '2.0')`, package `gir1.2-atspi-2.0` — already present on this machine)
+   to walk `Atspi.get_desktop(0)`'s children for the app named
+   `"Polaris"`, find the target node by role/name, and call
+   `node.get_action_iface().do_action(i)` for whichever action is
+   `"Press"`/`"click"`/`"activate"`. This invokes the control's real Qt
+   slot directly (`AbstractButton::clicked()` etc.) — it is not a
+   simulated OS-level input event, so it works identically under
+   Wayland/X11 and doesn't depend on window manager focus at all.
+3. **Stock `QtQuick.Controls` types work with zero code changes** — a
+   `Button` already exposes a `"Press"` action out of the box (proven by
+   driving the login window's "Connect" button this way). **Custom
+   interactive items don't**, and the failure mode is silent, not an
+   error: a plain `ItemDelegate` used outside a real list-selection view
+   (e.g. `MainWindow.qml`'s `SidebarItem` inline component, used for
+   sidebar nav — not inside a `ListView`/selection model) gets
+   `Accessible.role` `ListItem` by default, and the AT-SPI bridge simply
+   doesn't synthesize a press action for that role — `get_n_actions()`
+   returns `0`. Fix: declare `Accessible.role: Accessible.Button` and
+   `Accessible.onPressAction: <item>.clicked()` explicitly on the
+   component. This is a real accessibility improvement in its own right
+   (screen readers get the same benefit), not merely a testing hack —
+   worth doing for any future custom-drawn interactive control, not just
+   ones this technique needs to drive.
+4. **Don't reach for `Atspi.generate_keyboard_event`/`generate_mouse_event`**
+   (raw XTEST-style synthetic input) as a fallback for elements lacking a
+   proper action — both were tried and both are unreliable here:
+   `generate_mouse_event` silently no-ops under this Wayland session (KWin
+   doesn't accept fake XTEST pointer input without an interactive
+   permission grant), and `generate_keyboard_event` *does* land somewhere,
+   but not reliably where focus was just set via AT-SPI's own `SetFocus`
+   action — one attempt landed a stray `Return` in the hidden login
+   window's pre-filled password field and forced a real disconnect
+   (recovered cleanly by re-pressing "Connect" the proper way, no data
+   lost, but a good demonstration of why this path isn't trustworthy for
+   unattended use).
+5. Combine with a screenshot (`spectacle -b -n -a -o <path>`, still the
+   only working capture mechanism) after each `do_action` press for actual
+   pixel confirmation, not just "the click didn't error."
+
+This is how every module page's post-redesign layout (Camera, Telescope,
+AutoFocus, Acquisition, AutoGuiding, Mode, Weather, plus Status/Settings)
+got genuinely screenshot-verified end to end in one sitting, rather than
+relying on "whichever page happened to be showing" luck — see the
+`CameraView.qml` layout pass entry below for the redesign this validated.
+
 ---
 
 ## Completed phases
