@@ -264,8 +264,12 @@ jobs:
 
       # macdeployqt only knows how to deploy into a real .app bundle
       # (CMakeLists.txt's APPLE-guarded MACOSX_BUNDLE TRUE makes
-      # build/Release/bin/polaris.app exist in the first place - qt_add_executable()
-      # doesn't opt into that on its own). It walks polaris's actual
+      # build/Release/polaris.app exist in the first place - qt_add_executable()
+      # doesn't opt into that on its own). Lands directly at
+      # build/Release/, NOT build/Release/bin/ - CMAKE_RUNTIME_OUTPUT_DIRECTORY
+      # (CMakeLists.txt) only redirects output on WIN32; a first attempt at
+      # this step assumed the same bin/ path as Windows and failed with
+      # "Could not find app bundle". macdeployqt walks polaris's actual
       # dependency graph (via the RPATHs CMake's build tree already sets,
       # same mechanism the Linux patchelf step works around) to find and
       # embed not just Qt's own frameworks but also the vendored
@@ -281,8 +285,8 @@ jobs:
       - name: Package release artifact (macOS)
         if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS'
         run: |
-          macdeployqt build/Release/bin/polaris.app -qmldir=qml
-          ditto -c -k --sequesterRsrc build/Release/bin/polaris.app polaris-macos-arm64.zip
+          macdeployqt build/Release/polaris.app -qmldir=qml
+          ditto -c -k --sequesterRsrc build/Release/polaris.app polaris-macos-arm64.zip
 
       # Matrix jobs run in parallel, so exactly one of these three legs'
       # `gh release create` calls will actually create the release (racing
