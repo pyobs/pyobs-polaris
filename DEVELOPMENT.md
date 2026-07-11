@@ -1849,6 +1849,22 @@ project's own `FetchContent` block:
   defining `HAVE_ROUND` via `target_compile_definitions(libnova PRIVATE
   HAVE_ROUND)` is the correct fix, not a workaround for something
   actually missing.
+- **Missed on first pass, only surfaced on CI's clean build**:
+  `julian_day.c` also has its own unconditional `#include "config.h"` -
+  same root cause as `HAVE_ROUND` above (the skipped autotools
+  `configure` step normally `autoheader`-generates it), but this one
+  is a hard "no such file" compile error rather than a silent runtime
+  bug, so it should have been the more obvious of the two - it wasn't
+  caught locally because a stale `_deps/libnova-build` from before this
+  file existed stuck around instead of a real clean-tree build. Fixed by
+  writing an empty `config.h` into the build tree and adding it to
+  `libnova`'s own (`PRIVATE`) include path - **do not** `configure_file()`
+  libnova's real `config.h.in`: it `#undef`s `HAVE_ROUND`, which would
+  silently cancel the `target_compile_definitions()` fix above (the two
+  aren't independent - config.h's own `#undef` wins over an earlier `-D`
+  compile definition, so whichever fix touches config.h has to know about
+  the other one). No other compiled source includes config.h, so an empty
+  file is sufficient.
 - `v0.16`'s own `cmake_minimum_required(VERSION 2.6)` is a hard configure
   error on modern CMake ("Compatibility with CMake < 3.5 has been
   removed") - fixed via `CMAKE_POLICY_VERSION_MINIMUM`, CMake's own

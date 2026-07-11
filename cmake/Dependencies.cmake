@@ -115,6 +115,24 @@ target_include_directories(libnova PUBLIC ${libnova_SOURCE_DIR}/src)
 # (glibc, macOS, MSVC 2013+) - defining HAVE_ROUND ourselves is the
 # correct fix, not a workaround for something actually missing.
 target_compile_definitions(libnova PRIVATE HAVE_ROUND)
+# julian_day.c also has its own unconditional `#include "config.h"` -
+# normally generated into the build tree by the autotools configure
+# script (autoheader, from config.h.in), which - same as HAVE_ROUND above
+# - this CMake-only build never runs. Don't be tempted to configure_file()
+# libnova's own config.h.in verbatim: it `#undef`s HAVE_ROUND, which would
+# silently cancel the target_compile_definitions() above (config.h is
+# included first, but a `-D` compile definition and a `#undef` later in
+# the same translation unit still result in undefined - order of
+# CMake calls doesn't matter, only the resulting preprocessor text order
+# does). No other compiled source includes config.h and julian_day.c reads
+# no other macro from it, so an empty file is sufficient - it only needs
+# to exist to satisfy the #include. PRIVATE: no consumer of libnova ever
+# includes config.h itself.
+set(libnova_config_h_dir "${CMAKE_CURRENT_BINARY_DIR}/libnova-config")
+file(MAKE_DIRECTORY "${libnova_config_h_dir}")
+file(WRITE "${libnova_config_h_dir}/config.h" "")
+target_include_directories(libnova PRIVATE "${libnova_config_h_dir}")
+unset(libnova_config_h_dir)
 unset(LIBRARY_NAME)
 unset(BUILD_SHARED_LIBS)
 
