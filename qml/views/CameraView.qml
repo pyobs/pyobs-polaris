@@ -201,6 +201,54 @@ ScrollView {
                     })
                 }
 
+                // Sends whatever Window/Gain/ExposureTime values are
+                // currently sitting in the SpinBoxes (populated once on
+                // start, freely edited since - see exposureTimeInitialized/
+                // windowInitialized/gainInitialized above) as a single
+                // batch, then starts the exposure sequence once every "set"
+                // RPC has come back - direct instruction: no per-field Set
+                // button/confirmation, just apply everything together right
+                // before Expose. Only ever called once per Expose click
+                // (not once per exposure in a Count > 1 sequence) - the
+                // settings apply for the whole sequence, matching what a
+                // user clicking Expose once would expect.
+                function applyPendingSettingsThenExpose() {
+                    const pending = []
+                    if (cameraDelegate.windowInterface) {
+                        pending.push((cb) => root.xmppClient.executeMethod(
+                            jid, "set_window", [leftSpin.value, topSpin.value, widthSpin.value, heightSpin.value], cb))
+                    }
+                    if (cameraDelegate.gainInterface) {
+                        pending.push((cb) => root.xmppClient.executeMethod(jid, "set_gain", [gainSpin.value / 100], cb))
+                        pending.push((cb) => root.xmppClient.executeMethod(jid, "set_offset", [offsetSpin.value / 100], cb))
+                    }
+                    if (cameraDelegate.exposureTimeInterface && cameraDelegate.currentImageType !== "bias") {
+                        pending.push((cb) => root.xmppClient.executeMethod(
+                            jid, "set_exposure_time", [exposureTimeSpin.value / 1000], cb))
+                    }
+
+                    if (pending.length === 0) {
+                        cameraDelegate.remainingExposures = countSpin.value
+                        cameraDelegate.grabOne()
+                        return
+                    }
+
+                    let remaining = pending.length
+                    function onOneDone(result) {
+                        if (!result.success) {
+                            cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                        }
+                        remaining -= 1
+                        if (remaining === 0) {
+                            cameraDelegate.remainingExposures = countSpin.value
+                            cameraDelegate.grabOne()
+                        }
+                    }
+                    for (const fn of pending) {
+                        fn(onOneDone)
+                    }
+                }
+
                 // --- Image display: grab_data() -> NewImageEvent -> VFS
                 // fetch -> FITS decode, the flow TODO.md's "ICamera
                 // follow-up" split into three separately-shipped pieces
@@ -324,11 +372,22 @@ ScrollView {
                     }
                 }
 
-                // "was synced" idioms for every capability-gated control
-                // below. Each must live here on cameraDelegate - the object
-                // that actually owns exposureTimeState/windowState/
-                // gainState/currentImageType - since an onXChanged handler
-                // only binds to a property on its own object, not one
+                // "was synced" idiom for IImageType alone now - Window/
+                // Gain/ExposureTime used to do this same continuous
+                // live-resync dance (plus a grey "current value" label
+                // next to each field), mirroring camerawidget.py's
+                // WatchedLabel. Direct user instruction: that pattern
+                // "doesn't really work" in practice - removed in favor of
+                // fetch-once-on-start (below) + apply-on-Expose
+                // (applyPendingSettingsThenExpose()). Type has no
+                // separate "current value" display and no batch-apply
+                // either (it's a single ComboBox, not a numeric field to
+                // stage edits on) - it stays live-synced and
+                // immediate-on-select, unchanged. Must live here on
+                // cameraDelegate - the object that actually owns
+                // exposureTimeState/windowState/gainState/
+                // currentImageType - since an onXChanged handler only
+                // binds to a property on its own object, not one
                 // belonging to an ancestor/descendant (same lesson as
                 // TelescopeView.qml's Offsets section). imageTypeCombo/
                 // exposureTimeSpin/leftSpin.../gainSpin/offsetSpin are
@@ -353,27 +412,32 @@ ScrollView {
                     }
                 }
 
-                property real lastSyncedExposureTime: NaN
+                // Fetch-once-on-start: the first state push populates the
+                // SpinBox, then this flag blocks any further server-driven
+                // updates - the user edits freely afterward with no
+                // ongoing resync fighting them, and the edited value is
+                // only ever sent to the server in a batch right before
+                // grab_data() (applyPendingSettingsThenExpose() below).
+                property bool exposureTimeInitialized: false
 
                 onExposureTimeStateChanged: {
+                    if (exposureTimeInitialized) {
+                        return
+                    }
                     const value = fieldOf(exposureTimeState, "exposure_time")
                     if (value === undefined || value === null) {
                         return
                     }
-                    const wasSynced = isNaN(lastSyncedExposureTime)
-                        || Math.round(exposureTimeSpin.value) === Math.round(lastSyncedExposureTime * 1000)
-                    lastSyncedExposureTime = value
-                    if (wasSynced) {
-                        exposureTimeSpin.value = Math.round(value * 1000)
-                    }
+                    exposureTimeSpin.value = Math.round(value * 1000)
+                    exposureTimeInitialized = true
                 }
 
-                property int lastSyncedLeft: -1
-                property int lastSyncedTop: -1
-                property int lastSyncedWidth: -1
-                property int lastSyncedHeight: -1
+                property bool windowInitialized: false
 
                 onWindowStateChanged: {
+                    if (windowInitialized) {
+                        return
+                    }
                     const left = fieldOf(windowState, "x")
                     const top = fieldOf(windowState, "y")
                     const width = fieldOf(windowState, "width")
@@ -381,35 +445,27 @@ ScrollView {
                     if (left === undefined || left === null) {
                         return
                     }
-                    const leftSynced = lastSyncedLeft < 0 || leftSpin.value === lastSyncedLeft
-                    const topSynced = lastSyncedTop < 0 || topSpin.value === lastSyncedTop
-                    const widthSynced = lastSyncedWidth < 0 || widthSpin.value === lastSyncedWidth
-                    const heightSynced = lastSyncedHeight < 0 || heightSpin.value === lastSyncedHeight
-                    lastSyncedLeft = left
-                    lastSyncedTop = top
-                    lastSyncedWidth = width
-                    lastSyncedHeight = height
-                    if (leftSynced) leftSpin.value = left
-                    if (topSynced) topSpin.value = top
-                    if (widthSynced) widthSpin.value = width
-                    if (heightSynced) heightSpin.value = height
+                    leftSpin.value = left
+                    topSpin.value = top
+                    widthSpin.value = width
+                    heightSpin.value = height
+                    windowInitialized = true
                 }
 
-                property real lastSyncedGain: NaN
-                property real lastSyncedOffset: NaN
+                property bool gainInitialized: false
 
                 onGainStateChanged: {
+                    if (gainInitialized) {
+                        return
+                    }
                     const gain = fieldOf(gainState, "gain")
                     const offset = fieldOf(gainState, "offset")
                     if (gain === undefined || gain === null || offset === undefined || offset === null) {
                         return
                     }
-                    const gainSynced = isNaN(lastSyncedGain) || Math.round(gainSpin.value) === Math.round(lastSyncedGain * 100)
-                    const offsetSynced = isNaN(lastSyncedOffset) || Math.round(offsetSpin.value) === Math.round(lastSyncedOffset * 100)
-                    lastSyncedGain = gain
-                    lastSyncedOffset = offset
-                    if (gainSynced) gainSpin.value = Math.round(gain * 100)
-                    if (offsetSynced) offsetSpin.value = Math.round(offset * 100)
+                    gainSpin.value = Math.round(gain * 100)
+                    offsetSpin.value = Math.round(offset * 100)
+                    gainInitialized = true
                 }
 
                 RowLayout {
@@ -457,61 +513,38 @@ ScrollView {
                                 readonly property int maxHeight: Math.max(1, Math.floor((cameraDelegate.windowExtent.fullFrameHeight || 0) / cameraDelegate.currentBinY))
 
                                 GridLayout {
-                                    columns: 3
+                                    columns: 2
                                     columnSpacing: 8
                                     rowSpacing: 4
                                     Layout.fillWidth: true
 
                                     Label { text: "Left:" }
-                                    Label { text: cameraDelegate.lastSyncedLeft >= 0 ? String(cameraDelegate.lastSyncedLeft) : "-"; color: "grey" }
                                     SpinBox { id: leftSpin; Layout.fillWidth: true; from: 0; to: windowSection.maxWidth; editable: true }
 
                                     Label { text: "Top:" }
-                                    Label { text: cameraDelegate.lastSyncedTop >= 0 ? String(cameraDelegate.lastSyncedTop) : "-"; color: "grey" }
                                     SpinBox { id: topSpin; Layout.fillWidth: true; from: 0; to: windowSection.maxHeight; editable: true }
 
                                     Label { text: "Width:" }
-                                    Label { text: cameraDelegate.lastSyncedWidth >= 0 ? String(cameraDelegate.lastSyncedWidth) : "-"; color: "grey" }
                                     SpinBox { id: widthSpin; Layout.fillWidth: true; from: 1; to: windowSection.maxWidth; editable: true }
 
                                     Label { text: "Height:" }
-                                    Label { text: cameraDelegate.lastSyncedHeight >= 0 ? String(cameraDelegate.lastSyncedHeight) : "-"; color: "grey" }
                                     SpinBox { id: heightSpin; Layout.fillWidth: true; from: 1; to: windowSection.maxHeight; editable: true }
                                 }
 
-                                RowLayout {
+                                // Local-only - no RPC. Just stages the
+                                // full-frame values into the SpinBoxes;
+                                // like every other edit here, they're only
+                                // ever sent to the server as part of
+                                // applyPendingSettingsThenExpose() on the
+                                // next Expose click.
+                                Button {
                                     Layout.fillWidth: true
-                                    Button {
-                                        Layout.fillWidth: true
-                                        text: "Set Window"
-                                        onClicked: {
-                                            cameraDelegate.lastError = ""
-                                            root.xmppClient.executeMethod(
-                                                jid, "set_window", [leftSpin.value, topSpin.value, widthSpin.value, heightSpin.value],
-                                                function (result) {
-                                                    if (!result.success) {
-                                                        cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                                    }
-                                                })
-                                        }
-                                    }
-                                    Button {
-                                        Layout.fillWidth: true
-                                        text: "Full Frame"
-                                        onClicked: {
-                                            leftSpin.value = 0
-                                            topSpin.value = 0
-                                            widthSpin.value = windowSection.maxWidth
-                                            heightSpin.value = windowSection.maxHeight
-                                            cameraDelegate.lastError = ""
-                                            root.xmppClient.executeMethod(
-                                                jid, "set_window", [0, 0, widthSpin.value, heightSpin.value],
-                                                function (result) {
-                                                    if (!result.success) {
-                                                        cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                                    }
-                                                })
-                                        }
+                                    text: "Full Frame"
+                                    onClicked: {
+                                        leftSpin.value = 0
+                                        topSpin.value = 0
+                                        widthSpin.value = windowSection.maxWidth
+                                        heightSpin.value = windowSection.maxHeight
                                     }
                                 }
                             }
@@ -631,13 +664,12 @@ ScrollView {
                                 spacing: 6
 
                                 GridLayout {
-                                    columns: 3
+                                    columns: 2
                                     columnSpacing: 8
                                     rowSpacing: 4
                                     Layout.fillWidth: true
 
                                     Label { text: "Gain:" }
-                                    Label { text: isNaN(cameraDelegate.lastSyncedGain) ? "-" : cameraDelegate.lastSyncedGain.toFixed(2); color: "grey" }
                                     SpinBox {
                                         id: gainSpin
                                         Layout.fillWidth: true
@@ -649,7 +681,6 @@ ScrollView {
                                     }
 
                                     Label { text: "Offset:" }
-                                    Label { text: isNaN(cameraDelegate.lastSyncedOffset) ? "-" : cameraDelegate.lastSyncedOffset.toFixed(2); color: "grey" }
                                     SpinBox {
                                         id: offsetSpin
                                         Layout.fillWidth: true
@@ -658,24 +689,6 @@ ScrollView {
                                         editable: true
                                         textFromValue: (value) => (value / 100).toFixed(2)
                                         valueFromText: (text) => Math.round(parseFloat(text) * 100)
-                                    }
-                                }
-
-                                Button {
-                                    Layout.fillWidth: true
-                                    text: "Set"
-                                    onClicked: {
-                                        cameraDelegate.lastError = ""
-                                        root.xmppClient.executeMethod(jid, "set_gain", [gainSpin.value / 100], function (result) {
-                                            if (!result.success) {
-                                                cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                            }
-                                        })
-                                        root.xmppClient.executeMethod(jid, "set_offset", [offsetSpin.value / 100], function (result) {
-                                            if (!result.success) {
-                                                cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                            }
-                                        })
                                     }
                                 }
                             }
@@ -724,26 +737,20 @@ ScrollView {
                                     }
                                 }
 
-                                // --- IExposureTime: AutoGuidingView.qml's
-                                // exposure-time SpinBox idiom, verbatim
-                                // (integer milliseconds, was-synced guard)
-                                // - disabled while BIAS is selected. Grey
-                                // current-value label mirrors
-                                // camerawidget.ui's boxed labelExpTime.
-                                ColumnLayout {
+                                // --- IExposureTime: fetched once on start
+                                // (exposureTimeInitialized above), edited
+                                // freely, applied as part of the batch in
+                                // applyPendingSettingsThenExpose() - no
+                                // immediate per-edit RPC, no separate
+                                // current-value label (direct instruction,
+                                // see that function's own comment).
+                                // Disabled while BIAS is selected, same as
+                                // before.
+                                RowLayout {
                                     Layout.fillWidth: true
                                     visible: cameraDelegate.exposureTimeInterface !== null
-                                    spacing: 2
 
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        Label { text: "Exp. time:" }
-                                        Label {
-                                            text: isNaN(cameraDelegate.lastSyncedExposureTime)
-                                                ? "-" : cameraDelegate.lastSyncedExposureTime.toFixed(3) + "s"
-                                            color: "grey"
-                                        }
-                                    }
+                                    Label { text: "Exp. time:" }
                                     SpinBox {
                                         id: exposureTimeSpin
                                         Layout.fillWidth: true
@@ -754,14 +761,8 @@ ScrollView {
                                         enabled: cameraDelegate.currentImageType !== "bias"
                                         textFromValue: (value) => (value / 1000).toFixed(3)
                                         valueFromText: (text) => Math.round(parseFloat(text) * 1000)
-                                        onValueModified: {
-                                            root.xmppClient.executeMethod(jid, "set_exposure_time", [value / 1000], function (result) {
-                                                if (!result.success) {
-                                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                                }
-                                            })
-                                        }
                                     }
+                                    Label { text: "s" }
                                 }
 
                                 RowLayout {
@@ -817,8 +818,7 @@ ScrollView {
                                         enabled: cameraDelegate.remainingExposures === 0
                                         onClicked: {
                                             cameraDelegate.lastError = ""
-                                            cameraDelegate.remainingExposures = countSpin.value
-                                            cameraDelegate.grabOne()
+                                            cameraDelegate.applyPendingSettingsThenExpose()
                                         }
                                     }
                                     Button {
