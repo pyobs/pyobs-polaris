@@ -202,15 +202,30 @@ jobs:
           key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
 
       # Only on a version tag push. The plain build/Release/polaris
-      # binary is not redistributable as-is: it links libQXmppQt6.so.5 and
-      # libqt6keychain.so.1 via an absolute RUNPATH into this job's own
-      # ephemeral build directory (CMake's normal, correct behavior for an
-      # uninstalled build-tree binary) - copying just the executable
-      # elsewhere would fail with "cannot open shared object file" the
-      # moment it's run. patchelf rewrites the RUNPATH to $ORIGIN so a copy
-      # of both .so's placed alongside the binary (as this tarball does) is
-      # found instead, wherever it's eventually extracted.
-      - name: Package release artifact
+      # binary is not redistributable as-is: it links libQXmppQt6.so.5,
+      # libqt6keychain.so.1, and liblibnova.so via an absolute RUNPATH into
+      # this job's own ephemeral build directory (CMake's normal, correct
+      # behavior for an uninstalled build-tree binary) - copying just the
+      # executable elsewhere would fail with "cannot open shared object
+      # file" the moment it's run. patchelf rewrites the RUNPATH to
+      # $ORIGIN so a copy of all three .so's placed alongside the binary
+      # (as this tarball does) is found instead, wherever it's eventually
+      # extracted. liblibnova.so was missing from this list until now -
+      # a real gap (every past release tarball would have failed to start
+      # once actually extracted, not just an oversight caught in review),
+      # not just a Windows/macOS-shaped addition.
+      #
+      # System Qt6 itself (Qt6Core/Gui/Qml/Quick/Network/Xml and the
+      # QtQuick.Controls/.Material/.Layouts QML plugins) is deliberately
+      # NOT bundled on Linux - this project always links against the
+      # system install (see CMakeLists.txt's qt_standard_project_setup),
+      # so running this binary still requires Qt 6.5+ installed on the
+      # target machine (documented in the release notes below). Windows/
+      # macOS below take the opposite approach (windeployqt/macdeployqt
+      # bundle Qt itself into the artifact) - Linux is the one platform
+      # where "install Qt6 from your package manager" is a reasonable ask
+      # of an end user; Windows/macOS users have no equivalent expectation.
+      - name: Package release artifact (Linux)
         if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Linux'
         run: |
           sudo apt-get install -y patchelf
@@ -218,24 +233,69 @@ jobs:
           cp build/Release/polaris dist/
           cp -P build/Release/_deps/qxmpp-build/src/libQXmppQt6.so* dist/
           cp -P build/Release/bin/libqt6keychain.so* dist/
+          cp -P build/Release/_deps/libnova-build/liblibnova.so* dist/
           patchelf --set-rpath '$ORIGIN' dist/polaris
           tar -czf polaris-linux-x86_64.tar.gz -C dist .
 
-      # System Qt6 itself (Qt6Core/Gui/Qml/Quick/Network/Xml and the
-      # QtQuick.Controls/.Material/.Layouts QML plugins) is deliberately
-      # NOT bundled - this project always links against the system
-      # install (see CMakeLists.txt's qt_standard_project_setup), so
-      # running this binary still requires Qt 6.5+ installed on the
-      # target machine. Documented in the release notes below rather than
-      # solved here - full self-contained deployment (linuxdeployqt-style)
-      # is a bigger undertaking than this step.
+      # windeployqt scans polaris.exe's actual Qt module dependencies and
+      # copies the matching DLLs/plugins alongside it; --qmldir additionally
+      # scans qml/ for QML imports (QtQuick.Controls etc.) it wouldn't
+      # otherwise detect from the binary alone. CMAKE_RUNTIME_OUTPUT_DIRECTORY
+      # (CMakeLists.txt, WIN32-guarded) already funnels polaris.exe and the
+      # vendored qt6keychain.dll/QXmppQt6.dll/libnova.dll into one directory
+      # - windeployqt only needs to add Qt's own pieces to that same folder.
+      # Unlike Linux, the whole point here is a self-contained artifact - a
+      # typical Windows user has no "install Qt6" equivalent to apt.
+      - name: Package release artifact (Windows)
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          windeployqt --qmldir qml build\Release\bin\polaris.exe
+          Compress-Archive -Path build\Release\bin\* -DestinationPath polaris-windows-x86_64.zip
+
+      # macdeployqt only knows how to deploy into a real .app bundle
+      # (CMakeLists.txt's APPLE-guarded MACOSX_BUNDLE TRUE makes
+      # build/Release/bin/polaris.app exist in the first place - qt_add_executable()
+      # doesn't opt into that on its own). It walks polaris's actual
+      # dependency graph (via the RPATHs CMake's build tree already sets,
+      # same mechanism the Linux patchelf step works around) to find and
+      # embed not just Qt's own frameworks but also the vendored
+      # QXmppQt6/qt6keychain/libnova dylibs - no separate copy step needed
+      # the way Linux/Windows each require. Same self-contained-artifact
+      # reasoning as Windows above.
+      #
+      # Unsigned/not notarized: first launch needs a right-click-Open
+      # (documented in the release notes below) rather than a plain
+      # double-click, which Gatekeeper would otherwise block - a real
+      # signing/notarization setup (Apple Developer account, credentials
+      # in CI) is a separate undertaking from just producing an artifact.
+      - name: Package release artifact (macOS)
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS'
+        run: |
+          macdeployqt build/Release/bin/polaris.app -qmldir=qml
+          ditto -c -k --sequesterRsrc build/Release/bin/polaris.app polaris-macos-arm64.zip
+
+      # Matrix jobs run in parallel, so exactly one of these three legs'
+      # `gh release create` calls will actually create the release (racing
+      # is fine - releases/tags are created atomically server-side, so
+      # whichever job gets there first wins) and the other two will fail
+      # with "release already exists" - falling back to `gh release
+      # upload --clobber` for those attaches this OS's own asset to the
+      # release the winning job created, --clobber so re-running a single
+      # failed leg (as happened getting Windows/macOS working) doesn't
+      # error on an asset that's already there from a previous attempt.
       - name: Create GitHub release
-        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Linux'
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            polaris-linux-x86_64.tar.gz \
+          case "${{ runner.os }}" in
+            Linux) ASSET=polaris-linux-x86_64.tar.gz ;;
+            Windows) ASSET=polaris-windows-x86_64.zip ;;
+            macOS) ASSET=polaris-macos-arm64.zip ;;
+          esac
+          if gh release create "${{ github.ref_name }}" "$ASSET" \
             --title "${{ github.ref_name }}" \
             --notes "$(cat <<'EOF'
           A release of Polaris (pyobs-polaris), a clean-room C++/QML client for pyobs 2.0. Every phase up to this tag was verified live against a real ejabberd server and real pyobs modules - see DEVELOPMENT.md for the full phase-by-phase history.
@@ -249,17 +309,40 @@ jobs:
           - Live domain event log via PEP
           - First hand-designed widget: RoofWidget for IRoof modules
 
+          **Downloads:**
+          - `polaris-linux-x86_64.tar.gz` — Linux x86_64
+          - `polaris-windows-x86_64.zip` — Windows x86_64
+          - `polaris-macos-arm64.zip` — macOS (Apple Silicon)
+
           **Runtime requirements (Linux x86_64):**
           - Qt 6.5+ installed on the system (built and tested against Qt 6.10.2 from Ubuntu 26.04's apt packages): `libQt6Core`, `libQt6Gui`, `libQt6Qml`, `libQt6Quick`, `libQt6Network`, `libQt6Xml`, plus the QtQuick.Controls / QtQuick.Controls.Material / QtQuick.Layouts QML modules
-          - The bundled `libQXmppQt6.so.5` (vendored, QXmpp v1.10.2) and `libqt6keychain.so.1` (vendored, QtKeychain v0.17.0) must stay alongside the `polaris` binary - already laid out correctly in this tarball
+          - The bundled `libQXmppQt6.so.5` (vendored, QXmpp v1.10.2), `libqt6keychain.so.1` (vendored, QtKeychain v0.17.0), and `liblibnova.so` (vendored, libnova v0.16) must stay alongside the `polaris` binary - already laid out correctly in this tarball
           - `libsecret-1-0` (usually already present on a KDE/GNOME desktop) plus a running Secret Service provider (e.g. gnome-keyring, KWallet) if you want "remember this login" to actually persist a password - the app works fine without one, that checkbox just won't have anywhere secure to store the password
+
+          **Runtime requirements (Windows/macOS):** none - both artifacts are self-contained (Qt itself and every vendored dependency are bundled in), no separate Qt install needed.
+
+          **macOS Gatekeeper note:** the app isn't signed/notarized, so a plain double-click on first launch will be blocked ("cannot be opened because the developer cannot be verified"). Right-click `Polaris.app` → Open once instead (or `xattr -cr Polaris.app` after unzipping) to bypass this - only needed the first time.
 
           **Usage:**
           ```
+          # Linux
           tar -xzf polaris-linux-x86_64.tar.gz
           ./polaris
+
+          # Windows
+          Expand-Archive polaris-windows-x86_64.zip
+          .\polaris.exe
+
+          # macOS
+          unzip polaris-macos-arm64.zip
+          open Polaris.app   # or right-click -> Open on first launch
           ```
 
-          Built directly by this repository's CI (ubuntu-26.04, Qt 6.10.2) from this tag.
+          Built directly by this repository's CI from this tag (ubuntu-26.04/Qt 6.10.2, windows-latest/Qt 6.10.2, macos-latest/Qt 6.10.2).
           EOF
-          )"
+          )"; then
+            echo "Created release and uploaded $ASSET"
+          else
+            echo "Release already exists - uploading $ASSET to it instead"
+            gh release upload "${{ github.ref_name }}" "$ASSET" --clobber
+          fi

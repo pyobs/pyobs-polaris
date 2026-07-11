@@ -96,6 +96,15 @@ qt_add_executable(polaris
     src/fits/FitsFileWriter.cpp
 )
 
+if(APPLE)
+    # qt_add_executable() doesn't opt into a real .app bundle on its own -
+    # without this, "polaris" is a bare Mach-O executable, which
+    # macdeployqt (release packaging, see build.yml) can't deploy into:
+    # it specifically embeds Qt frameworks/plugins into an existing
+    # Foo.app/Contents/{Frameworks,PlugIns}, not a loose binary.
+    set_target_properties(polaris PROPERTIES MACOSX_BUNDLE TRUE)
+endif()
+
 qt_add_qml_module(polaris
     URI pyobs.polaris
     VERSION 1.0
