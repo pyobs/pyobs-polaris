@@ -82,6 +82,17 @@ enable_language(C)
 # different subdirectory than its own top-level file would.
 set(LIBRARY_NAME libnova)
 set(BUILD_SHARED_LIBS ON)
+# src/CMakeLists.txt's own MSVC-specific branch (giving the DLL and its
+# import library different PREFIX/IMPORT_PREFIX paths) checks
+# BUILD_SHARED_LIBRARY - libnova's own real option name, upstream's
+# (skipped) top-level file translates that into CMake's BUILD_SHARED_LIBS
+# for us. Setting only BUILD_SHARED_LIBS (above) is enough to build an
+# actual shared library everywhere, but leaves BUILD_SHARED_LIBRARY unset,
+# so that MSVC branch falls through to its else-case and gives the DLL
+# and import library the same output path - Ninja (forced on Windows/
+# macOS, see build.yml) catches this as "multiple rules generate
+# ../libnova.dll"; Unix Makefiles (Linux) silently tolerated it.
+set(BUILD_SHARED_LIBRARY ON)
 FetchContent_Declare(
     libnova
     GIT_REPOSITORY https://git.code.sf.net/p/libnova/libnova
@@ -135,6 +146,7 @@ target_include_directories(libnova PRIVATE "${libnova_config_h_dir}")
 unset(libnova_config_h_dir)
 unset(LIBRARY_NAME)
 unset(BUILD_SHARED_LIBS)
+unset(BUILD_SHARED_LIBRARY)
 
 # libnova's ln_types.h requires exactly one of LIBNOVA_SHARED/
 # LIBNOVA_STATIC to be defined, but (since its top-level CMakeLists.txt is
