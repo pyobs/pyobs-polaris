@@ -18,6 +18,20 @@ import pyobs.polaris
 // boundary as a Q_PROPERTY(QVariant) (see DEVELOPMENT.md's "Roof state
 // display bug" section) - offsetHistory is built and owned entirely in
 // QML/JS, never itself crossing that boundary.
+//
+// Layout: plots on top (untouched by this pass - see the two-plot Row's
+// own comment on the RowLayout bug behind that shape), one "Auto
+// Guiding" GroupBox below wrapping Start/Stop/loop-state/exposure-time/
+// last-offset, matching autoguidingwidget.ui exactly (read directly).
+// Exposure time deliberately keeps its immediate-apply-on-edit RPC
+// (onValueModified below), unlike CameraView.qml's Window/Gain/ExpTime -
+// this is NOT the same "current value label + live resync" pattern the
+// user flagged as not working well for Camera (this page never had a
+// separate current-value label to begin with), and the legacy widget's
+// own _set_exposure_time is wired to the spinbox's committed signal
+// (confirmed from source), i.e. immediate apply, not batched onto Start
+// - so this page's existing behavior already matches the reference, not
+// a regression to fix.
 ScrollView {
     id: root
 
@@ -272,75 +286,92 @@ ScrollView {
                     }
                 }
 
-                Label {
+                GroupBox {
+                    title: "Auto Guiding"
                     Layout.leftMargin: 8
-                    text: autoGuidingDelegate.loopStateText
-                    color: "grey"
-                }
+                    Layout.preferredWidth: 320
 
-                Label {
-                    Layout.leftMargin: 8
-                    visible: autoGuidingDelegate.hasOffset
-                    text: "(" + autoGuidingDelegate.signedFixed(autoGuidingDelegate.offsetLon * 3600, 2)
-                        + ", " + autoGuidingDelegate.signedFixed(autoGuidingDelegate.offsetLat * 3600, 2) + ") arcsec"
-                }
+                    ColumnLayout {
+                        width: parent.width
+                        spacing: 6
 
-                RowLayout {
-                    Layout.leftMargin: 8
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Button {
+                                Layout.fillWidth: true
+                                text: "Start"
+                                enabled: !autoGuidingDelegate.running
+                                onClicked: {
+                                    autoGuidingDelegate.lastError = ""
+                                    root.xmppClient.executeMethod(
+                                        autoGuidingDelegate.jid, "start", 0,
+                                        function (result) {
+                                            if (!result.success) {
+                                                autoGuidingDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                            }
+                                        })
+                                }
+                            }
+                            Button {
+                                Layout.fillWidth: true
+                                text: "Stop"
+                                enabled: autoGuidingDelegate.running
+                                onClicked: root.xmppClient.executeMethod(autoGuidingDelegate.jid, "stop", 0)
+                            }
+                        }
 
-                    Label { text: "Exposure time:" }
-                    SpinBox {
-                        id: exposureSpin
-                        from: 1
-                        to: 60000
-                        value: 1000
-                        editable: true
-                        textFromValue: (value) => (value / 1000).toFixed(3)
-                        valueFromText: (text) => Math.round(parseFloat(text) * 1000)
-                        onValueModified: {
-                            root.xmppClient.executeMethod(
-                                autoGuidingDelegate.jid, "set_exposure_time", [value / 1000],
-                                function (result) {
-                                    if (!result.success) {
-                                        autoGuidingDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                    }
-                                })
+                        Label {
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            text: autoGuidingDelegate.loopStateText
+                            color: "grey"
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "Exposure time:" }
+                            SpinBox {
+                                id: exposureSpin
+                                Layout.fillWidth: true
+                                from: 1
+                                to: 60000
+                                value: 1000
+                                editable: true
+                                textFromValue: (value) => (value / 1000).toFixed(3)
+                                valueFromText: (text) => Math.round(parseFloat(text) * 1000)
+                                onValueModified: {
+                                    root.xmppClient.executeMethod(
+                                        autoGuidingDelegate.jid, "set_exposure_time", [value / 1000],
+                                        function (result) {
+                                            if (!result.success) {
+                                                autoGuidingDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                            }
+                                        })
+                                }
+                            }
+                            Label { text: "s" }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "Last offset:" }
+                            Label {
+                                Layout.fillWidth: true
+                                visible: autoGuidingDelegate.hasOffset
+                                text: "(" + autoGuidingDelegate.signedFixed(autoGuidingDelegate.offsetLon * 3600, 2)
+                                    + ", " + autoGuidingDelegate.signedFixed(autoGuidingDelegate.offsetLat * 3600, 2) + ") arcsec"
+                                color: "grey"
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: autoGuidingDelegate.lastError.length > 0
+                            text: autoGuidingDelegate.lastError
+                            color: "red"
+                            wrapMode: Text.WrapAnywhere
                         }
                     }
-                    Label { text: "s" }
-                }
-
-                RowLayout {
-                    Layout.leftMargin: 8
-
-                    Button {
-                        text: "Start"
-                        enabled: !autoGuidingDelegate.running
-                        onClicked: {
-                            autoGuidingDelegate.lastError = ""
-                            root.xmppClient.executeMethod(
-                                autoGuidingDelegate.jid, "start", 0,
-                                function (result) {
-                                    if (!result.success) {
-                                        autoGuidingDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                    }
-                                })
-                        }
-                    }
-                    Button {
-                        text: "Stop"
-                        enabled: autoGuidingDelegate.running
-                        onClicked: root.xmppClient.executeMethod(autoGuidingDelegate.jid, "stop", 0)
-                    }
-                }
-
-                Label {
-                    Layout.leftMargin: 8
-                    Layout.fillWidth: true
-                    visible: autoGuidingDelegate.lastError.length > 0
-                    text: autoGuidingDelegate.lastError
-                    color: "red"
-                    wrapMode: Text.WrapAnywhere
                 }
             }
         }

@@ -8,11 +8,35 @@ import pyobs.polaris
 // least one connected module implements IMode (see MainWindow.qml's
 // hasModeModule). One row per mode "group" the module reports via its
 // static IMode capabilities (ModuleListModel::ModeGroupsRole) - a
-// ComboBox per group, populated from that group's static option list,
-// showing/setting the live current mode from IMode state
-// (ModeState.modes, group name -> current mode). Controls stay disabled
-// until IMotion state reaches the same "initialized" set
-// modewidget.py::update_gui already uses.
+// ComboBox per group, populated from that group's static option list.
+// Controls stay disabled until IMotion state reaches the same
+// "initialized" set modewidget.py::update_gui already uses.
+//
+// Direct instruction: selecting an option in the ComboBox must NOT itself
+// call set_mode - unlike modewidget.py's own onActivated-applies-
+// immediately behavior (and unlike this project's own earlier port of
+// it), picking an item from a dropdown is too easy to trigger by
+// accident (scrolling, a stray click) for that to fire a real mode
+// change. A real three-column table instead (label/current/new, one row
+// per group - built from three parallel Repeaters over the same
+// modeGroups list with the GridLayout's own flow set to TopToBottom, the
+// standard way to get a Repeater to fill one whole column at a time
+// rather than interleaving row-by-row) with a single shared "Set" button
+// below it, batch-applying every group whose staged selection actually
+// differs from its current mode - same fetch-once-then-explicit-apply
+// shape as CameraView.qml's Window/Gain (staged selections live in
+// stagedModes below, seeded once per group from the first state push),
+// just one button for every row instead of Camera's one Expose doing
+// double duty as both "apply settings" and "the actual action" - Mode
+// has no equivalent single action to batch onto, so Set only ever does
+// the applying.
+//
+// Layout: modewidget.ui itself is just a single "Modes" GroupBox (a
+// status field, read directly from the .ui) - the mode-group ComboBox
+// rows are added to that *same* GroupBox's form layout at runtime
+// (modewidget.py:69, one per group, confirmed from source), not a
+// separate section. Ported as one GroupBox here too, same as
+// CameraView.qml/TelescopeView.qml's GroupBox treatment.
 ColumnLayout {
     id: root
 
@@ -111,6 +135,75 @@ ColumnLayout {
             readonly property bool initialized: motionStatus === "slewing" || motionStatus === "tracking"
                 || motionStatus === "idle" || motionStatus === "positioned"
 
+            // group -> staged (not-yet-applied) selection. Seeded once per
+            // group from the first state push that reports it (fetch-once,
+            // same as CameraView.qml's Window/Gain/ExposureTime), then left
+            // entirely to the user - the ComboBox delegates below bind
+            // their currentIndex to this dict, not to modesByGroup
+            // directly, so nothing here ever fights an in-progress
+            // selection with a live resync.
+            property var stagedModes: ({})
+
+            function stagedModeFor(group) {
+                return stagedModes[group] !== undefined ? stagedModes[group] : ""
+            }
+
+            function setStagedMode(group, mode) {
+                const updated = Object.assign({}, stagedModes)
+                updated[group] = mode
+                stagedModes = updated
+            }
+
+            onModesByGroupChanged: {
+                if (!modesByGroup) {
+                    return
+                }
+                const groups = modeDelegate.modeGroups || []
+                let updated = null
+                for (let i = 0; i < groups.length; ++i) {
+                    const group = groups[i].group
+                    if (stagedModes[group] !== undefined) {
+                        continue
+                    }
+                    const current = fieldOf(modesByGroup, group)
+                    if (current === undefined || current === null) {
+                        continue
+                    }
+                    if (updated === null) {
+                        updated = Object.assign({}, stagedModes)
+                    }
+                    updated[group] = current
+                }
+                if (updated !== null) {
+                    stagedModes = updated
+                }
+            }
+
+            // Fires set_mode only for groups whose staged selection
+            // actually differs from the current mode - re-sending an
+            // already-current mode could have real side effects depending
+            // on the module (e.g. re-triggering a physical filter wheel
+            // move), not just a wasted RPC.
+            function applyStagedModes() {
+                modeDelegate.lastError = ""
+                const groups = modeDelegate.modeGroups || []
+                for (let i = 0; i < groups.length; ++i) {
+                    const group = groups[i].group
+                    const staged = modeDelegate.stagedModeFor(group)
+                    const current = fieldOf(modeDelegate.modesByGroup, group) || ""
+                    if (staged === "" || staged === current) {
+                        continue
+                    }
+                    root.xmppClient.executeMethod(
+                        modeDelegate.jid, "set_mode", [staged, group],
+                        function (result) {
+                            if (!result.success) {
+                                modeDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                            }
+                        })
+                }
+            }
+
             property string lastError: ""
 
             RowLayout {
@@ -124,76 +217,92 @@ ColumnLayout {
                 }
             }
 
-            KeyValueCard {
-                Layout.fillWidth: true
+            GroupBox {
+                title: "Modes"
                 Layout.leftMargin: 8
-                value: modeDelegate.motionState
-            }
+                Layout.preferredWidth: 320
 
-            Repeater {
-                model: modeDelegate.modeGroups || []
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 6
 
-                delegate: RowLayout {
-                    id: groupRow
-                    Layout.leftMargin: 8
-
-                    required property string group
-                    required property var modes
-
-                    readonly property string currentMode: modeDelegate.fieldOf(modeDelegate.modesByGroup, group) || ""
-
-                    // Live-editable idiom (AutoGuidingView.qml/
-                    // AutoFocusView.qml's exposure-time SpinBoxes): only
-                    // overwritten by a fresh server push if the combo box
-                    // still shows the last value *this row* last synced
-                    // from the server, so an in-progress user pick isn't
-                    // clobbered by an unrelated state update.
-                    property string lastSyncedMode: ""
-
-                    onCurrentModeChanged: {
-                        if (currentMode === "") {
-                            return
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { text: "Status:" }
+                        Label {
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            text: modeDelegate.motionStatus.toUpperCase()
                         }
-                        const wasSynced = lastSyncedMode === "" || combo.currentText === lastSyncedMode
-                        lastSyncedMode = currentMode
-                        if (wasSynced) {
-                            const idx = combo.indexOfValue(currentMode)
-                            if (idx >= 0) {
-                                combo.currentIndex = idx
+                    }
+
+                    // Real three-column table (label/current/new) - three
+                    // Repeaters over the same modeGroups list, one per
+                    // column, with flow: TopToBottom so each Repeater
+                    // fills its whole column before moving to the next
+                    // (the standard way to get column-major fill order
+                    // out of GridLayout; row-major, the default, would
+                    // interleave labels/current/combos across rows
+                    // instead of down columns).
+                    GridLayout {
+                        id: modesGrid
+                        Layout.fillWidth: true
+                        columns: 3
+                        flow: GridLayout.TopToBottom
+                        rows: (modeDelegate.modeGroups || []).length
+                        columnSpacing: 12
+                        rowSpacing: 4
+
+                        Repeater {
+                            model: modeDelegate.modeGroups || []
+                            delegate: Label {
+                                required property string group
+                                text: group
+                                font.bold: true
+                            }
+                        }
+
+                        Repeater {
+                            model: modeDelegate.modeGroups || []
+                            delegate: Label {
+                                required property string group
+                                text: {
+                                    const current = modeDelegate.fieldOf(modeDelegate.modesByGroup, group)
+                                    return (current === undefined || current === null || current === "") ? "-" : current
+                                }
+                                color: "grey"
+                            }
+                        }
+
+                        Repeater {
+                            model: modeDelegate.modeGroups || []
+                            delegate: ComboBox {
+                                required property string group
+                                required property var modes
+                                Layout.fillWidth: true
+                                model: modes || []
+                                enabled: modeDelegate.initialized
+                                currentIndex: indexOfValue(modeDelegate.stagedModeFor(group))
+                                onActivated: modeDelegate.setStagedMode(group, currentText)
                             }
                         }
                     }
 
-                    Label {
-                        Layout.preferredWidth: 90
-                        text: groupRow.group
+                    Button {
+                        Layout.fillWidth: true
+                        text: "Set"
+                        enabled: modeDelegate.initialized
+                        onClicked: modeDelegate.applyStagedModes()
                     }
 
-                    ComboBox {
-                        id: combo
-                        model: groupRow.modes || []
-                        enabled: modeDelegate.initialized
-                        onActivated: {
-                            modeDelegate.lastError = ""
-                            root.xmppClient.executeMethod(
-                                modeDelegate.jid, "set_mode", [currentText, groupRow.group],
-                                function (result) {
-                                    if (!result.success) {
-                                        modeDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                    }
-                                })
-                        }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: modeDelegate.lastError.length > 0
+                        text: modeDelegate.lastError
+                        color: "red"
+                        wrapMode: Text.WrapAnywhere
                     }
                 }
-            }
-
-            Label {
-                Layout.leftMargin: 8
-                Layout.fillWidth: true
-                visible: modeDelegate.lastError.length > 0
-                text: modeDelegate.lastError
-                color: "red"
-                wrapMode: Text.WrapAnywhere
             }
         }
     }

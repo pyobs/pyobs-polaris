@@ -8,6 +8,17 @@ import pyobs.polaris
 // the sidebar while at least one connected module implements IAutoFocus
 // (see MainWindow.qml's hasAutoFocusModule), same shape as
 // RoofView.qml/IRoof.
+//
+// Layout: autofocuswidget.ui itself is a vertical stack (stretch="1,0,0,0"
+// - read directly), plot on top and dominant, everything else below it -
+// ported as-is rather than switching to CameraView.qml's sidebar+dominant-
+// content split, since that's what the source actually does. Count/Step/
+// Exposure time + Run/Abort all live inside one "Auto Focus" GroupBox in
+// the source (formLayout + a button row, both nested inside the same
+// groupBox) - status (labelStatus) is a sibling of the GroupBox, not
+// nested inside it, so it stays below/outside here too. No color
+// overrides on Run/Abort in the source (unlike Camera's Expose/Abort or
+// Roof's Open/Close/Stop) - left plain here to match.
 ColumnLayout {
     id: root
 
@@ -189,6 +200,82 @@ ColumnLayout {
                 referenceLabel: "fitted focus"
             }
 
+            GroupBox {
+                title: "Auto Focus"
+                Layout.leftMargin: 8
+                Layout.preferredWidth: 320
+
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 6
+
+                    GridLayout {
+                        columns: 2
+                        columnSpacing: 8
+                        rowSpacing: 4
+                        Layout.fillWidth: true
+
+                        Label { text: "Count:" }
+                        SpinBox {
+                            id: countSpin
+                            Layout.fillWidth: true
+                            from: 1
+                            to: 20
+                            value: 5
+                            editable: true
+                        }
+                        Label { text: "Step [mm]:" }
+                        SpinBox {
+                            id: stepSpin
+                            Layout.fillWidth: true
+                            from: 1
+                            to: 1000
+                            value: 20
+                            editable: true
+                            textFromValue: (value) => (value / 1000).toFixed(3)
+                            valueFromText: (text) => Math.round(parseFloat(text) * 1000)
+                        }
+                        Label { text: "Exposure [s]:" }
+                        SpinBox {
+                            id: exposureSpin
+                            Layout.fillWidth: true
+                            from: 1
+                            to: 60000
+                            value: 1000
+                            editable: true
+                            textFromValue: (value) => (value / 1000).toFixed(3)
+                            valueFromText: (text) => Math.round(parseFloat(text) * 1000)
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Run Auto Focus"
+                            enabled: !autoFocusDelegate.running
+                            onClicked: {
+                                autoFocusDelegate.lastError = ""
+                                root.xmppClient.executeMethod(
+                                    autoFocusDelegate.jid, "auto_focus",
+                                    [countSpin.value, stepSpin.value / 1000, exposureSpin.value / 1000],
+                                    function (result) {
+                                        if (!result.success) {
+                                            autoFocusDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
+                                        }
+                                    })
+                            }
+                        }
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Abort"
+                            enabled: autoFocusDelegate.running
+                            onClicked: root.xmppClient.executeMethod(autoFocusDelegate.jid, "abort", 0)
+                        }
+                    }
+                }
+            }
+
             Label {
                 Layout.leftMargin: 8
                 text: {
@@ -204,64 +291,6 @@ ColumnLayout {
                         + (err !== null && err !== undefined ? " ± " + err.toFixed(3) : "") + " mm"
                 }
                 color: "grey"
-            }
-
-            RowLayout {
-                Layout.leftMargin: 8
-
-                Label { text: "Count:" }
-                SpinBox {
-                    id: countSpin
-                    from: 1
-                    to: 20
-                    value: 5
-                    editable: true
-                }
-                Label { text: "Step [mm]:" }
-                SpinBox {
-                    id: stepSpin
-                    from: 1
-                    to: 1000
-                    value: 20
-                    editable: true
-                    textFromValue: (value) => (value / 1000).toFixed(3)
-                    valueFromText: (text) => Math.round(parseFloat(text) * 1000)
-                }
-                Label { text: "Exposure [s]:" }
-                SpinBox {
-                    id: exposureSpin
-                    from: 1
-                    to: 60000
-                    value: 1000
-                    editable: true
-                    textFromValue: (value) => (value / 1000).toFixed(3)
-                    valueFromText: (text) => Math.round(parseFloat(text) * 1000)
-                }
-            }
-
-            RowLayout {
-                Layout.leftMargin: 8
-
-                Button {
-                    text: "Run Auto Focus"
-                    enabled: !autoFocusDelegate.running
-                    onClicked: {
-                        autoFocusDelegate.lastError = ""
-                        root.xmppClient.executeMethod(
-                            autoFocusDelegate.jid, "auto_focus",
-                            [countSpin.value, stepSpin.value / 1000, exposureSpin.value / 1000],
-                            function (result) {
-                                if (!result.success) {
-                                    autoFocusDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                }
-                            })
-                    }
-                }
-                Button {
-                    text: "Abort"
-                    enabled: autoFocusDelegate.running
-                    onClicked: root.xmppClient.executeMethod(autoFocusDelegate.jid, "abort", 0)
-                }
             }
 
             Label {

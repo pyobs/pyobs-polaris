@@ -8,9 +8,19 @@ import pyobs.polaris
 // only reachable via the sidebar while at least one connected module
 // implements IRoof (see MainWindow.qml's hasRoofModule). IRoof declares
 // zero commands/state beyond what IMotion already provides (see
-// DEVELOPMENT.md), so this page is just KeyValueCard for the module's
-// IMotion state plus three hand-designed buttons (executeMethod): Open
-// (init), Close (park), Stop (stop_motion).
+// DEVELOPMENT.md) - no azimuth reading exists on the wire for this
+// interface (confirmed from source, not an oversight), unlike
+// roofwidget.ui's own labelAzimuth field, so there's nothing to port
+// there. This page is a status readout plus three hand-designed buttons
+// (executeMethod): Open (init), Close (park), Stop (stop_motion).
+//
+// Layout: one "Status" GroupBox wrapping status + the three buttons,
+// ported from roofwidget.ui's own groupBox_2 (read directly), same
+// GroupBox treatment as CameraView.qml/TelescopeView.qml. Button colors
+// also read directly from that file's own per-button QPalette overrides
+// - green Open, yellow Close, red Stop (not red Close/red Stop the way
+// Camera's Expose/Abort split might suggest - Close isn't the
+// destructive action here, Stop is).
 ColumnLayout {
     id: root
 
@@ -99,36 +109,72 @@ ColumnLayout {
                 }
             }
 
-            KeyValueCard {
-                Layout.fillWidth: true
+            readonly property var motionState: roofDelegate.subscription ? roofDelegate.subscription.value : undefined
+
+            function fieldOf(entries, key) {
+                const list = entries || []
+                for (let i = 0; i < list.length; ++i) {
+                    if (list[i].key === key) {
+                        return list[i].value
+                    }
+                }
+                return undefined
+            }
+
+            readonly property string motionStatus: fieldOf(motionState, "status") || ""
+
+            GroupBox {
+                title: "Status"
                 Layout.leftMargin: 8
-                value: roofDelegate.subscription ? roofDelegate.subscription.value : undefined
-            }
+                Layout.preferredWidth: 260
 
-            RowLayout {
-                Button {
-                    text: "Open"
-                    enabled: roofDelegate.running === ""
-                    onClicked: roofDelegate.run("init", 0)
-                }
-                Button {
-                    text: "Close"
-                    enabled: roofDelegate.running === ""
-                    onClicked: roofDelegate.run("park", 0)
-                }
-                Button {
-                    text: "Stop"
-                    enabled: roofDelegate.running === ""
-                    onClicked: roofDelegate.run("stop_motion", 1)
-                }
-            }
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 6
 
-            Label {
-                Layout.fillWidth: true
-                visible: roofDelegate.lastError.length > 0
-                text: roofDelegate.lastError
-                color: "red"
-                wrapMode: Text.WrapAnywhere
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        text: roofDelegate.motionStatus.toUpperCase()
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Open"
+                            palette.button: "#2e7d32"
+                            palette.buttonText: "white"
+                            enabled: roofDelegate.running === ""
+                            onClicked: roofDelegate.run("init", 0)
+                        }
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Close"
+                            palette.button: "#f9a825"
+                            palette.buttonText: "black"
+                            enabled: roofDelegate.running === ""
+                            onClicked: roofDelegate.run("park", 0)
+                        }
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Stop"
+                            palette.button: "#c62828"
+                            palette.buttonText: "white"
+                            enabled: roofDelegate.running === ""
+                            onClicked: roofDelegate.run("stop_motion", 1)
+                        }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: roofDelegate.lastError.length > 0
+                        text: roofDelegate.lastError
+                        color: "red"
+                        wrapMode: Text.WrapAnywhere
+                    }
+                }
             }
         }
     }

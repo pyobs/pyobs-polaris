@@ -9,6 +9,12 @@ import pyobs.polaris
 // IAcquisition (see MainWindow.qml's hasAcquisitionModule), same shape as
 // AutoFocusView.qml/IAutoFocus.
 //
+// Layout order below (plots -> Acquire/Abort -> status -> "Result"
+// GroupBox) matches acquisitionwidget.ui exactly (read directly) - the
+// two-plot Row block itself is untouched by this pass (see its own
+// comment on why RowLayout specifically misbehaved there; not worth
+// re-litigating for a GroupBox-only pass).
+//
 // Unlike IAutoFocus, the result here arrives purely via state
 // (AcquisitionState.result) - acquisitionwidget.py never registers a
 // separate event, so this page doesn't either.
@@ -236,34 +242,6 @@ ScrollView {
                     }
                 }
 
-                Label {
-                    Layout.leftMargin: 8
-                    text: acquisitionDelegate.running ? "Acquiring..." : acquisitionDelegate.hasResult ? "Acquired." : "Idle"
-                    color: "grey"
-                }
-
-                GridLayout {
-                    Layout.leftMargin: 8
-                    columns: 4
-                    visible: acquisitionDelegate.hasResult
-
-                    Label { text: "RA:"; color: "grey" }
-                    Label { text: acquisitionDelegate.formatFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "ra"), 5) }
-                    Label { text: "Dec:"; color: "grey" }
-                    Label { text: acquisitionDelegate.formatFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "dec"), 5) }
-                    Label { text: "Alt:"; color: "grey" }
-                    Label { text: acquisitionDelegate.formatFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "alt"), 3) }
-                    Label { text: "Az:"; color: "grey" }
-                    Label { text: acquisitionDelegate.formatFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "az"), 3) }
-                    Label { text: acquisitionDelegate.offsetLabelText; color: "grey" }
-                    Label {
-                        Layout.columnSpan: 3
-                        text: "(" + acquisitionDelegate.signedFixed(acquisitionDelegate.toArcsec(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "offset_lon")), 2)
-                            + ", " + acquisitionDelegate.signedFixed(acquisitionDelegate.toArcsec(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "offset_lat")), 2)
-                            + ") arcsec"
-                    }
-                }
-
                 RowLayout {
                     Layout.leftMargin: 8
 
@@ -285,6 +263,41 @@ ScrollView {
                         text: "Abort"
                         enabled: acquisitionDelegate.running
                         onClicked: root.xmppClient.executeMethod(acquisitionDelegate.jid, "abort", 0)
+                    }
+                }
+
+                Label {
+                    Layout.leftMargin: 8
+                    text: acquisitionDelegate.running ? "Acquiring..." : acquisitionDelegate.hasResult ? "Acquired." : "Idle"
+                    color: "grey"
+                }
+
+                GroupBox {
+                    title: "Result"
+                    Layout.leftMargin: 8
+                    visible: acquisitionDelegate.hasResult
+
+                    GridLayout {
+                        width: parent.width
+                        columns: 4
+                        columnSpacing: 12
+                        rowSpacing: 4
+
+                        Label { text: "RA:"; color: "grey" }
+                        Label { text: acquisitionDelegate.formatFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "ra"), 5) }
+                        Label { text: "Dec:"; color: "grey" }
+                        Label { text: acquisitionDelegate.formatFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "dec"), 5) }
+                        Label { text: "Alt:"; color: "grey" }
+                        Label { text: acquisitionDelegate.formatFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "alt"), 3) }
+                        Label { text: "Az:"; color: "grey" }
+                        Label { text: acquisitionDelegate.formatFixed(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "az"), 3) }
+                        Label { text: acquisitionDelegate.offsetLabelText; color: "grey" }
+                        Label {
+                            Layout.columnSpan: 3
+                            text: "(" + acquisitionDelegate.signedFixed(acquisitionDelegate.toArcsec(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "offset_lon")), 2)
+                                + ", " + acquisitionDelegate.signedFixed(acquisitionDelegate.toArcsec(acquisitionDelegate.fieldOf(acquisitionDelegate.resultValue, "offset_lat")), 2)
+                                + ") arcsec"
+                        }
                     }
                 }
 
