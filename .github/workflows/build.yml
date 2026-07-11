@@ -15,24 +15,35 @@ on:
 
 jobs:
   build:
-    # Windows/macOS added for build+test coverage only (DEVELOPMENT.md's
-    # "Windows/macOS are untested, not unsupported" note on QtKeychain -
-    # none of SavedAccountsModel's code is Linux-specific, it's just never
-    # been run there). Deliberately NOT wired into the release/packaging
-    # story below - that stays Linux-only until someone actually designs
-    # cross-platform release artifacts (the "never bundle Qt" policy that
-    # works fine on Linux via apt doesn't translate cleanly to a platform
-    # with no equivalent system Qt).
+    # Windows/macOS build+test AND now produce their own release artifacts
+    # too (windeployqt/macdeployqt, self-contained - see the packaging
+    # steps below) - originally added for coverage only (DEVELOPMENT.md's
+    # "Windows/macOS are untested, not unsupported" note on QtKeychain),
+    # extended once that proved out.
     #
-    # UNVERIFIED against a real Windows/macOS GitHub-hosted runner as of
-    # introduction - unlike the rest of this project's "verified live"
-    # bar, there was no way to test this locally. Expect the Qt `arch`
-    # string and module defaults below to need a follow-up fix once a real
-    # run's log is available.
+    # Getting both working needed several rounds of genuinely
+    # platform-specific fixes verified against real runs, not guessed:
+    # wrong Qt `arch` for aqtinstall, macOS's Xcode SDK dropping the AGL
+    # framework, three separate libnova/MSVC CMake quirks, Windows DLL
+    # discoverability causing tests to hang rather than fail, and
+    # windeployqt hard-coding the Qt install prefix for dependency
+    # resolution. See this file's own git history for the full trail.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-26.04, windows-latest, macos-latest]
+        # macos-14, not macos-latest: GitHub is mid-migration of that
+        # floating label to macOS 26 (started ~2026-06-15), so consecutive
+        # "macos-latest" runs can land on genuinely different underlying
+        # Xcode/toolchain versions - already caused one real build break
+        # (Xcode 26's SDK dropped the AGL framework Qt 6.8.1 still linked)
+        # and, more subtly, silently invalidates ccache's cross-run hit
+        # rate (ccache hashes in the compiler's own version/timestamp, so
+        # a different Xcode = a near-total cache miss even though no
+        # source changed - observed directly: 99.30% hits one run, 10.53%
+        # the very next, nothing but this workflow file's own comments
+        # differing between them). Pinning trades "latest" freshness for
+        # actually-reproducible builds and a cache that reliably pays off.
+        os: [ubuntu-26.04, windows-latest, macos-14]
     # contents: write is only actually exercised on a tag push (the release
     # step below is gated on that) - harmless for ordinary branch/PR runs,
     # which never reach that step.
@@ -48,8 +59,10 @@ jobs:
     # stops being offered as a hosted runner, fall back to pinning a modern
     # Qt6 explicitly (e.g. via jurplel/install-qt-action, already used
     # below for Windows/macOS) rather than silently drifting back onto
-    # ubuntu-latest's much older apt Qt. windows-latest/macos-latest are
-    # left floating (no equivalent apt-version-lag risk on those images).
+    # ubuntu-latest's much older apt Qt. windows-latest is left floating
+    # (no equivalent apt-version-lag risk on that image, and no observed
+    # cross-run non-determinism the way macos-latest had) - macos-14 is
+    # pinned instead, see the matrix comment above.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -396,7 +409,7 @@ jobs:
           open Polaris.app   # or right-click -> Open on first launch
           ```
 
-          Built directly by this repository's CI from this tag (ubuntu-26.04/Qt 6.10.2, windows-latest/Qt 6.10.2, macos-latest/Qt 6.10.2).
+          Built directly by this repository's CI from this tag (ubuntu-26.04/Qt 6.10.2, windows-latest/Qt 6.10.2, macos-14/Qt 6.10.2).
           EOF
           )"; then
             echo "Created release and uploaded $ASSET"
