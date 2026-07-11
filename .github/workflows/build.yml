@@ -73,16 +73,24 @@ jobs:
 
       # Neither Windows nor macOS has an OS-provided Qt6 the way Ubuntu's
       # apt does - install-qt-action fetches a prebuilt desktop Qt from
-      # Qt's own aqt archives instead. Version picked close to the Linux
-      # leg's apt-provided 6.10.2 (subject to what aqt actually mirrors);
-      # `arch` is required for Windows specifically (Linux/macOS desktop
-      # default to gcc_64/clang_64 automatically).
+      # Qt's own aqt archives instead. Pinned to 6.10.2 to exactly match
+      # the Linux leg's apt-provided version (confirmed available for both
+      # OSes via a real `aqt list-qt {windows,mac} desktop --arch 6.10.2`
+      # query) - not just for consistency: an earlier attempt at 6.8.1
+      # failed macOS's link step with "framework 'AGL' not found"
+      # (QTBUG-137687 - Apple removed the AGL framework from the SDK
+      # macos-latest's Xcode ships, and only later 6.9.x/6.10.x Qt
+      # releases stopped requiring it). `arch` is required for Windows
+      # specifically (Linux/macOS desktop default to gcc_64/clang_64
+      # automatically); win64_msvc2019_64 (this step's very first guess)
+      # doesn't exist as of 6.8+, which dropped MSVC2019 prebuilts -
+      # win64_msvc2022_64 is what's actually published.
       - name: Install Qt6 (Windows/macOS)
         if: runner.os != 'Linux'
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.1'
-          arch: ${{ runner.os == 'Windows' && 'win64_msvc2019_64' || '' }}
+          version: '6.10.2'
+          arch: ${{ runner.os == 'Windows' && 'win64_msvc2022_64' || '' }}
 
       # Forces Ninja (a single-config generator) instead of each OS's
       # default - critically, Visual Studio's generator on Windows, which
