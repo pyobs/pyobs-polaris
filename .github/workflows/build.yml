@@ -279,22 +279,32 @@ jobs:
       # vendored qt6keychain.dll/QXmppQt6.dll/libnova.dll into one directory
       # - windeployqt only needs to add Qt's own pieces to that same folder,
       # it doesn't need to (and can't) deploy those vendored DLLs itself.
-      # --ignore-library-errors: windeployqt doesn't inspect this project's
-      # build tree - it resolves an executable's dependencies assuming
-      # everything lives under the Qt install prefix, and errors out
-      # trying (and failing) to find qt6keychain.dll there specifically,
-      # since its name looks Qt-associated even though it's our own
-      # vendored copy (confirmed as a known windeployqt limitation with
-      # third-party DLLs, not specific to this project - see e.g.
-      # QTBUG-39177). Harmless to ignore: that DLL is already correctly
-      # placed, windeployqt just can't find it in the one place it looks.
+      #
+      # windeployqt hard-codes the assumption that every one of an
+      # executable's dependencies lives under the Qt install prefix -
+      # walking polaris.exe's import table, it tries (and fails) to find
+      # qt6keychain.dll specifically under $QT_ROOT_DIR\bin, since the
+      # name looks Qt-associated even though it's our own vendored copy,
+      # and aborts immediately rather than continuing to deploy Qt's own
+      # pieces (confirmed - --ignore-library-errors does NOT make this
+      # non-fatal despite its name; a first attempt at this step still hit
+      # the exact same abort with that flag set). The actual fix
+      # (confirmed as the standard workaround for this class of
+      # windeployqt limitation, e.g. QTBUG-39177): copy the vendored DLLs
+      # into $QT_ROOT_DIR\bin first, satisfying windeployqt's own lookup
+      # path. Self-contained - this doesn't touch the actual release
+      # artifact (Compress-Archive still only packages build\Release\bin\,
+      # where CMAKE_RUNTIME_OUTPUT_DIRECTORY already placed the real
+      # copies polaris.exe actually loads at runtime), it only exists to
+      # satisfy windeployqt's dependency walk.
       # Unlike Linux, the whole point here is a self-contained artifact - a
       # typical Windows user has no "install Qt6" equivalent to apt.
       - name: Package release artifact (Windows)
         if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
         shell: pwsh
         run: |
-          windeployqt --qmldir qml --ignore-library-errors build\Release\bin\polaris.exe
+          Copy-Item build\Release\bin\qt6keychain.dll,build\Release\bin\QXmppQt6.dll,build\Release\bin\libnova.dll -Destination "$env:QT_ROOT_DIR\bin\"
+          windeployqt --qmldir qml build\Release\bin\polaris.exe
           Compress-Archive -Path build\Release\bin\* -DestinationPath polaris-windows-x86_64.zip
 
       # macdeployqt only knows how to deploy into a real .app bundle
