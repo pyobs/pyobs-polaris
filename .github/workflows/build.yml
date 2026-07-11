@@ -6,12 +6,30 @@ on:
 
 jobs:
   build:
+    # Windows/macOS added for build+test coverage only (DEVELOPMENT.md's
+    # "Windows/macOS are untested, not unsupported" note on QtKeychain -
+    # none of SavedAccountsModel's code is Linux-specific, it's just never
+    # been run there). Deliberately NOT wired into the release/packaging
+    # story below - that stays Linux-only until someone actually designs
+    # cross-platform release artifacts (the "never bundle Qt" policy that
+    # works fine on Linux via apt doesn't translate cleanly to a platform
+    # with no equivalent system Qt).
+    #
+    # UNVERIFIED against a real Windows/macOS GitHub-hosted runner as of
+    # introduction - unlike the rest of this project's "verified live"
+    # bar, there was no way to test this locally. Expect the Qt `arch`
+    # string and module defaults below to need a follow-up fix once a real
+    # run's log is available.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, windows-latest, macos-latest]
     # contents: write is only actually exercised on a tag push (the release
     # step below is gated on that) - harmless for ordinary branch/PR runs,
     # which never reach that step.
     permissions:
       contents: write
-    # Matches the dev machine's OS exactly (also Ubuntu 26.04) rather than
+    # ubuntu-26.04 matches the dev machine's OS exactly, rather than
     # GitHub's "ubuntu-latest" label, which lags real Ubuntu releases by
     # years (currently Ubuntu 24.04 / Qt 6.4.2 - over two years behind what
     # this project requires: qt_standard_project_setup(REQUIRES 6.5) in
@@ -19,13 +37,24 @@ jobs:
     # already caused two build breaks (QDomDocument::ParseOption needs 6.8,
     # QQmlApplicationEngine::loadFromModule needs 6.5). If ubuntu-26.04 ever
     # stops being offered as a hosted runner, fall back to pinning a modern
-    # Qt6 explicitly (e.g. via jurplel/install-qt-action) rather than
-    # silently drifting back onto ubuntu-latest's much older apt Qt.
-    runs-on: ubuntu-26.04
+    # Qt6 explicitly (e.g. via jurplel/install-qt-action, already used
+    # below for Windows/macOS) rather than silently drifting back onto
+    # ubuntu-latest's much older apt Qt. windows-latest/macos-latest are
+    # left floating (no equivalent apt-version-lag risk on those images).
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Qt6 dev packages
+      # Ninja+MSVC needs the MSVC dev environment (cl.exe, INCLUDE/LIB env
+      # vars) active in the shell *before* CMake configures - unlike the
+      # Visual Studio generator, Ninja doesn't locate MSVC itself. Must run
+      # before every later step on Windows, hence right after checkout.
+      - name: Set up MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt6 dev packages (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -35,9 +64,38 @@ jobs:
       # libsecret-1-dev + pkg-config: required by QtKeychain (vendored via
       # FetchContent below) to build its Linux Secret Service backend -
       # see its own CMakeLists.txt's pkg_check_modules(LIBSECRET REQUIRED
-      # libsecret-1).
-      - name: Install QtKeychain build dependencies
+      # libsecret-1). QtKeychain's Windows (Credential Manager) and macOS
+      # (Keychain) backends link platform frameworks its own CMakeLists.txt
+      # already handles - no equivalent extra step needed on those OSes.
+      - name: Install QtKeychain build dependencies (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get install -y libsecret-1-dev pkg-config
+
+      # Neither Windows nor macOS has an OS-provided Qt6 the way Ubuntu's
+      # apt does - install-qt-action fetches a prebuilt desktop Qt from
+      # Qt's own aqt archives instead. Version picked close to the Linux
+      # leg's apt-provided 6.10.2 (subject to what aqt actually mirrors);
+      # `arch` is required for Windows specifically (Linux/macOS desktop
+      # default to gcc_64/clang_64 automatically).
+      - name: Install Qt6 (Windows/macOS)
+        if: runner.os != 'Linux'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          arch: ${{ runner.os == 'Windows' && 'win64_msvc2019_64' || '' }}
+
+      # Forces Ninja (a single-config generator) instead of each OS's
+      # default - critically, Visual Studio's generator on Windows, which
+      # would make Conan's CMakeToolchain emit a differently-named preset
+      # ("conan-default" instead of "conan-release"), breaking the
+      # `--preset conan-release` commands shared by every OS below. Not
+      # preinstalled on any of these runner images (GitHub dropped the
+      # incidental Windows inclusion a while back, and it was never on
+      # Ubuntu/macOS images) - installed via pip since that's the one
+      # install method that doesn't need a third OS-specific step.
+      - name: Install Ninja (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: pip install ninja
 
       - name: Install Conan
         run: pipx install conan
@@ -72,7 +130,9 @@ jobs:
           key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
 
       - name: Conan install
-        run: conan install . --build=missing
+        run: >
+          conan install . --build=missing
+          ${{ runner.os != 'Linux' && '-c tools.cmake.cmaketoolchain:generator=Ninja' || '' }}
 
       - name: Configure
         run: >
@@ -108,7 +168,7 @@ jobs:
       # of both .so's placed alongside the binary (as this tarball does) is
       # found instead, wherever it's eventually extracted.
       - name: Package release artifact
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Linux'
         run: |
           sudo apt-get install -y patchelf
           mkdir -p dist
@@ -125,10 +185,9 @@ jobs:
       # running this binary still requires Qt 6.5+ installed on the
       # target machine. Documented in the release notes below rather than
       # solved here - full self-contained deployment (linuxdeployqt-style)
-      # is a bigger undertaking than this step, and Phase 8's WebAssembly
-      # build is a more likely real answer to "run this anywhere" anyway.
+      # is a bigger undertaking than this step.
       - name: Create GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Linux'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
