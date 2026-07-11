@@ -1,7 +1,16 @@
 name: build
 
+# push is scoped to develop + tags, not main: main only ever advances via
+# fast-forward from an already-CI-tested develop commit in this project's
+# workflow, so a plain `push:` (every branch) built the identical tree
+# three times on every release - develop's own push, main's fast-forward,
+# then the release tag. If main ever received a commit that didn't go
+# through develop first, it would get no CI coverage until a tag was cut
+# off it - accepted tradeoff given the current always-via-develop practice.
 on:
   push:
+    branches: [develop]
+    tags: ['v*']
   pull_request:
 
 jobs:
