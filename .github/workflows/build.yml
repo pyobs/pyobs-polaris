@@ -64,6 +64,18 @@ jobs:
     # cross-run non-determinism the way macos-latest had) - macos-14 is
     # pinned instead, see the matrix comment above.
     runs-on: ${{ matrix.os }}
+    # ccache's direct mode (fast: hashes source+headers without invoking
+    # the preprocessor) is well-documented as unreliable with Apple
+    # clang specifically - observed directly on macOS-14: Direct 0/27
+    # (0%), every hit falling back to the slow Preprocessed mode, vs.
+    # gcc on Linux getting Direct 115/115 (100%). pch_defines,time_macros
+    # is ccache's own documented sloppiness setting for exactly this
+    # clang/direct-mode gap. Set job-wide (not just on the Build step) so
+    # it also covers CMake's own try_compile() feature-detection checks
+    # during Configure, which are ccache-wrapped too once
+    # CMAKE_CXX_COMPILER_LAUNCHER is set.
+    env:
+      CCACHE_SLOPPINESS: pch_defines,time_macros
     steps:
       - uses: actions/checkout@v4
 
