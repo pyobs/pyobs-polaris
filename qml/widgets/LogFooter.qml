@@ -54,6 +54,27 @@ ColumnLayout {
         return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds())
     }
 
+    // See LogsView.qml's identical comment for both of these - same
+    // per-entry right-click "Copy" feature, deliberately duplicated here
+    // rather than shared (this file's own header comment already
+    // explains why: this footer and that page are expected to diverge,
+    // not share one component).
+    function entryAsText(entry) {
+        return root.formatTime(entry.timestamp) + " " + (entry.data.level ?? "").toUpperCase()
+            + " " + entry.module + ": " + (entry.data.message ?? "")
+    }
+
+    TextEdit {
+        id: clipboardHelper
+        visible: false
+    }
+
+    function copyEntryToClipboard(entry) {
+        clipboardHelper.text = root.entryAsText(entry)
+        clipboardHelper.selectAll()
+        clipboardHelper.copy()
+    }
+
     ListView {
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -64,30 +85,54 @@ ColumnLayout {
         model: root.logEvents
         onCountChanged: positionViewAtEnd()
 
-        delegate: RowLayout {
-            width: ListView.view.width
-
+        // See LogsView.qml's identical comment for why this is a plain
+        // Item (not a bare RowLayout) - the right-click "Copy" MouseArea
+        // needs a sibling, not a layout cell of its own.
+        delegate: Item {
+            id: logRow
             required property var modelData
+            width: ListView.view.width
+            height: rowLayout.implicitHeight
 
-            Label {
-                text: root.formatTime(modelData.timestamp)
-                color: "grey"
-                Layout.preferredWidth: 90
+            RowLayout {
+                id: rowLayout
+                anchors.left: parent.left
+                anchors.right: parent.right
+
+                Label {
+                    text: root.formatTime(logRow.modelData.timestamp)
+                    color: "grey"
+                    Layout.preferredWidth: 90
+                }
+                Label {
+                    text: (logRow.modelData.data.level ?? "").toUpperCase()
+                    color: root.levelColor(logRow.modelData.data.level)
+                    Layout.preferredWidth: 70
+                }
+                Label {
+                    text: logRow.modelData.module
+                    color: "grey"
+                    Layout.preferredWidth: 90
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: logRow.modelData.data.message ?? ""
+                }
             }
-            Label {
-                text: (modelData.data.level ?? "").toUpperCase()
-                color: root.levelColor(modelData.data.level)
-                Layout.preferredWidth: 70
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                onClicked: contextMenu.popup()
             }
-            Label {
-                text: modelData.module
-                color: "grey"
-                Layout.preferredWidth: 90
-            }
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                text: modelData.data.message ?? ""
+
+            Menu {
+                id: contextMenu
+                MenuItem {
+                    text: "Copy"
+                    onTriggered: root.copyEntryToClipboard(logRow.modelData)
+                }
             }
         }
     }

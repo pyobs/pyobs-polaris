@@ -102,6 +102,34 @@ ColumnLayout {
         return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds())
     }
 
+    // Plain-text reproduction of one row, for the per-entry "Copy" button
+    // below - same field order/formatting the row itself already
+    // displays, just space-joined instead of column-aligned.
+    function entryAsText(entry) {
+        return root.formatTime(entry.timestamp) + " " + (entry.data.level ?? "").toUpperCase()
+            + " " + entry.module + ": " + (entry.data.message ?? "")
+    }
+
+    // Hidden TextEdit is the standard QtQuick idiom for writing to the
+    // system clipboard without pulling in Qt.labs.platform's Clipboard
+    // singleton (a separate QML module this project doesn't otherwise
+    // depend on, and isn't in CLAUDE.md's documented system-Qt6-package
+    // prerequisites) - TextEdit.copy() already wraps QGuiApplication's
+    // own clipboard, no extra import needed. invisible children are
+    // already excluded from Layout arrangement (same behavior this
+    // project's own SidebarColumn.qml collapse toggle already relies on),
+    // so this doesn't need explicit zero-size Layout properties.
+    TextEdit {
+        id: clipboardHelper
+        visible: false
+    }
+
+    function copyEntryToClipboard(entry) {
+        clipboardHelper.text = root.entryAsText(entry)
+        clipboardHelper.selectAll()
+        clipboardHelper.copy()
+    }
+
     RowLayout {
         Layout.fillWidth: true
 
@@ -152,30 +180,58 @@ ColumnLayout {
         model: root.filteredEvents
         onCountChanged: positionViewAtEnd()
 
-        delegate: RowLayout {
-            width: ListView.view.width
-
+        // Item, not a bare RowLayout, as the delegate root - a right-click
+        // "Copy" context menu needs a MouseArea sibling of the RowLayout
+        // (not squeezed inside it as a layout cell, which would distort
+        // the row), and MouseArea/Menu both need a plain Item to anchor
+        // against. acceptedButtons: Qt.RightButton only, so this never
+        // intercepts anything else the row itself might want (nothing
+        // does today, but this doesn't foreclose it later).
+        delegate: Item {
+            id: logRow
             required property var modelData
+            width: ListView.view.width
+            height: rowLayout.implicitHeight
 
-            Label {
-                text: root.formatTime(modelData.timestamp)
-                color: "grey"
-                Layout.preferredWidth: 90
+            RowLayout {
+                id: rowLayout
+                anchors.left: parent.left
+                anchors.right: parent.right
+
+                Label {
+                    text: root.formatTime(logRow.modelData.timestamp)
+                    color: "grey"
+                    Layout.preferredWidth: 90
+                }
+                Label {
+                    text: (logRow.modelData.data.level ?? "").toUpperCase()
+                    color: root.levelColor(logRow.modelData.data.level)
+                    Layout.preferredWidth: 70
+                }
+                Label {
+                    text: logRow.modelData.module
+                    color: "grey"
+                    Layout.preferredWidth: 90
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: logRow.modelData.data.message ?? ""
+                }
             }
-            Label {
-                text: (modelData.data.level ?? "").toUpperCase()
-                color: root.levelColor(modelData.data.level)
-                Layout.preferredWidth: 70
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                onClicked: contextMenu.popup()
             }
-            Label {
-                text: modelData.module
-                color: "grey"
-                Layout.preferredWidth: 90
-            }
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                text: modelData.data.message ?? ""
+
+            Menu {
+                id: contextMenu
+                MenuItem {
+                    text: "Copy"
+                    onTriggered: root.copyEntryToClipboard(logRow.modelData)
+                }
             }
         }
     }
