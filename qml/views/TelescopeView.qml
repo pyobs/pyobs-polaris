@@ -450,24 +450,41 @@ ScrollView {
                                 font.bold: true
                             }
 
+                            // Color-coded, matching telescopewidget.py's own
+                            // colorize_button() calls (green Init/yellow
+                            // Park/red Stop/blue Move, all black-on-color
+                            // there via Qt::GlobalColor - this project's own
+                            // dark theme already established a muted-shade-
+                            // plus-white-text convention instead for the same
+                            // semantic colors, see CameraView.qml's green
+                            // Expose/red Abort; yellow is the one exception
+                            // kept black-on-color here, same as pyobs-gui,
+                            // since white text on a light amber background
+                            // reads poorly).
                             RowLayout {
                                 Layout.fillWidth: true
                                 Button {
                                     Layout.fillWidth: true
                                     text: "Init"
                                     enabled: telescopeDelegate.running === ""
+                                    palette.button: "#2e7d32"
+                                    palette.buttonText: "white"
                                     onClicked: telescopeDelegate.run("init", 0)
                                 }
                                 Button {
                                     Layout.fillWidth: true
                                     text: "Park"
                                     enabled: telescopeDelegate.running === ""
+                                    palette.button: "#f9a825"
+                                    palette.buttonText: "black"
                                     onClicked: telescopeDelegate.run("park", 0)
                                 }
                                 Button {
                                     Layout.fillWidth: true
                                     text: "Stop"
                                     enabled: telescopeDelegate.running === ""
+                                    palette.button: "#c62828"
+                                    palette.buttonText: "white"
                                     onClicked: telescopeDelegate.run("stop_motion", 1)
                                 }
                             }
@@ -596,6 +613,8 @@ ScrollView {
                                 }
                                 Button {
                                     text: telescopeDelegate.simbadQuerying ? "Querying…" : "Simbad"
+                                    palette.button: "#2e7d32"
+                                    palette.buttonText: "white"
                                     enabled: !telescopeDelegate.simbadQuerying && simbadNameField.text.length > 0
                                     onClicked: {
                                         const requestId = telescopeDelegate.jid + "|simbad|" + Date.now()
@@ -640,6 +659,8 @@ ScrollView {
                                 }
                                 Button {
                                     text: telescopeDelegate.jplHorizonsQuerying ? "Querying…" : "JPL Horizons"
+                                    palette.button: "#2e7d32"
+                                    palette.buttonText: "white"
                                     enabled: !telescopeDelegate.jplHorizonsQuerying && jplHorizonsNameField.text.length > 0
                                     onClicked: {
                                         const requestId = telescopeDelegate.jid + "|jplhorizons|" + Date.now()
@@ -771,6 +792,8 @@ ScrollView {
                             Button {
                                 Layout.fillWidth: true
                                 text: "Move"
+                                palette.button: "#1565c0"
+                                palette.buttonText: "white"
                                 enabled: telescopeDelegate.motionReady && (
                                     (moveTypeCombo.currentText === "RA/Dec"
                                         && !isNaN(Sexagesimal.parseRa(raField.text))
@@ -844,6 +867,8 @@ ScrollView {
                                         Layout.fillWidth: true
                                         text: "Set"
                                         enabled: telescopeDelegate.motionReady
+                                        palette.button: "#2e7d32"
+                                        palette.buttonText: "white"
                                         onClicked: telescopeDelegate.runWithParams(
                                             "set_offsets_radec", [raOffsetSpin.value / 3600, decOffsetSpin.value / 3600])
                                     }
@@ -851,6 +876,8 @@ ScrollView {
                                         Layout.fillWidth: true
                                         text: "Reset"
                                         enabled: telescopeDelegate.motionReady
+                                        palette.button: "#f9a825"
+                                        palette.buttonText: "black"
                                         onClicked: {
                                             raOffsetSpin.value = 0
                                             decOffsetSpin.value = 0
@@ -894,6 +921,8 @@ ScrollView {
                                         Layout.fillWidth: true
                                         text: "Set"
                                         enabled: telescopeDelegate.motionReady
+                                        palette.button: "#2e7d32"
+                                        palette.buttonText: "white"
                                         onClicked: telescopeDelegate.runWithParams(
                                             "set_offsets_altaz", [altOffsetSpin.value / 3600, azOffsetSpin.value / 3600])
                                     }
@@ -901,6 +930,8 @@ ScrollView {
                                         Layout.fillWidth: true
                                         text: "Reset"
                                         enabled: telescopeDelegate.motionReady
+                                        palette.button: "#f9a825"
+                                        palette.buttonText: "black"
                                         onClicked: {
                                             altOffsetSpin.value = 0
                                             azOffsetSpin.value = 0

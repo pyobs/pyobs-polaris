@@ -122,6 +122,12 @@ GroupBox {
         Button {
             Layout.fillWidth: true
             text: "Set filter"
+            // Matches filterwidget.py's own colorize_button(buttonSetFilter,
+            // green) - see TelescopeView.qml's Init/Park/Stop comment for
+            // the color convention this project uses instead of pyobs-gui's
+            // own raw Qt::GlobalColor + black text.
+            palette.button: "#2e7d32"
+            palette.buttonText: "white"
             enabled: !root.running && root.motionReady && filterCombo.currentText.length > 0
             onClicked: {
                 root.running = true

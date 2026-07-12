@@ -163,6 +163,13 @@ GroupBox {
         Button {
             Layout.fillWidth: true
             text: "Set focus"
+            // Matches focuswidget.py's own colorize_button() calls (green
+            // Set focus/Set offset, yellow Reset offset) - see
+            // TelescopeView.qml's Init/Park/Stop comment for the color
+            // convention this project uses instead of pyobs-gui's own raw
+            // Qt::GlobalColor + black text.
+            palette.button: "#2e7d32"
+            palette.buttonText: "white"
             enabled: !root.running && root.motionReady
             onClicked: root.run("set_focus", [focusSpin.value / 1000])
         }
@@ -187,12 +194,16 @@ GroupBox {
             Button {
                 Layout.fillWidth: true
                 text: "Set offset"
+                palette.button: "#2e7d32"
+                palette.buttonText: "white"
                 enabled: !root.running && root.motionReady
                 onClicked: root.run("set_focus_offset", [offsetSpin.value / 1000])
             }
             Button {
                 Layout.fillWidth: true
                 text: "Reset offset"
+                palette.button: "#f9a825"
+                palette.buttonText: "black"
                 enabled: !root.running && root.motionReady
                 onClicked: {
                     offsetSpin.value = 0
