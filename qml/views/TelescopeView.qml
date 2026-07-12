@@ -755,7 +755,28 @@ ScrollView {
                             model: SidebarPanelRegistry.entries
 
                             delegate: Loader {
+                                id: panelLoader
                                 Layout.fillWidth: true
+                                // See CameraView.qml's own copy of this
+                                // Repeater for why both of these are needed -
+                                // a GroupBox's own implicit-width self-binding
+                                // defeats Loader's usual auto-resize-to-me
+                                // behavior, and a hidden GroupBox still has a
+                                // real implicitHeight this Loader (a distinct,
+                                // still-*visible* Item) would otherwise keep
+                                // reserving space for. This page is in fact
+                                // where the second bug was actually spotted
+                                // live - CoolingPanel is always hidden here
+                                // (DummyTelescope has no ICooling) but sits
+                                // first in registry order, so it showed up as
+                                // a stray top margin above Temperatures.
+                                // Computed directly via findInterface(), not
+                                // by reading `panelLoader.item.visible` back
+                                // through the Loader - see CameraView.qml's
+                                // own comment on why that indirection didn't
+                                // reliably re-evaluate live.
+                                visible: telescopeDelegate.findInterface(modelData.interface) !== null
+
                                 sourceComponent: modelData.component
 
                                 onLoaded: {
@@ -764,6 +785,7 @@ ScrollView {
                                     item.moduleName = telescopeDelegate.name
                                     item.statefulInterfaces = Qt.binding(() => telescopeDelegate.statefulInterfaces)
                                     item.availableFilters = Qt.binding(() => telescopeDelegate.filters)
+                                    item.width = Qt.binding(() => panelLoader.width)
                                 }
                             }
                         }

@@ -130,17 +130,42 @@ GroupBox {
             }
         }
 
+        // Current-value label and the SpinBox/unit editor split across two
+        // rows (matching FocuserPanel.qml/FiltersPanel.qml's own
+        // Label-row-then-SpinBox-row convention) rather than crammed onto
+        // one - a real, live-caught bug: Label{"Setpoint:"} + Label{value}
+        // + SpinBox + Label{"°C"} all on a single RowLayout has an
+        // unshrinkable natural width (~253px) wider than this sidebar
+        // column's ~202px content width, and Qt Quick Layouts' constraint
+        // solver responds to one row's minimum width exceeding the
+        // ColumnLayout's own explicit `width: parent.width` by widening
+        // the *whole* column - including every other `Layout.fillWidth`
+        // sibling below, e.g. the "Apply" Button - to that row's wider
+        // minimum, not just that one row. That's what made this panel
+        // silently render ~50px wider than TemperaturesPanel.qml despite
+        // both panels' own GroupBox reporting an identical 220px width
+        // (direct report: "the two panels don't share the same right
+        // edge" - Cooling was actually the wrong/overflowing one, not
+        // Temperatures, even though visually Cooling looked "correct"
+        // simply because nothing sits to its right to reveal the
+        // overflow). Confirmed via temporary onWidthChanged console.log
+        // tracing on both panels' ColumnLayout/Button, not guessed.
         RowLayout {
             Layout.fillWidth: true
             Label { text: "Setpoint:" }
+            Item { Layout.fillWidth: true }
             Label {
                 text: root.currentEnabled && root.currentSetpoint !== undefined && root.currentSetpoint !== null
                     ? root.currentSetpoint.toFixed(1) + "°C" : "-"
                 color: "grey"
             }
-            Item { Layout.fillWidth: true }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
             SpinBox {
                 id: setpointSpin
+                Layout.fillWidth: true
                 from: -1000
                 to: 500
                 editable: true

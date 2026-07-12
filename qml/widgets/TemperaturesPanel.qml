@@ -168,81 +168,97 @@ GroupBox {
         return result
     }
 
-    // Declared before the "Plot temps" Button below that references its
-    // id - a real bug hit while building this the first time: this
-    // project's AOT-compiled (qmlcachegen) setup didn't resolve a forward
-    // id reference from a signal handler across a Window boundary the
-    // way plain interpreted QML would (see DEVELOPMENT.md).
-    ApplicationWindow {
-        id: plotWindow
-        width: 640
-        height: 420
-        title: "Temperatures — " + root.moduleName
-        visible: false
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 8
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
-
-                Flow {
-                    Layout.fillWidth: true
-                    spacing: 12
-
-                    Repeater {
-                        // Every sensor seen so far, not just the ones
-                        // currently selected - a deselected sensor's
-                        // checkbox must stay put (just unchecked), not
-                        // disappear.
-                        model: Object.keys(root.history).sort()
-
-                        delegate: CheckBox {
-                            text: modelData
-                            checked: root.isSeriesSelected(modelData)
-                            onToggled: root.setSeriesSelected(modelData, checked)
-                        }
-                    }
-                }
-
-                Label { text: "Show:" }
-                ComboBox {
-                    id: plotWindowRangeCombo
-                    model: ["Last 5 minutes", "Last hour", "All"]
-                    currentIndex: 2
-
-                    onActivated: {
-                        switch (currentIndex) {
-                        case 0:
-                            root.plotWindowSeconds = 5 * 60
-                            break
-                        case 1:
-                            root.plotWindowSeconds = 60 * 60
-                            break
-                        default:
-                            root.plotWindowSeconds = -1
-                            break
-                        }
-                    }
-                }
-            }
-
-            PlotItem {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                xLabel: "Time"
-                yLabel: "Temperature (°C)"
-                xTicksAsTime: true
-                series: root.plotSeries()
-            }
-        }
-    }
-
+    // `plotWindow` is nested *inside* this ColumnLayout (rather than a
+    // second, sibling child of the GroupBox) purely for id-scoping - see
+    // its own comment below. This was originally suspected as the cause
+    // of a real, live-caught bug (direct report: "the two panels don't
+    // share the same right edge"; visible as the "Plot temps" button
+    // rendering ~50px narrower than Cooling's "Apply" button), on the
+    // theory that GroupBox's default Column-positioner contentItem sizes
+    // to its widest child unless given exactly one - that theory was
+    // wrong (a Window is never part of Qt Quick's Item/Layout
+    // arrangement regardless of where it's parented, so moving
+    // `plotWindow` in or out of this ColumnLayout provably changes
+    // nothing, confirmed by instrumenting both panels' actual widths with
+    // temporary onWidthChanged console.log tracing). The real cause was
+    // entirely inside CoolingPanel.qml, not here - see that file's own
+    // Setpoint-row comment.
     ColumnLayout {
         width: parent.width
         spacing: 6
+
+        // Declared before the "Plot temps" Button below that references
+        // its id - a real bug hit while building this the first time:
+        // this project's AOT-compiled (qmlcachegen) setup didn't resolve
+        // a forward id reference from a signal handler across a Window
+        // boundary the way plain interpreted QML would (see
+        // DEVELOPMENT.md).
+        ApplicationWindow {
+            id: plotWindow
+            width: 640
+            height: 420
+            title: "Temperatures — " + root.moduleName
+            visible: false
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        Repeater {
+                            // Every sensor seen so far, not just the ones
+                            // currently selected - a deselected sensor's
+                            // checkbox must stay put (just unchecked), not
+                            // disappear.
+                            model: Object.keys(root.history).sort()
+
+                            delegate: CheckBox {
+                                text: modelData
+                                checked: root.isSeriesSelected(modelData)
+                                onToggled: root.setSeriesSelected(modelData, checked)
+                            }
+                        }
+                    }
+
+                    Label { text: "Show:" }
+                    ComboBox {
+                        id: plotWindowRangeCombo
+                        model: ["Last 5 minutes", "Last hour", "All"]
+                        currentIndex: 2
+
+                        onActivated: {
+                            switch (currentIndex) {
+                            case 0:
+                                root.plotWindowSeconds = 5 * 60
+                                break
+                            case 1:
+                                root.plotWindowSeconds = 60 * 60
+                                break
+                            default:
+                                root.plotWindowSeconds = -1
+                                break
+                            }
+                        }
+                    }
+                }
+
+                PlotItem {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    xLabel: "Time"
+                    yLabel: "Temperature (°C)"
+                    xTicksAsTime: true
+                    series: root.plotSeries()
+                }
+            }
+        }
 
         Repeater {
             model: root.sortedReadings()
