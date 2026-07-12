@@ -5,19 +5,23 @@ import pyobs.polaris
 
 // Dedicated page for ITelescope modules, ported from pyobs-gui's
 // telescopewidget.py - MVP scope only (see TODO.md for what's
-// deliberately out of scope: solar-frame pointing, SIMBAD/Horizons/MPC/
+// deliberately out of scope: solar-frame pointing, JPL Horizons/MPC/
 // orbit-elements lookups, the jog/compass widget). Sexagesimal RA/Dec
-// input used to be on that list too - shipped as a direct follow-up
-// (Move's RA/Dec fields now accept "12:00:00"/"45:30:00" alongside plain
-// decimal degrees via the Sexagesimal QML singleton, src/util/
-// Sexagesimal.h - see that file's own comment for the parsing rule and
-// why a bare number still means degrees, not hours, unlike pyobs-gui's
-// own astropy-based parsing). ITelescope itself is a bare IMotion marker
-// (confirmed against pyobs.interfaces.ITelescope source), so the base
-// block below is identical to RoofView.qml's; Status/Move/Offsets stack
-// under it, each gated on the module actually implementing the relevant
-// capability interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/
-// IOffsetsAltAz) -
+// input and SIMBAD name resolution used to be on that list too - both
+// shipped as direct follow-ups: Move's RA/Dec fields now accept
+// "12:00:00"/"45:30:00" alongside plain decimal degrees via the
+// Sexagesimal QML singleton (src/util/Sexagesimal.h - see that file's
+// own comment for the parsing rule and why a bare number still means
+// degrees, not hours, unlike pyobs-gui's own astropy-based parsing), and
+// a "Simbad" button next to a name field resolves any SIMBAD-known
+// identifier ("M31", "Sirius", ...) straight into those same fields via
+// comm::SimbadClient (src/comm/SimbadClient.h - talks SIMBAD's own
+// TAP/ADQL service directly, no astroquery dependency needed). ITelescope
+// itself is a bare IMotion marker (confirmed against
+// pyobs.interfaces.ITelescope source), so the base block below is
+// identical to RoofView.qml's; Status/Move/Offsets stack under it, each
+// gated on the module actually implementing the relevant capability
+// interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/IOffsetsAltAz) -
 // see DEVELOPMENT.md for the live-verification caveat around
 // IOffsetsAltAz specifically.
 //
@@ -64,6 +68,7 @@ ScrollView {
 
     required property var xmppClient
     required property var appSettings
+    required property var simbadClient
 
     clip: true
 
@@ -229,6 +234,48 @@ ScrollView {
                             telescopeDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
                         }
                     })
+                }
+
+                // Simbad name resolution (see the Move GroupBox's own
+                // comment on this feature) - root.simbadClient is one
+                // shared instance (like root.vfsClient in CameraView.qml),
+                // so a query's own requestId (jid + a timestamp, unique
+                // enough here - never more than one query in flight per
+                // delegate at a time, guarded by simbadQuerying) is
+                // needed to tell this delegate's own signal apart from
+                // any other connected ITelescope module's simultaneous
+                // query, same correlation idiom CameraView.qml's own
+                // pendingRequestId already uses for vfsClient.
+                property string pendingSimbadRequestId: ""
+                property bool simbadQuerying: false
+                property string simbadStatusText: ""
+                property bool simbadStatusIsError: false
+
+                Connections {
+                    target: root.simbadClient
+                    function onQueryReady(requestId, ra, dec, mainId) {
+                        if (requestId !== telescopeDelegate.pendingSimbadRequestId
+                                || telescopeDelegate.pendingSimbadRequestId === "") {
+                            return
+                        }
+                        telescopeDelegate.pendingSimbadRequestId = ""
+                        telescopeDelegate.simbadQuerying = false
+                        telescopeDelegate.simbadStatusIsError = false
+                        telescopeDelegate.simbadStatusText = "→ " + mainId + ": RA " + ra.toFixed(6)
+                            + "°, Dec " + dec.toFixed(6) + "°"
+                        raField.text = ra.toFixed(6)
+                        decField.text = dec.toFixed(6)
+                    }
+                    function onQueryFailed(requestId, errorMessage) {
+                        if (requestId !== telescopeDelegate.pendingSimbadRequestId
+                                || telescopeDelegate.pendingSimbadRequestId === "") {
+                            return
+                        }
+                        telescopeDelegate.pendingSimbadRequestId = ""
+                        telescopeDelegate.simbadQuerying = false
+                        telescopeDelegate.simbadStatusIsError = true
+                        telescopeDelegate.simbadStatusText = errorMessage
+                    }
                 }
 
                 // "was synced" idiom, same as AutoGuidingView.qml's
@@ -486,6 +533,51 @@ ScrollView {
                                         return types
                                     }
                                 }
+                            }
+
+                            // SIMBAD name resolution - ports pyobs-gui's own
+                            // buttonSimbadQuery/textSimbadName (telescopewidget.py's
+                            // _query_simbad()), which fills the RA/Dec fields from
+                            // an object name via astroquery's Simbad.query_object().
+                            // This talks SIMBAD's own TAP/ADQL service directly
+                            // instead (comm::SimbadClient, src/comm/SimbadClient.h)
+                            // - no astroquery/VOTable dependency needed once a
+                            // plain CSV response is requested instead of the
+                            // service's own VOTable/XML default. Fills plain
+                            // decimal degrees (not pyobs-gui's own sexagesimal
+                            // "hmsdms" display) - simpler, and exactly as valid an
+                            // input to raField/decField below as sexagesimal
+                            // notation is, so no separate formatting code was
+                            // needed just for this.
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: moveTypeCombo.currentText === "RA/Dec"
+
+                                TextField {
+                                    id: simbadNameField
+                                    Layout.fillWidth: true
+                                    placeholderText: "Simbad object name (e.g. M31, Sirius)"
+                                    enabled: !telescopeDelegate.simbadQuerying
+                                }
+                                Button {
+                                    text: telescopeDelegate.simbadQuerying ? "Querying…" : "Simbad"
+                                    enabled: !telescopeDelegate.simbadQuerying && simbadNameField.text.length > 0
+                                    onClicked: {
+                                        const requestId = telescopeDelegate.jid + "|simbad|" + Date.now()
+                                        telescopeDelegate.pendingSimbadRequestId = requestId
+                                        telescopeDelegate.simbadQuerying = true
+                                        telescopeDelegate.simbadStatusText = ""
+                                        root.simbadClient.queryByName(requestId, simbadNameField.text)
+                                    }
+                                }
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                visible: moveTypeCombo.currentText === "RA/Dec" && telescopeDelegate.simbadStatusText.length > 0
+                                text: telescopeDelegate.simbadStatusText
+                                color: telescopeDelegate.simbadStatusIsError ? "red" : "grey"
+                                wrapMode: Text.WordWrap
                             }
 
                             GridLayout {

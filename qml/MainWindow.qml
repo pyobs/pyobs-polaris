@@ -73,6 +73,7 @@ ApplicationWindow {
     required property var appSettings
     required property var vfsEndpoints
     required property var vfsClient
+    required property var simbadClient
 
     // TODO.md's "Plugin mechanism for custom module widgets", step 1: a
     // registry mapping an interface (or a specific module) to a sidebar
@@ -125,7 +126,7 @@ ApplicationWindow {
         WeatherView { xmppClient: root.xmppClient }
     }
     property Component telescopeComponent: Component {
-        TelescopeView { xmppClient: root.xmppClient; appSettings: root.appSettings }
+        TelescopeView { xmppClient: root.xmppClient; appSettings: root.appSettings; simbadClient: root.simbadClient }
     }
     property Component cameraComponent: Component {
         CameraView {

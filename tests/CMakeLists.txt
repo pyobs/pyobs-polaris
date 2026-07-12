@@ -107,6 +107,16 @@ target_link_libraries(tst_vfsclient PRIVATE Qt6::Test Qt6::Network Qt6::Qml)
 
 add_test(NAME tst_vfsclient COMMAND tst_vfsclient)
 
+add_executable(tst_simbadclient
+    comm/tst_simbadclient.cpp
+    ${CMAKE_SOURCE_DIR}/src/comm/SimbadClient.h
+    ${CMAKE_SOURCE_DIR}/src/comm/SimbadClient.cpp
+)
+target_include_directories(tst_simbadclient PRIVATE ${CMAKE_SOURCE_DIR}/src/comm)
+target_link_libraries(tst_simbadclient PRIVATE Qt6::Test Qt6::Network Qt6::Qml)
+
+add_test(NAME tst_simbadclient COMMAND tst_simbadclient)
+
 add_executable(tst_modulelistmodel
     comm/tst_modulelistmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/comm/ModuleInfo.h

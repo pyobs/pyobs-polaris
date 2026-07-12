@@ -53,6 +53,8 @@ qt_add_executable(polaris
     src/config/VfsEndpointsModel.cpp
     src/comm/VfsClient.h
     src/comm/VfsClient.cpp
+    src/comm/SimbadClient.h
+    src/comm/SimbadClient.cpp
     src/comm/ModuleInfo.h
     src/comm/ModuleListModel.h
     src/comm/ModuleListModel.cpp

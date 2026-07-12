@@ -56,6 +56,10 @@ QtObject {
         id: vfsClient
     }
 
+    property var _simbadClient: SimbadClient {
+        id: simbadClient
+    }
+
     property var _loginWindow: LoginWindow {
         xmppClient: xmppClient
         appSettings: appSettings
@@ -68,6 +72,7 @@ QtObject {
         appSettings: appSettings
         vfsEndpoints: vfsEndpointsModel
         vfsClient: vfsClient
+        simbadClient: simbadClient
         visible: xmppClient.status === "connected"
     }
 }
