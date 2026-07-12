@@ -23,9 +23,6 @@ private slots:
     void pluginFilesIsEmptyWhenDirectoryUnset();
     void pluginFilesIsEmptyWhenDirectoryDoesNotExist();
     void pluginFilesListsOnlyQmlFilesSortedByName();
-    void observerLocationDefaultsToZeroAndUnset();
-    void observerLocationPersistsAndNotifies();
-    void hasObserverLocationRequiresBothLatAndLon();
     void sidebarWidthDefaultsAndPersists();
     void sidebarCollapsedDefaultsAndPersists();
 };
@@ -127,55 +124,6 @@ void TestAppSettings::pluginFilesListsOnlyQmlFilesSortedByName()
     QVERIFY(files.at(0).endsWith(QStringLiteral("Apple.qml")));
     QVERIFY(files.at(1).endsWith(QStringLiteral("Zebra.qml")));
     QVERIFY(files.at(0).startsWith(QStringLiteral("file://")));
-}
-
-void TestAppSettings::observerLocationDefaultsToZeroAndUnset()
-{
-    AppSettings settings;
-    QCOMPARE(settings.observerLatitude(), 0.0);
-    QCOMPARE(settings.observerLongitude(), 0.0);
-    QCOMPARE(settings.observerElevation(), 0.0);
-    QVERIFY(!settings.hasObserverLocation());
-}
-
-void TestAppSettings::observerLocationPersistsAndNotifies()
-{
-    AppSettings settings;
-    QSignalSpy latSpy(&settings, &AppSettings::observerLatitudeChanged);
-    QSignalSpy lonSpy(&settings, &AppSettings::observerLongitudeChanged);
-    QSignalSpy elevSpy(&settings, &AppSettings::observerElevationChanged);
-
-    settings.setObserverLatitude(52.52);
-    settings.setObserverLongitude(13.405);
-    settings.setObserverElevation(34.0);
-
-    QCOMPARE(settings.observerLatitude(), 52.52);
-    QCOMPARE(settings.observerLongitude(), 13.405);
-    QCOMPARE(settings.observerElevation(), 34.0);
-    QCOMPARE(latSpy.count(), 1);
-    QCOMPARE(lonSpy.count(), 1);
-    QCOMPARE(elevSpy.count(), 1);
-
-    AppSettings reloaded;
-    QCOMPARE(reloaded.observerLatitude(), 52.52);
-    QCOMPARE(reloaded.observerLongitude(), 13.405);
-    QCOMPARE(reloaded.observerElevation(), 34.0);
-
-    latSpy.clear();
-    settings.setObserverLatitude(52.52);
-    QCOMPARE(latSpy.count(), 0);
-}
-
-void TestAppSettings::hasObserverLocationRequiresBothLatAndLon()
-{
-    AppSettings settings;
-    QVERIFY(!settings.hasObserverLocation());
-
-    settings.setObserverLatitude(52.52);
-    QVERIFY(!settings.hasObserverLocation());
-
-    settings.setObserverLongitude(13.405);
-    QVERIFY(settings.hasObserverLocation());
 }
 
 void TestAppSettings::sidebarWidthDefaultsAndPersists()

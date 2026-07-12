@@ -61,12 +61,18 @@ import pyobs.polaris
 //
 // Move also includes a destination-coordinate preview (typed RA/Dec <->
 // Alt/Az, computed via the CoordinateTransform QML singleton - see
-// src/util/CoordinateTransform.h) and an inline Observer Location editor.
-// pyobs-core has no wire path for observer location at all (confirmed
-// against source - the legacy Python GUI only had it via in-process
-// Python object sharing, never serialized to XMPP), so this is a
-// client-side-only AppSettings value the user enters once, not fetched
-// from any module. Purely informational either way - never changes what
+// src/util/CoordinateTransform.h), fed by the connected module's own
+// reported observer location (IModule capabilities' ModuleLocation,
+// pyobs-core 2.0.0.dev18+ - see ModuleListModel.h's own
+// ModuleLocationRole comment). pyobs-core had no wire path for this at
+// all before dev18 (confirmed against source - the legacy Python GUI
+// only ever had it via in-process Python object sharing, never
+// serialized to XMPP), so this page originally carried its own
+// client-side-only AppSettings entry instead; that's gone now that a
+// real one exists - a connected ITelescope module is expected to always
+// report its location, and one that doesn't is treated as an error (see
+// telescopeDelegate's own hasModuleLocation comment), not silently
+// worked around. Purely informational either way - never changes what
 // move_radec()/move_altaz() actually send.
 ScrollView {
     id: root
@@ -104,6 +110,7 @@ ScrollView {
                 required property string name
                 required property var statefulInterfaces
                 required property var filters
+                required property var moduleLocation
 
                 function findInterface(interfaceName) {
                     const list = statefulInterfaces || []
@@ -132,6 +139,23 @@ ScrollView {
                 readonly property var altAzPointingInterface: findInterface("IPointingAltAz")
                 readonly property bool hasRaDecPointing: raDecPointingInterface !== null
                 readonly property bool hasAltAzPointing: altAzPointingInterface !== null
+
+                // Observer location - a real ITelescope module is always
+                // expected to report one (IModule capabilities'
+                // ModuleLocation, pyobs-core 2.0.0.dev18+, see
+                // ModuleListModel.h's own ModuleLocationRole comment); a
+                // connected telescope that doesn't is treated as a real
+                // error condition to surface, not silently worked around
+                // (direct instruction - this page used to fall back to a
+                // client-side-only AppSettings entry from before dev18
+                // existed, since pyobs-core had no wire path for this at
+                // all; that fallback is gone now that there's a real one).
+                // moduleLocation is always a QVariantMap (never null/
+                // undefined - ModuleListModel returns an empty one, never
+                // an absent role value), so checking for a known key's
+                // presence is enough to tell "module reported one" apart
+                // from "didn't".
+                readonly property bool hasModuleLocation: telescopeDelegate.moduleLocation.latitude !== undefined
 
                 visible: findInterface("ITelescope") !== null
 
@@ -509,60 +533,26 @@ ScrollView {
                             width: parent.width
                             spacing: 6
 
-                            // Client-side only - see the file header comment
-                            // for why this can't be fetched from the
-                            // module. Plain "controlled component"
-                            // TextFields (same idiom as CameraView.qml's
-                            // broadcastCheck): text is set once from the
-                            // persisted AppSettings value, then the user
-                            // freely edits it, writing back on
-                            // editingFinished.
-                            Label { text: "Observer location"; color: "grey" }
-                            GridLayout {
-                                columns: 2
-                                columnSpacing: 8
-                                rowSpacing: 4
+                            // Observer location itself is never shown here -
+                            // it's read straight off the module's own
+                            // reported ModuleLocation (pyobs-core
+                            // 2.0.0.dev18+, see telescopeDelegate's own
+                            // hasModuleLocation comment) purely as input to
+                            // the destination-coordinate preview below, not
+                            // something a user needs to look at or edit
+                            // (direct instruction). A connected ITelescope
+                            // module is always expected to report one, so a
+                            // missing one is surfaced as an error rather
+                            // than silently degrading - there's no
+                            // client-side fallback to fall back to anymore.
+                            Label {
                                 Layout.fillWidth: true
-
-                                Label { text: "Lat [deg]:" }
-                                TextField {
-                                    id: obsLatField
-                                    Layout.fillWidth: true
-                                    text: root.appSettings.observerLatitude.toFixed(4)
-                                    validator: DoubleValidator { bottom: -90; top: 90 }
-                                    onEditingFinished: {
-                                        const value = parseFloat(text)
-                                        if (!isNaN(value)) {
-                                            root.appSettings.observerLatitude = value
-                                        }
-                                    }
-                                }
-                                Label { text: "Lon [deg]:" }
-                                TextField {
-                                    id: obsLonField
-                                    Layout.fillWidth: true
-                                    text: root.appSettings.observerLongitude.toFixed(4)
-                                    validator: DoubleValidator { bottom: -180; top: 180 }
-                                    onEditingFinished: {
-                                        const value = parseFloat(text)
-                                        if (!isNaN(value)) {
-                                            root.appSettings.observerLongitude = value
-                                        }
-                                    }
-                                }
-                                Label { text: "Elev [m]:" }
-                                TextField {
-                                    id: obsElevField
-                                    Layout.fillWidth: true
-                                    text: root.appSettings.observerElevation.toFixed(1)
-                                    validator: DoubleValidator {}
-                                    onEditingFinished: {
-                                        const value = parseFloat(text)
-                                        if (!isNaN(value)) {
-                                            root.appSettings.observerElevation = value
-                                        }
-                                    }
-                                }
+                                visible: !telescopeDelegate.hasModuleLocation
+                                text: "This telescope module did not report an observer location "
+                                    + "(requires pyobs-core 2.0.0.dev18+ with a location configured) "
+                                    + "- destination-coordinate preview unavailable."
+                                color: "red"
+                                wrapMode: Text.WordWrap
                             }
 
                             RowLayout {
@@ -744,29 +734,22 @@ ScrollView {
                             // spun values, unchanged.
                             Label {
                                 Layout.fillWidth: true
+                                visible: telescopeDelegate.hasModuleLocation
                                 color: "grey"
                                 wrapMode: Text.WordWrap
                                 text: {
-                                    // Read these unconditionally, before any
-                                    // early return - real bug caught live: a
-                                    // Q_INVOKABLE call like hasObserverLocation()
-                                    // below creates no QML binding dependency by
-                                    // itself. The first evaluation of this binding
-                                    // happens while location is still unset, so it
-                                    // used to return before ever reading
-                                    // observerLatitude/observerLongitude as
-                                    // properties - meaning this binding never
-                                    // re-evaluated once the user actually set a
-                                    // location, since no dependency on those
-                                    // properties had ever been established.
-                                    // Reading them here every time, regardless of
-                                    // branch, fixes that.
-                                    const lat = root.appSettings.observerLatitude
-                                    const lon = root.appSettings.observerLongitude
-                                    const elev = root.appSettings.observerElevation
-                                    if (!root.appSettings.hasObserverLocation()) {
-                                        return "Set observer location above to preview"
-                                    }
+                                    // moduleLocation is a plain (required)
+                                    // property, not a Q_INVOKABLE method
+                                    // call - reading it here establishes a
+                                    // real QML binding dependency on its own
+                                    // (unlike the old AppSettings.
+                                    // hasObserverLocation() this replaced,
+                                    // which needed a workaround for exactly
+                                    // that reason - see git history if this
+                                    // comment outlives that fix).
+                                    const lat = telescopeDelegate.moduleLocation.latitude
+                                    const lon = telescopeDelegate.moduleLocation.longitude
+                                    const elev = telescopeDelegate.moduleLocation.elevation
                                     if (moveTypeCombo.currentText === "RA/Dec") {
                                         const ra = Sexagesimal.parseRa(raField.text)
                                         const dec = Sexagesimal.parseDec(decField.text)

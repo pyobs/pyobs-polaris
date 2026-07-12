@@ -18,6 +18,9 @@ private slots:
     void capabilitiesRoleIsEmptyWithNoCapabilities();
     void versionComesFromIModuleCapabilities();
     void versionIsEmptyWithoutIModuleCapabilities();
+    void moduleLocationComesFromIModuleCapabilities();
+    void moduleLocationIsEmptyWithoutLocationField();
+    void moduleLocationIsEmptyWithoutIModuleCapabilities();
     void modeGroupsComeFromIModeCapabilities();
     void modeGroupsIsEmptyWithoutIModeCapabilities();
     void binningOptionsComeFromIBinningCapabilities();
@@ -162,6 +165,60 @@ void TestModuleListModel::versionIsEmptyWithoutIModuleCapabilities()
     model.upsert(makeModule(QStringLiteral("roof@localhost")));
 
     QCOMPARE(model.data(model.index(0), ModuleListModel::VersionRole).toString(), QString());
+}
+
+void TestModuleListModel::moduleLocationComesFromIModuleCapabilities()
+{
+    ModuleInfo info = makeModule(QStringLiteral("telescope@localhost"));
+    info.capabilities.insert(
+        QStringLiteral("IModule"),
+        codec::WireValue(codec::WireDict {
+            { QStringLiteral("label"), codec::WireValue(QStringLiteral("Telescope")) },
+            { QStringLiteral("version"), codec::WireValue(QStringLiteral("2.0.0.dev18")) },
+            { QStringLiteral("location"),
+              codec::WireValue(codec::WireDict {
+                  { QStringLiteral("latitude"), codec::WireValue(52.52) },
+                  { QStringLiteral("longitude"), codec::WireValue(13.405) },
+                  { QStringLiteral("elevation"), codec::WireValue(34.0) },
+                  { QStringLiteral("timezone"), codec::WireValue(QStringLiteral("Europe/Berlin")) },
+              }) },
+        }));
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantMap location = model.data(model.index(0), ModuleListModel::ModuleLocationRole).toMap();
+    QCOMPARE(location.value(QStringLiteral("latitude")).toDouble(), 52.52);
+    QCOMPARE(location.value(QStringLiteral("longitude")).toDouble(), 13.405);
+    QCOMPARE(location.value(QStringLiteral("elevation")).toDouble(), 34.0);
+    QCOMPARE(location.value(QStringLiteral("timezone")).toString(), QStringLiteral("Europe/Berlin"));
+}
+
+void TestModuleListModel::moduleLocationIsEmptyWithoutLocationField()
+{
+    // ModuleCapabilities.location is None (no location configured on
+    // that module) - the "location" entry is simply absent from the
+    // dict, matching how pyobs-core's own dataclass-to-XML serializer
+    // omits None-valued optional fields elsewhere in this wire protocol.
+    ModuleInfo info = makeModule(QStringLiteral("telescope@localhost"));
+    info.capabilities.insert(QStringLiteral("IModule"),
+                             codec::WireValue(codec::WireDict {
+                                 { QStringLiteral("label"), codec::WireValue(QStringLiteral("Telescope")) },
+                                 { QStringLiteral("version"), codec::WireValue(QStringLiteral("2.0.0.dev18")) },
+                             }));
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::ModuleLocationRole).toMap().isEmpty());
+}
+
+void TestModuleListModel::moduleLocationIsEmptyWithoutIModuleCapabilities()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("telescope@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::ModuleLocationRole).toMap().isEmpty());
 }
 
 void TestModuleListModel::modeGroupsComeFromIModeCapabilities()

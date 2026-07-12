@@ -20,8 +20,22 @@
 # DEVELOPMENT.md's "Live-verification test fixtures"). Uses the already-
 # registered "telescope" ejabberd account (present since an earlier
 # fixture pass - see `ejabberdctl registered_users localhost`).
+#
+# location/timezone (pyobs.object.Object's own config, forwarded through
+# DummyTelescope -> Module -> Object) are what TelescopeView.qml's Move
+# destination-coordinate preview now reads via IModule capabilities'
+# ModuleLocation (pyobs-core 2.0.0.dev18+ - see ModuleListModel.h's own
+# ModuleLocationRole comment) - without this block the module reports no
+# location at all, which the client now treats as an error rather than
+# falling back to a client-side value.
 class: pyobs.modules.telescope.DummyTelescope
 name: DummyTelescope
+
+location:
+  longitude: 13.405
+  latitude: 52.52
+  elevation: 34.0
+timezone: Europe/Berlin
 
 comm:
   <<: *comm

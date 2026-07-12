@@ -226,6 +226,30 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         }
         return result;
     }
+    case ModuleLocationRole: {
+        QVariantMap result;
+        const auto it = info.capabilities.constFind(QStringLiteral("IModule"));
+        if (it == info.capabilities.constEnd() || !it.value().isDict()) {
+            return result;
+        }
+        for (const auto &field : it.value().toDict()) {
+            if (field.first != QStringLiteral("location") || !field.second.isDict()) {
+                continue;
+            }
+            for (const auto &locField : field.second.toDict()) {
+                if (locField.first == QStringLiteral("latitude") && locField.second.isDouble()) {
+                    result.insert(QStringLiteral("latitude"), locField.second.toDouble());
+                } else if (locField.first == QStringLiteral("longitude") && locField.second.isDouble()) {
+                    result.insert(QStringLiteral("longitude"), locField.second.toDouble());
+                } else if (locField.first == QStringLiteral("elevation") && locField.second.isDouble()) {
+                    result.insert(QStringLiteral("elevation"), locField.second.toDouble());
+                } else if (locField.first == QStringLiteral("timezone") && locField.second.isString()) {
+                    result.insert(QStringLiteral("timezone"), locField.second.toString());
+                }
+            }
+        }
+        return result;
+    }
     case PresenceStateRole:
         return info.presenceState;
     case PresenceErrorRole:
@@ -263,6 +287,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { WindowExtentRole, "windowExtent" },
         { ImageFormatsRole, "imageFormats" },
         { FiltersRole, "filters" },
+        { ModuleLocationRole, "moduleLocation" },
         { PresenceStateRole, "presenceState" },
         { PresenceErrorRole, "presenceError" },
         { CapabilitiesRole, "capabilities" },

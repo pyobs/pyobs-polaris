@@ -97,6 +97,19 @@ public:
         // ComboBox population. Same narrow-scope discipline as
         // ImageFormatsRole above.
         FiltersRole,
+        // QVariantMap {"latitude":..., "longitude":..., "elevation":...,
+        // "timezone":...} decoded from IModule capabilities' "location"
+        // field (pyobs-core 2.0.0.dev18+'s ModuleLocation - see
+        // pyobs.interfaces.IModule.ModuleLocation source: longitude is
+        // East-positive degrees, elevation meters, timezone an IANA
+        // name), empty map if the module hasn't reported IModule
+        // capabilities, has no location configured
+        // (ModuleCapabilities.location is None), or predates dev18 -
+        // TelescopeView.qml's own Observer Location section prefers this
+        // over its previous client-side-only AppSettings fallback
+        // whenever it's non-empty. Same narrow-scope discipline as
+        // WindowExtentRole above.
+        ModuleLocationRole,
         // "ready" / "error" / "local", derived from presence show/status -
         // see ModuleInfo::presenceState. The Status page's health badge.
         PresenceStateRole,
