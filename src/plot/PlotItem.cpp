@@ -1,5 +1,6 @@
 #include "PlotItem.h"
 
+#include <QDateTime>
 #include <QPainter>
 #include <QPen>
 #include <QPolygonF>
@@ -44,6 +45,25 @@ QString formatTick(double value)
 {
     return QString::number(value, 'g', 4);
 }
+
+// matplotlib's DateFormatter("%H:%M:%S") equivalent for xTicksAsTime -
+// `value` is seconds-since-epoch, matching what CameraView.qml's history
+// buffer stores (Date.now() / 1000).
+QString formatTimeTick(double value)
+{
+    return QDateTime::fromSecsSinceEpoch(static_cast<qint64>(value)).toString(QStringLiteral("HH:mm:ss"));
+}
+
+// A small, distinguishable default palette for series that don't specify
+// their own color (or specify an invalid one) - reusing
+// WireValueFormat.js's "value" amber as the first entry would tie a C++
+// file to a QML-side constant across the codec boundary for no benefit,
+// so this is its own independent set, chosen only to read distinctly
+// against this widget's dark background.
+const QVector<QColor> kDefaultSeriesColors = {
+    QColor(100, 160, 255), QColor(240, 160, 80), QColor(120, 200, 120),
+    QColor(220, 100, 100), QColor(180, 130, 220), QColor(220, 200, 80),
+};
 
 // Pads a [lo, hi] data range with headroom so points/lines never sit flush
 // on the plot's edge, and guards the degenerate zero-range case (one
@@ -264,6 +284,49 @@ void PlotItem::setReferenceLabel(const QString &label)
     Q_EMIT referenceLabelChanged();
 }
 
+void PlotItem::setSeries(const QVariantList &series)
+{
+    m_seriesRaw = series;
+    reparseSeries();
+    Q_EMIT seriesChanged();
+}
+
+void PlotItem::reparseSeries()
+{
+    m_series.clear();
+    int colorIndex = 0;
+    for (const QVariant &entryVariant : m_seriesRaw) {
+        const QVariantMap entry = entryVariant.toMap();
+        Series series;
+        series.label = entry.value(QStringLiteral("label")).toString();
+        const QColor explicitColor(entry.value(QStringLiteral("color")).toString());
+        series.color = explicitColor.isValid() ? explicitColor
+                                                 : kDefaultSeriesColors.at(colorIndex % kDefaultSeriesColors.size());
+        ++colorIndex;
+        for (const QVariant &pointVariant : entry.value(QStringLiteral("points")).toList()) {
+            const QVariantMap point = pointVariant.toMap();
+            const QVariant x = point.value(QStringLiteral("x"));
+            const QVariant y = point.value(QStringLiteral("y"));
+            if (!x.isValid() || !y.isValid()) {
+                continue;
+            }
+            series.points.push_back(QPointF(x.toDouble(), y.toDouble()));
+        }
+        m_series.push_back(series);
+    }
+    update();
+}
+
+void PlotItem::setXTicksAsTime(bool asTime)
+{
+    if (m_xTicksAsTime == asTime) {
+        return;
+    }
+    m_xTicksAsTime = asTime;
+    update();
+    Q_EMIT xTicksAsTimeChanged();
+}
+
 void PlotItem::paint(QPainter *painter)
 {
     painter->setRenderHint(QPainter::Antialiasing, true);
@@ -272,15 +335,30 @@ void PlotItem::paint(QPainter *painter)
     // clipped outside the visible x-range. Computed before plotArea
     // (below) since the left margin needs to know the actual y-tick
     // label text to size itself against.
-    double xMin = m_points.isEmpty() ? 0.0 : m_points.first().x();
-    double xMax = xMin;
-    double yMin = m_points.isEmpty() ? 0.0 : m_points.first().y();
-    double yMax = yMin;
-    for (const QPointF &p : m_points) {
+    double xMin = 0.0;
+    double xMax = 0.0;
+    double yMin = 0.0;
+    double yMax = 0.0;
+    bool boundsInitialized = false;
+    auto includePoint = [&](const QPointF &p) {
+        if (!boundsInitialized) {
+            xMin = xMax = p.x();
+            yMin = yMax = p.y();
+            boundsInitialized = true;
+            return;
+        }
         xMin = std::min(xMin, p.x());
         xMax = std::max(xMax, p.x());
         yMin = std::min(yMin, p.y());
         yMax = std::max(yMax, p.y());
+    };
+    for (const QPointF &p : m_points) {
+        includePoint(p);
+    }
+    for (const Series &series : m_series) {
+        for (const QPointF &p : series.points) {
+            includePoint(p);
+        }
     }
     if (!std::isnan(m_referenceX)) {
         xMin = std::min(xMin, m_referenceX);
@@ -343,7 +421,7 @@ void PlotItem::paint(QPainter *painter)
         painter->drawLine(QPointF(px, plotArea.top()), QPointF(px, plotArea.bottom()));
         painter->setPen(kTickLabelColor);
         painter->drawText(QRectF(px - 30, plotArea.bottom() + 4, 60, 16), Qt::AlignHCenter | Qt::AlignTop,
-                          formatTick(fx));
+                          m_xTicksAsTime ? formatTimeTick(fx) : formatTick(fx));
 
         const double fy = yMax - (yMax - yMin) * i / kTickCount;
         const double py = plotArea.top() + plotArea.height() * i / kTickCount;
@@ -407,6 +485,51 @@ void PlotItem::paint(QPainter *painter)
         painter->setPen(Qt::NoPen);
         painter->setBrush(kLatestMarkerColor);
         painter->drawPolygon(starPolygon(toPixel(m_points.last()), kEndpointMarkerRadius * 1.4));
+    }
+
+    // Multi-series mode (see `series`'s own doc comment) - each series is
+    // just a plain colored polyline, no point markers: matches pyobs-gui's
+    // matplotlib ax.plot() default styling for the temperatures history
+    // plot this was added for, and keeps a many-point growing history
+    // readable instead of cluttered with hundreds of dots.
+    for (const Series &series : m_series) {
+        if (series.points.size() < 2) {
+            continue;
+        }
+        QPolygonF line;
+        for (const QPointF &p : series.points) {
+            line << toPixel(p);
+        }
+        painter->setPen(QPen(series.color, 1.5));
+        painter->drawPolyline(line);
+    }
+
+    if (m_series.size() > 1) {
+        QFont legendFont(painter->font().family(), 8);
+        painter->setFont(legendFont);
+        const QFontMetrics legendMetrics(legendFont);
+        constexpr double kSwatchSize = 10.0;
+        constexpr double kRowHeight = 14.0;
+        constexpr double kPadding = 6.0;
+        int maxLabelWidth = 0;
+        for (const Series &series : m_series) {
+            maxLabelWidth = std::max(maxLabelWidth, legendMetrics.horizontalAdvance(series.label));
+        }
+        const double legendWidth = kSwatchSize + 6.0 + maxLabelWidth + kPadding * 2;
+        const double legendHeight = m_series.size() * kRowHeight + kPadding * 2;
+        const QRectF legendRect(plotArea.right() - legendWidth - 4, plotArea.top() + 4, legendWidth, legendHeight);
+        painter->setPen(QPen(kAxisColor, 1));
+        painter->setBrush(QColor(30, 30, 30, 200));
+        painter->drawRect(legendRect);
+        for (int i = 0; i < m_series.size(); ++i) {
+            const double rowTop = legendRect.top() + kPadding + i * kRowHeight;
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(m_series.at(i).color);
+            painter->drawRect(QRectF(legendRect.left() + kPadding, rowTop + 2, kSwatchSize, kSwatchSize - 4));
+            painter->setPen(kTickLabelColor);
+            painter->drawText(QRectF(legendRect.left() + kPadding + kSwatchSize + 6, rowTop, maxLabelWidth, kRowHeight),
+                              Qt::AlignLeft | Qt::AlignVCenter, m_series.at(i).label);
+        }
     }
 
     painter->setPen(kAxisLabelColor);

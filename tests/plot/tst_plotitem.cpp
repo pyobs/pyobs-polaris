@@ -1,3 +1,4 @@
+#include <QColor>
 #include <QTest>
 #include <QVariantList>
 #include <QVariantMap>
@@ -36,6 +37,10 @@ private slots:
     void skipsRecordsWithNullSelectedField();
     void skipsShortRecords();
     void emptyOrInvalidPointsIsEmpty();
+    void seriesParsesLabelColorAndPoints();
+    void seriesAssignsDefaultColorWhenNoneGiven();
+    void seriesSkipsPointsWithMissingXOrY();
+    void emptyOrInvalidSeriesIsEmpty();
 };
 
 void TestPlotItem::defaultFieldIndices()
@@ -138,6 +143,72 @@ void TestPlotItem::emptyOrInvalidPointsIsEmpty()
 
     item.setPoints(QVariantList {});
     QCOMPARE(item.pointCount(), 0);
+}
+
+void TestPlotItem::seriesParsesLabelColorAndPoints()
+{
+    QVariantMap ccdPoint1;
+    ccdPoint1.insert(QStringLiteral("x"), 1.0);
+    ccdPoint1.insert(QStringLiteral("y"), -10.0);
+    QVariantMap ccdPoint2;
+    ccdPoint2.insert(QStringLiteral("x"), 2.0);
+    ccdPoint2.insert(QStringLiteral("y"), -11.5);
+
+    QVariantMap ccdSeries;
+    ccdSeries.insert(QStringLiteral("label"), QStringLiteral("CCD"));
+    ccdSeries.insert(QStringLiteral("color"), QStringLiteral("#ff0000"));
+    ccdSeries.insert(QStringLiteral("points"), QVariantList { ccdPoint1, ccdPoint2 });
+
+    PlotItem item;
+    item.setSeries(QVariantList { ccdSeries });
+
+    QCOMPARE(item.seriesCount(), 1);
+    QCOMPARE(item.seriesLabel(0), QStringLiteral("CCD"));
+    QCOMPARE(item.seriesColor(0), QColor(QStringLiteral("#ff0000")));
+    QCOMPARE(item.seriesPointCount(0), 2);
+    QCOMPARE(item.seriesPointAt(0, 0), QPointF(1.0, -10.0));
+    QCOMPARE(item.seriesPointAt(0, 1), QPointF(2.0, -11.5));
+}
+
+void TestPlotItem::seriesAssignsDefaultColorWhenNoneGiven()
+{
+    QVariantMap series;
+    series.insert(QStringLiteral("label"), QStringLiteral("Back"));
+    series.insert(QStringLiteral("points"), QVariantList {});
+
+    PlotItem item;
+    item.setSeries(QVariantList { series });
+
+    QCOMPARE(item.seriesCount(), 1);
+    QVERIFY(item.seriesColor(0).isValid());
+}
+
+void TestPlotItem::seriesSkipsPointsWithMissingXOrY()
+{
+    QVariantMap validPoint;
+    validPoint.insert(QStringLiteral("x"), 1.0);
+    validPoint.insert(QStringLiteral("y"), 2.0);
+    QVariantMap missingY;
+    missingY.insert(QStringLiteral("x"), 3.0);
+
+    QVariantMap series;
+    series.insert(QStringLiteral("label"), QStringLiteral("CCD"));
+    series.insert(QStringLiteral("points"), QVariantList { validPoint, missingY });
+
+    PlotItem item;
+    item.setSeries(QVariantList { series });
+
+    QCOMPARE(item.seriesPointCount(0), 1);
+    QCOMPARE(item.seriesPointAt(0, 0), QPointF(1.0, 2.0));
+}
+
+void TestPlotItem::emptyOrInvalidSeriesIsEmpty()
+{
+    PlotItem item;
+    QCOMPARE(item.seriesCount(), 0);
+
+    item.setSeries(QVariantList {});
+    QCOMPARE(item.seriesCount(), 0);
 }
 
 QTEST_MAIN(TestPlotItem)

@@ -1,8 +1,11 @@
 #pragma once
 
+#include <QColor>
 #include <QPointF>
 #include <QQuickPaintedItem>
+#include <QString>
 #include <QVariant>
+#include <QVariantList>
 #include <QVector>
 #include <limits>
 #include <qqmlintegration.h>
@@ -91,6 +94,30 @@ class PlotItem : public QQuickPaintedItem
     Q_PROPERTY(double referenceX READ referenceX WRITE setReferenceX NOTIFY referenceXChanged)
     Q_PROPERTY(QString referenceLabel READ referenceLabel WRITE setReferenceLabel NOTIFY referenceLabelChanged)
 
+    // Multi-series mode, additive to (and independent of) the single
+    // implicit series above: CameraView.qml's "Plot temps" window (one
+    // line per ITemperatures sensor, e.g. CCD/Back) needs several
+    // simultaneously-drawn, independently-colored/labeled lines on one
+    // chart, none of which come from a single already-arrived WireValue
+    // array field the way `points`/xFieldIndex/yFieldIndex do - each
+    // ITemperatures state update is only ever the latest snapshot (see
+    // pyobs.interfaces.ITemperatures), so the caller accumulates a
+    // growing points history client-side and hands it here already
+    // shaped as plain {x, y} pairs, not a WireValue to decode. Each
+    // `series` entry: {"label": string, "color": string (e.g.
+    // "#f2a660"), "points": [{"x": double, "y": double}, ...]}. A small
+    // legend is drawn automatically when this is non-empty. Extending
+    // this class rather than forking a second plot item, per the class
+    // comment above.
+    Q_PROPERTY(QVariantList series READ series WRITE setSeries NOTIFY seriesChanged)
+    // matplotlib's DateFormatter equivalent for the x axis - ticks are
+    // seconds-since-epoch (matching QDateTime::currentSecsSinceEpoch(),
+    // what CameraView.qml's history buffer stores), formatted "HH:mm:ss"
+    // instead of PlotItem's usual plain-number formatTick(). Only
+    // meaningful together with `series`'s time-series use case - AutoFocus/
+    // Acquisition's plots stay on the default numeric formatting.
+    Q_PROPERTY(bool xTicksAsTime READ xTicksAsTime WRITE setXTicksAsTime NOTIFY xTicksAsTimeChanged)
+
 public:
     explicit PlotItem(QQuickItem *parent = nullptr);
 
@@ -147,6 +174,23 @@ public:
     QString referenceLabel() const { return m_referenceLabel; }
     void setReferenceLabel(const QString &label);
 
+    QVariantList series() const { return m_seriesRaw; }
+    void setSeries(const QVariantList &series);
+
+    // Parsed-output accessors, same "tests need to see past paint()"
+    // reasoning as pointCount()/pointAt() above.
+    int seriesCount() const { return m_series.size(); }
+    QString seriesLabel(int index) const { return m_series.value(index).label; }
+    QColor seriesColor(int index) const { return m_series.value(index).color; }
+    int seriesPointCount(int index) const { return m_series.value(index).points.size(); }
+    QPointF seriesPointAt(int seriesIndex, int pointIndex) const
+    {
+        return m_series.value(seriesIndex).points.value(pointIndex);
+    }
+
+    bool xTicksAsTime() const { return m_xTicksAsTime; }
+    void setXTicksAsTime(bool asTime);
+
     void paint(QPainter *painter) override;
 
 protected:
@@ -171,9 +215,21 @@ Q_SIGNALS:
     void xTicksAsIntegersChanged();
     void referenceXChanged();
     void referenceLabelChanged();
+    void seriesChanged();
+    void xTicksAsTimeChanged();
 
 private:
+    // One named/colored line for multi-series mode (see `series`'s own
+    // doc comment above) - already-shaped {x, y} pairs, no field-index
+    // parsing (unlike m_points/reparsePoints() below).
+    struct Series {
+        QString label;
+        QColor color;
+        QVector<QPointF> points;
+    };
+
     void reparsePoints();
+    void reparseSeries();
 
     QVariant m_pointsRaw;
     QVector<QPointF> m_points;
@@ -191,6 +247,9 @@ private:
     bool m_xTicksAsIntegers = false;
     double m_referenceX = std::numeric_limits<double>::quiet_NaN();
     QString m_referenceLabel;
+    QVariantList m_seriesRaw;
+    QVector<Series> m_series;
+    bool m_xTicksAsTime = false;
 };
 
 }

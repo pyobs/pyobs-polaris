@@ -113,6 +113,7 @@ ScrollView {
                 readonly property var gainInterface: findInterface("IGain")
                 readonly property var imageFormatInterface: findInterface("IImageFormat")
                 readonly property var coolingInterface: findInterface("ICooling")
+                readonly property var temperaturesInterface: findInterface("ITemperatures")
                 readonly property bool hasAbort: findInterface("IAbortable") !== null
 
                 property var exposureSubscription: null
@@ -123,6 +124,7 @@ ScrollView {
                 property var gainSubscription: null
                 property var imageFormatSubscription: null
                 property var coolingSubscription: null
+                property var temperaturesSubscription: null
 
                 function refreshSubscriptions() {
                     if (exposureSubscription) { exposureSubscription.unsubscribe(); exposureSubscription = null }
@@ -133,6 +135,7 @@ ScrollView {
                     if (gainSubscription) { gainSubscription.unsubscribe(); gainSubscription = null }
                     if (imageFormatSubscription) { imageFormatSubscription.unsubscribe(); imageFormatSubscription = null }
                     if (coolingSubscription) { coolingSubscription.unsubscribe(); coolingSubscription = null }
+                    if (temperaturesSubscription) { temperaturesSubscription.unsubscribe(); temperaturesSubscription = null }
 
                     if (visible && exposureInterface) {
                         exposureSubscription = root.xmppClient.subscribeState(
@@ -166,6 +169,10 @@ ScrollView {
                         coolingSubscription = root.xmppClient.subscribeState(
                             jid, "ICooling", coolingInterface.version, cameraDelegate)
                     }
+                    if (visible && temperaturesInterface) {
+                        temperaturesSubscription = root.xmppClient.subscribeState(
+                            jid, "ITemperatures", temperaturesInterface.version, cameraDelegate)
+                    }
                 }
 
                 onVisibleChanged: refreshSubscriptions()
@@ -177,6 +184,7 @@ ScrollView {
                 onGainInterfaceChanged: refreshSubscriptions()
                 onImageFormatInterfaceChanged: refreshSubscriptions()
                 onCoolingInterfaceChanged: refreshSubscriptions()
+                onTemperaturesInterfaceChanged: refreshSubscriptions()
                 Component.onCompleted: {
                     refreshSubscriptions()
                     checkForNewImage()
@@ -190,6 +198,170 @@ ScrollView {
                 readonly property var gainState: gainSubscription ? gainSubscription.value : undefined
                 readonly property var imageFormatState: imageFormatSubscription ? imageFormatSubscription.value : undefined
                 readonly property var coolingState: coolingSubscription ? coolingSubscription.value : undefined
+                readonly property var temperaturesState: temperaturesSubscription ? temperaturesSubscription.value : undefined
+                readonly property var temperatureReadings: fieldOf(temperaturesState, "readings") || []
+
+                // ITemperatures' own wire state is only ever the latest
+                // snapshot (see pyobs.interfaces.ITemperatures) - there's no
+                // history on the wire, so the "Plot temps" window's history
+                // is accumulated client-side here, mirroring pyobs-gui's
+                // TemperaturesWidget._on_temperatures_state()/
+                // TemperaturesPlotWidget.add_data(): every new snapshot
+                // appends one point per sensor name. A plain JS object used
+                // as a name -> point-array map, always reassigned wholesale
+                // (not mutated in place) for the same reason StatusView.qml's
+                // expandedJids is - a QML binding only re-evaluates on
+                // property reassignment. Capped per sensor
+                // (maxHistoryPoints) so a long-running session doesn't grow
+                // this unboundedly - pyobs-gui has no such cap (an in-memory
+                // pandas DataFrame kept for the life of the plot window,
+                // never pruned either), but this project's own window can
+                // just as easily stay open indefinitely.
+                property var temperatureHistory: ({})
+                readonly property int maxHistoryPoints: 500
+
+                function recordTemperatureHistory() {
+                    const readings = cameraDelegate.temperatureReadings
+                    if (!readings || readings.length === 0) {
+                        return
+                    }
+                    const now = Date.now() / 1000
+                    const next = Object.assign({}, cameraDelegate.temperatureHistory)
+                    for (let i = 0; i < readings.length; ++i) {
+                        const name = cameraDelegate.fieldOf(readings[i], "name")
+                        const value = cameraDelegate.fieldOf(readings[i], "value")
+                        if (name === undefined || value === undefined || value === null) {
+                            continue
+                        }
+                        const series = (next[name] || []).concat([{ x: now, y: value }])
+                        next[name] = series.length > cameraDelegate.maxHistoryPoints
+                            ? series.slice(series.length - cameraDelegate.maxHistoryPoints) : series
+                    }
+                    cameraDelegate.temperatureHistory = next
+                }
+
+                onTemperaturesStateChanged: recordTemperatureHistory()
+
+                function sortedTemperatureReadings() {
+                    const list = (cameraDelegate.temperatureReadings || []).slice()
+                    list.sort(function (a, b) {
+                        const nameA = cameraDelegate.fieldOf(a, "name") || ""
+                        const nameB = cameraDelegate.fieldOf(b, "name") || ""
+                        return nameA < nameB ? -1 : (nameA > nameB ? 1 : 0)
+                    })
+                    return list
+                }
+
+                // Which sensors the "Plot temps" window currently shows,
+                // keyed by name - lets a user isolate one/some sensors on a
+                // busy multi-sensor camera instead of always plotting every
+                // one (pyobs-gui's own temperaturesplotwidget.py has no such
+                // toggle, always plots every column). A name absent from
+                // this map defaults to shown, so a newly-discovered sensor
+                // appears selected without needing its own explicit entry.
+                property var selectedTemperatureSeries: ({})
+
+                function isTemperatureSeriesSelected(name) {
+                    return cameraDelegate.selectedTemperatureSeries[name] !== false
+                }
+
+                function setTemperatureSeriesSelected(name, selected) {
+                    const next = Object.assign({}, cameraDelegate.selectedTemperatureSeries)
+                    next[name] = selected
+                    cameraDelegate.selectedTemperatureSeries = next
+                }
+
+                // "Plot temps" window's time-range filter - ports pyobs-gui's
+                // temperaturesplotwidget.py comboShow ("All"/"Last minute"/
+                // "Last 5 minutes"), just with "Last hour" instead of "Last
+                // minute" (a `maxHistoryPoints`-capped, ~1-point-per-second
+                // buffer makes "last minute" barely distinguishable from
+                // "last 5 minutes" here). -1 means "All" - no cutoff.
+                property int temperaturePlotWindowSeconds: -1
+
+                function temperaturePlotSeries() {
+                    const names = Object.keys(cameraDelegate.temperatureHistory).sort()
+                    const cutoff = cameraDelegate.temperaturePlotWindowSeconds > 0
+                        ? (Date.now() / 1000 - cameraDelegate.temperaturePlotWindowSeconds) : -Infinity
+                    const result = []
+                    for (let i = 0; i < names.length; ++i) {
+                        if (!cameraDelegate.isTemperatureSeriesSelected(names[i])) {
+                            continue
+                        }
+                        const points = cameraDelegate.temperatureHistory[names[i]].filter(function (p) {
+                            return p.x >= cutoff
+                        })
+                        result.push({ label: names[i], points: points })
+                    }
+                    return result
+                }
+
+                ApplicationWindow {
+                    id: temperaturesPlotWindow
+                    width: 640
+                    height: 420
+                    title: "Temperatures — " + cameraDelegate.name
+                    visible: false
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                Repeater {
+                                    // Every sensor seen so far, not just the
+                                    // ones currently selected - a deselected
+                                    // sensor's checkbox must stay put (just
+                                    // unchecked), not disappear.
+                                    model: Object.keys(cameraDelegate.temperatureHistory).sort()
+
+                                    delegate: CheckBox {
+                                        text: modelData
+                                        checked: cameraDelegate.isTemperatureSeriesSelected(modelData)
+                                        onToggled: cameraDelegate.setTemperatureSeriesSelected(modelData, checked)
+                                    }
+                                }
+                            }
+
+                            Label { text: "Show:" }
+                            ComboBox {
+                                id: temperaturePlotWindowCombo
+                                model: ["Last 5 minutes", "Last hour", "All"]
+                                currentIndex: 2
+
+                                onActivated: {
+                                    switch (currentIndex) {
+                                    case 0:
+                                        cameraDelegate.temperaturePlotWindowSeconds = 5 * 60
+                                        break
+                                    case 1:
+                                        cameraDelegate.temperaturePlotWindowSeconds = 60 * 60
+                                        break
+                                    default:
+                                        cameraDelegate.temperaturePlotWindowSeconds = -1
+                                        break
+                                    }
+                                }
+                            }
+                        }
+
+                        PlotItem {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            xLabel: "Time"
+                            yLabel: "Temperature (°C)"
+                            xTicksAsTime: true
+                            series: cameraDelegate.temperaturePlotSeries()
+                        }
+                    }
+                }
 
                 readonly property string exposureStatus: fieldOf(exposureState, "status") || ""
                 readonly property real exposureProgress: fieldOf(exposureState, "progress") || 0
@@ -1258,27 +1430,39 @@ ScrollView {
                         }
                     }
 
-                    // --- Third column: ICooling alone so far (CoolingState -
-                    // setpoint/power/enabled; current measured temperature
-                    // lives on the separately-inherited ITemperatures state,
-                    // out of scope here, see TODO.md's ITelescope-MVP
-                    // deferral of IFilters/ITemperatures, unchanged for this
-                    // pass). Mirrors camerawidget.ui's own right-hand
+                    // --- Third column: ICooling and, since the direct
+                    // request below, ITemperatures too (IFilters/IFocuser
+                    // still out of scope, see TODO.md's ITelescope-MVP
+                    // deferral). Mirrors camerawidget.ui's own right-hand
                     // sidebar position for Cooling/Temperatures/FITS
-                    // headers - this project only has Cooling of those so
-                    // far, but keeping it its own column leaves room for
-                    // Temperatures to land alongside it later rather than
-                    // needing another reshuffle.
+                    // headers.
+                    //
+                    // ITemperatures follow-up, direct request ("the camera
+                    // page is missing a widget for ITemperatures, right?
+                    // check pyobs-gui"): ports pyobs-gui's
+                    // temperatureswidget.py (a sorted-by-name read-only
+                    // sensor list) plus temperaturesplotwidget.py (a "Plot
+                    // temps" button opening a live multi-line history
+                    // window) - see cameraDelegate's own
+                    // temperatureHistory/recordTemperatureHistory() comment
+                    // above for why the plot's history has to be
+                    // accumulated client-side rather than read straight off
+                    // the wire. The plot itself needed plot::PlotItem
+                    // extended with genuine multi-series support (`series`/
+                    // `xTicksAsTime`, see PlotItem.h) - AutoFocusView's/
+                    // AcquisitionView's own single-series usage is
+                    // untouched.
                     ColumnLayout {
                         Layout.preferredWidth: 220
                         Layout.maximumWidth: 220
                         Layout.alignment: Qt.AlignTop
                         spacing: 8
-                        visible: cameraDelegate.coolingInterface !== null
+                        visible: cameraDelegate.coolingInterface !== null || cameraDelegate.temperaturesInterface !== null
 
                         GroupBox {
                             title: "Cooling"
                             Layout.fillWidth: true
+                            visible: cameraDelegate.coolingInterface !== null
 
                             ColumnLayout {
                                 width: parent.width
@@ -1359,6 +1543,49 @@ ScrollView {
                                                 }
                                             })
                                     }
+                                }
+                            }
+                        }
+
+                        GroupBox {
+                            title: "Temperatures"
+                            Layout.fillWidth: true
+                            visible: cameraDelegate.temperaturesInterface !== null
+
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: 6
+
+                                Repeater {
+                                    model: cameraDelegate.sortedTemperatureReadings()
+
+                                    delegate: RowLayout {
+                                        Layout.fillWidth: true
+
+                                        readonly property var rawValue: cameraDelegate.fieldOf(modelData, "value")
+
+                                        Label { text: cameraDelegate.fieldOf(modelData, "name") + ":" }
+                                        Item { Layout.fillWidth: true }
+                                        Label {
+                                            text: (parent.rawValue === undefined || parent.rawValue === null)
+                                                ? "N/A" : parent.rawValue.toFixed(2) + "°C"
+                                            color: "grey"
+                                        }
+                                    }
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    visible: cameraDelegate.sortedTemperatureReadings().length === 0
+                                    text: "(no readings yet)"
+                                    color: "grey"
+                                    font.italic: true
+                                }
+
+                                Button {
+                                    Layout.fillWidth: true
+                                    text: "Plot temps"
+                                    onClicked: temperaturesPlotWindow.visible = true
                                 }
                             }
                         }
