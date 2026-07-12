@@ -3,6 +3,7 @@
 #include "ModuleInfo.h"
 
 #include <QAbstractListModel>
+#include <QStringList>
 #include <QVariantList>
 #include <QVector>
 #include <qqmlintegration.h>
@@ -30,6 +31,13 @@ public:
         // for. Interfaces without a state block are omitted, not just
         // empty-stated, since there's nothing to render for them.
         StatefulInterfacesRole,
+        // QVariantList of {"name":..., "version":...} entries, one per
+        // interface the module's disco#info declared at all (unlike
+        // StatefulInterfacesRole above, not filtered down to the ones with
+        // a state block) - the Status page's per-module interface badges,
+        // matching DashboardView.vue's `Object.values(mod.interfaces)`
+        // badge list.
+        InterfacesRole,
         // QVariantList of {"interface":..., "name":..., "paramCount":...}
         // entries, one per command across every interface - Phase 5's
         // debug panel needs this to let you pick a discovered command and
@@ -88,6 +96,18 @@ public:
         PresenceStateRole,
         // presence statusText() for the error case above - empty otherwise.
         PresenceErrorRole,
+        // QVariantList of {"ifaceName":..., "value":...} entries, one per
+        // interface that reported any capabilities at all (info.capabilities
+        // is keyed by interface name; "value" is the whole decoded
+        // capabilities dict bridged via codec::toQVariant, same
+        // key/value-list shape StateSubscription::value already uses) - the
+        // Status page's per-module "<interface> capabilities" KeyValueCards,
+        // matching DashboardView.vue's `Object.entries(mod.capabilities)`.
+        // Deliberately the raw dict, not narrowed to any one field the way
+        // VersionRole/ModeGroupsRole/etc. above are - those exist for a
+        // specific widget's specific need, this one is for a generic
+        // "show me everything" drill-down.
+        CapabilitiesRole,
     };
     Q_ENUM(Role)
 
@@ -114,6 +134,13 @@ public:
     // than interface-specific) half of WidgetRegistry.qml's registration
     // lookup (TODO.md's "Plugin mechanism" item, step 1).
     Q_INVOKABLE bool hasModule(const QString &bareJid) const;
+
+    // Every connected module's bare JID, in model row order - the Status
+    // page's "Expand all" button uses this to build its expanded-set
+    // without needing per-row random access into the model itself (same
+    // "QML gets no generic random-access iteration over a
+    // QAbstractListModel" reasoning as hasInterface()/allCommands() above).
+    Q_INVOKABLE QStringList jids() const;
 
     // Flat, cross-module list of {"module":..., "name":..., "params":
     // [...]} entries - one per distinct command name per module, deduped

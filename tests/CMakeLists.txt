@@ -116,6 +116,8 @@ add_executable(tst_modulelistmodel
     ${CMAKE_SOURCE_DIR}/src/codec/WireValue.h
     ${CMAKE_SOURCE_DIR}/src/codec/WireType.h
     ${CMAKE_SOURCE_DIR}/src/codec/WireType.cpp
+    ${CMAKE_SOURCE_DIR}/src/codec/VariantBridge.h
+    ${CMAKE_SOURCE_DIR}/src/codec/VariantBridge.cpp
 )
 target_include_directories(tst_modulelistmodel PRIVATE
     ${CMAKE_SOURCE_DIR}/src/comm

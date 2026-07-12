@@ -129,6 +129,7 @@ qt_add_qml_module(polaris
         qml/views/WeatherView.qml
         qml/widgets/KeyValueCard.qml
         qml/widgets/LogFooter.qml
+        qml/widgets/WireValueFormat.js
 )
 
 target_link_libraries(polaris PRIVATE

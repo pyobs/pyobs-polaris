@@ -1,5 +1,7 @@
 #include "ModuleListModel.h"
 
+#include "../codec/VariantBridge.h"
+
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -58,6 +60,16 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
             if (!it.value().state) {
                 continue;
             }
+            QVariantMap entry;
+            entry.insert(QStringLiteral("name"), it.value().name);
+            entry.insert(QStringLiteral("version"), it.value().version);
+            result.push_back(entry);
+        }
+        return result;
+    }
+    case InterfacesRole: {
+        QVariantList result;
+        for (auto it = info.interfaces.constBegin(); it != info.interfaces.constEnd(); ++it) {
             QVariantMap entry;
             entry.insert(QStringLiteral("name"), it.value().name);
             entry.insert(QStringLiteral("version"), it.value().version);
@@ -200,6 +212,19 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         return info.presenceState;
     case PresenceErrorRole:
         return info.presenceError;
+    case CapabilitiesRole: {
+        QVariantList result;
+        for (auto it = info.capabilities.constBegin(); it != info.capabilities.constEnd(); ++it) {
+            QVariantMap entry;
+            // Not "interface": that's a reserved word in QML/JS, which
+            // breaks a `required property` of that name on a Repeater
+            // delegate bound directly to this list (see StatusView.qml).
+            entry.insert(QStringLiteral("ifaceName"), it.key());
+            entry.insert(QStringLiteral("value"), codec::toQVariant(it.value()));
+            result.push_back(entry);
+        }
+        return result;
+    }
     default:
         return {};
     }
@@ -211,6 +236,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { JidRole, "jid" },
         { NameRole, "name" },
         { StatefulInterfacesRole, "statefulInterfaces" },
+        { InterfacesRole, "interfaces" },
         { CommandsRole, "commands" },
         { CommandSchemasRole, "commandSchemas" },
         { VersionRole, "version" },
@@ -220,6 +246,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { ImageFormatsRole, "imageFormats" },
         { PresenceStateRole, "presenceState" },
         { PresenceErrorRole, "presenceError" },
+        { CapabilitiesRole, "capabilities" },
     };
 }
 
@@ -231,6 +258,16 @@ const ModuleInfo *ModuleListModel::find(const QString &bareJid) const
         }
     }
     return nullptr;
+}
+
+QStringList ModuleListModel::jids() const
+{
+    QStringList result;
+    result.reserve(m_modules.size());
+    for (const ModuleInfo &info : m_modules) {
+        result.push_back(info.jid);
+    }
+    return result;
 }
 
 QString ModuleListModel::jidForModuleName(const QString &moduleName) const

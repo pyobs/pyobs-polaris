@@ -12,6 +12,10 @@ class TestModuleListModel : public QObject
 
 private slots:
     void newModuleDefaultsToReady();
+    void interfacesRoleListsEveryDeclaredInterfaceRegardlessOfState();
+    void interfacesRoleIsEmptyWithNoInterfaces();
+    void capabilitiesRoleListsEveryInterfacesWholeCapabilitiesDict();
+    void capabilitiesRoleIsEmptyWithNoCapabilities();
     void versionComesFromIModuleCapabilities();
     void versionIsEmptyWithoutIModuleCapabilities();
     void modeGroupsComeFromIModeCapabilities();
@@ -34,6 +38,8 @@ private slots:
     void jidForModuleNameMatchesTheJidsLocalPart();
     void jidForModuleNameIsEmptyWhenNoModuleMatches();
     void jidForModuleNameDoesNotMatchTheDisplayName();
+    void jidsListsEveryModuleInRowOrder();
+    void jidsIsEmptyWithNoModules();
     void allCommandsListsOneEntryPerCommandAcrossModules();
     void allCommandsDedupesACommandDeclaredByMultipleInterfaces();
     void allCommandsIsEmptyWithNoModules();
@@ -59,6 +65,78 @@ void TestModuleListModel::newModuleDefaultsToReady()
 
     QCOMPARE(model.data(model.index(0), ModuleListModel::PresenceStateRole).toString(), QStringLiteral("ready"));
     QCOMPARE(model.data(model.index(0), ModuleListModel::PresenceErrorRole).toString(), QString());
+}
+
+void TestModuleListModel::interfacesRoleListsEveryDeclaredInterfaceRegardlessOfState()
+{
+    codec::InterfaceSchema stateful;
+    stateful.name = QStringLiteral("IRoof");
+    stateful.version = 2;
+    stateful.state = codec::StateSchema {};
+
+    codec::InterfaceSchema stateless;
+    stateless.name = QStringLiteral("IModule");
+    stateless.version = 1;
+
+    ModuleInfo info = makeModule(QStringLiteral("roof@localhost"));
+    info.interfaces.insert(stateful.name, stateful);
+    info.interfaces.insert(stateless.name, stateless);
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList interfaces = model.data(model.index(0), ModuleListModel::InterfacesRole).toList();
+    QCOMPARE(interfaces.size(), 2);
+
+    const QVariantMap first = interfaces.at(0).toMap();
+    QCOMPARE(first.value(QStringLiteral("name")).toString(), QStringLiteral("IModule"));
+    QCOMPARE(first.value(QStringLiteral("version")).toInt(), 1);
+
+    const QVariantMap second = interfaces.at(1).toMap();
+    QCOMPARE(second.value(QStringLiteral("name")).toString(), QStringLiteral("IRoof"));
+    QCOMPARE(second.value(QStringLiteral("version")).toInt(), 2);
+}
+
+void TestModuleListModel::interfacesRoleIsEmptyWithNoInterfaces()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("roof@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::InterfacesRole).toList().isEmpty());
+}
+
+void TestModuleListModel::capabilitiesRoleListsEveryInterfacesWholeCapabilitiesDict()
+{
+    ModuleInfo info = makeModule(QStringLiteral("roof@localhost"));
+    info.capabilities.insert(QStringLiteral("IModule"),
+                             codec::WireValue(codec::WireDict {
+                                 { QStringLiteral("label"), codec::WireValue(QStringLiteral("Roof")) },
+                                 { QStringLiteral("version"), codec::WireValue(QStringLiteral("1.2.3")) },
+                             }));
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList capabilities = model.data(model.index(0), ModuleListModel::CapabilitiesRole).toList();
+    QCOMPARE(capabilities.size(), 1);
+
+    const QVariantMap entry = capabilities.at(0).toMap();
+    QCOMPARE(entry.value(QStringLiteral("ifaceName")).toString(), QStringLiteral("IModule"));
+
+    const QVariantList fields = entry.value(QStringLiteral("value")).toList();
+    QCOMPARE(fields.size(), 2);
+    QCOMPARE(fields.at(0).toMap().value(QStringLiteral("key")).toString(), QStringLiteral("label"));
+    QCOMPARE(fields.at(0).toMap().value(QStringLiteral("value")).toString(), QStringLiteral("Roof"));
+    QCOMPARE(fields.at(1).toMap().value(QStringLiteral("key")).toString(), QStringLiteral("version"));
+    QCOMPARE(fields.at(1).toMap().value(QStringLiteral("value")).toString(), QStringLiteral("1.2.3"));
+}
+
+void TestModuleListModel::capabilitiesRoleIsEmptyWithNoCapabilities()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("roof@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::CapabilitiesRole).toList().isEmpty());
 }
 
 void TestModuleListModel::versionComesFromIModuleCapabilities()
@@ -398,6 +476,21 @@ void TestModuleListModel::jidForModuleNameDoesNotMatchTheDisplayName()
 
     QVERIFY(model.jidForModuleName(QStringLiteral("DummyMode")).isEmpty());
     QCOMPARE(model.jidForModuleName(QStringLiteral("mode")), QStringLiteral("mode@localhost"));
+}
+
+void TestModuleListModel::jidsListsEveryModuleInRowOrder()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("mode@localhost")));
+    model.upsert(makeModule(QStringLiteral("roof@localhost")));
+
+    QCOMPARE(model.jids(), QStringList({ QStringLiteral("mode@localhost"), QStringLiteral("roof@localhost") }));
+}
+
+void TestModuleListModel::jidsIsEmptyWithNoModules()
+{
+    ModuleListModel model;
+    QVERIFY(model.jids().isEmpty());
 }
 
 void TestModuleListModel::allCommandsListsOneEntryPerCommandAcrossModules()

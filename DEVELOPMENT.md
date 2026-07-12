@@ -2758,6 +2758,159 @@ the same "the indicator not being there is itself information" property
 dragging/wheel scroll - only its *visual* rendering was ever the
 problem.
 
+### Status page: expandable per-module drill-down
+
+Direct request, answering the open question left by "Dashboard and
+`RoofWidget` removed" above: bring back `DashboardView.vue`'s
+expand/collapse per-module drill-down (interface badges, live state,
+capabilities), but onto `StatusView.qml` rather than resurrecting a
+Dashboard - this page was already the natural home once Dashboard was
+gone, and there's still no second consumer for `subscribeState()`/
+`KeyValueCard` to justify a separate page.
+
+Ports `DashboardView.vue` fairly literally: collapsed by default (`▸`/`▾`
+chevron, whole row clickable via a `MouseArea` painted *behind* the row's
+`RowLayout` so its own "Clear error" `Button` still gets first claim on
+the click - the standard "background click-catcher declared first"
+stacking trick), plus "Expand all"/"Collapse all" buttons. Expanded state
+is a plain JS object used as a Set (`expandedJids`), always reassigned
+wholesale rather than mutated in place, same reasoning as everywhere else
+in this codebase that a QML binding only re-evaluates on property
+*reassignment*.
+
+Three new pieces on `ModuleListModel`, since none of its existing
+narrowly-scoped roles (`VersionRole`, `ModeGroupsRole`, etc.) were meant
+for a generic dump: `InterfacesRole` ("interfaces", every declared
+interface + version, unlike `StatefulInterfacesRole`'s state-only
+filter - the badge row), `CapabilitiesRole` ("capabilities", every
+interface's *whole* decoded capabilities dict bridged via
+`codec::toQVariant`, keyed `ifaceName`/`value` - not `interface`/`value`,
+because `interface` is an ES/QML reserved word and breaks a `required
+property` of that name on a Repeater delegate bound directly to the
+list), and `Q_INVOKABLE QStringList jids()`, the same "QML gets no
+generic random-access iteration over a `QAbstractListModel`" escape hatch
+as `hasInterface()`/`allCommands()`, needed for "Expand all" to build its
+full jid set without per-row access into the model.
+
+Live state subscriptions follow `RoofView.qml`'s manual lifecycle
+pattern (`Component.onCompleted` subscribe / `Component.onDestruction`
+unsubscribe via a `property var subscription: null`), but sidestep that
+file's own documented footgun (a `property var subscription: <expr>`
+binding re-running without unsubscribing the old one first, when its
+dependencies change while the *same* delegate instance persists) by
+construction rather than by care: the inner `Repeater`'s `model` is
+`expanded ? statefulInterfaces : []`, and `ModuleListModel::data()`
+allocates a brand-new `QVariantList` on every call, so any relevant
+change is a full model-reference swap - `Repeater` (over a plain array,
+unlike `ListView` over a real `QAbstractItemModel`) always destroys and
+fully recreates every delegate on that, never mutates one in place. A
+subscription is created and torn down exactly once per delegate
+instance, never resubscribed out from under itself.
+
+Verified live end-to-end using `scripts/screenshot_page.py Status
+<out.png> --click "Expand all"` (see that script's own header for the
+AT-SPI technique) against the `telescope` fixture plus this dev machine's
+other already-running fixtures: badges, per-interface live state (real
+`IWeather`/`IRunning`/... field values, not placeholders), and
+`"<Interface> capabilities"` sections all rendered correctly, and
+`--click "Collapse all"` afterward tore every subscription back down
+cleanly (chevrons back to `▸`, no leaked `KeyValueCard`s, no QML
+`TypeError`/binding-loop warnings in the log). One red herring while
+checking that log: several *other* dummy modules (`autoguiding`,
+`acquisition`, etc.) logged `"Could not subscribe to state node
+pyobs:state:telescope:IPointingAltAz:1 after 30 attempts"` at the same
+timestamp - initially alarming, but it's cross-module `pyobs-core`-side
+chatter (those dummy modules apparently probe for a guiding-target
+telescope on their own, independent of any GUI client) that lines up with
+`telescope` having only just been started for this session, not
+something this page's code could cause - every `subscribeState()` call
+here is scoped to its own row's own `jid`, never another module's.
+
+### `KeyValueCard.qml` follow-up: color-coded nested values, ported from `statuswidget.py`
+
+Direct request: "I like the way pyobs-gui does this better" - `KeyValueCard`'s
+nested/list values (e.g. `IWeather`'s `readings` field, a `WireList` of
+per-sensor `WireDict`s) were previously dumped with a plain
+`JSON.stringify()`, unreadable next to `statuswidget.py`'s own recursive,
+color-coded `_format_value_html()`/`_format_dataclass_html()`. Ported that
+scheme: field names in a normal-contrast "key" color, leaf values in an
+amber "value" accent, brackets/braces in a muted punctuation color,
+recursing into nested dicts (`{field=value, field=value}`) and lists
+(`[value, value]`) the same way. One deliberate simplification: no
+leading type name for a nested dict the way pyobs-gui prefixes one via
+Python's `type(value).__name__` - `codec::WireValue` is schema-less by
+design (see `WireValue.h`) and never reconstructs a dataclass name at
+decode time, so there's nothing to put there. Also deliberately just one
+fixed color set, not pyobs-gui's own light/dark-palette-aware pair
+(`_detail_colors()`) - this app has no other runtime light/dark branching
+anywhere (every other hand-picked color in this codebase is a single
+fixed value) and always renders with Fusion's dark look in practice.
+
+The real ambiguity: a `WireDict` and a `WireList` both cross the C++/QML
+boundary as the same kind of list-like object (`codec::toQVariant`, see
+`VariantBridge.h`) - a dict is always encoded as a list of `{"key":...,
+"value":...}` entries, so `isDictShaped()` treats exactly that shape (a
+non-empty list whose first element has both a `key` and a `value`
+property) as "this is really a dict," everything else as a plain list.
+Verified live with a throwaway synthetic value temporarily substituted
+into `StatusView.qml` (a nested dict, a plain list, and a list of dicts
+shaped like a real `IWeather` reading - `{sensor=temp, value=15}` came out
+exactly as expected, then removed once confirmed) plus a full
+`scripts/screenshot_page.py Status ... --click "Expand all"` pass against
+the live fixtures - every real field (`IModule` capabilities, `IRunning`/
+`IAcquisition`/`IAutoFocus` state, empty `IConfig capabilities` `caps: []`)
+rendered with the right colors and no leftover raw JSON anywhere.
+
+### Status page follow-up: one-line-per-State/Capabilities, matching `statuswidget.py` exactly
+
+Direct follow-up: "I mean I like the overall design for this whole
+feature better in pyobs-gui. The one-line per State/Cap." The previous
+section's first pass (badges row for interfaces, a bold interface-name
+heading followed by a whole `KeyValueCard` table per stateful/
+capabilities-bearing interface) was closer to this project's own earlier
+generic-rendering conventions than to `statuswidget.py`'s actual
+`_add_module_details()` shape, which is one *single* rich-text line per
+category: `"Interfaces: A, B, C"` (plain, one line total), then one
+`"Capabilities (X): field=value, ..."` line per capabilities-bearing
+interface, then one `"State (X): field=value, ..."` line per stateful
+interface - reordered/rewritten in `StatusView.qml` to match that
+directly, replacing the badges `Flow` and both `KeyValueCard`-based
+`Repeater`s with plain `Label`s. Colors are `_DARK_DETAIL_COLORS`'s own
+`interfaces`/`capabilities`/`state` entries (`#9aa0a6`/`#8ab4f8`/
+`#81c995`), stored as `StatusView.qml`-local properties since they're
+this page's own row-*category* colors, distinct from
+`WireValueFormat.js`'s wire-*value* colors (key/value/punctuation) below.
+
+This split the recursive value-formatting logic (previously private to
+`KeyValueCard.qml`) out into a new shared `qml/widgets/WireValueFormat.js`
+(a plain `.pragma library` JS module, added to `CMakeLists.txt`'s
+`QML_FILES` like any other qml-module resource) - `KeyValueCard.qml`
+still needs it for its own per-row values (RoofView/TelescopeQuickView's
+plugin example still render a whole live-state table that way, a
+different and still-valid design for a single-interface widget embedded
+in a `GroupBox`), while `StatusView.qml` now needs the *same* recursive
+formatter but for a single inline line instead of a table. Added one
+genuinely new function alongside the ported `formatValueHtml()`
+(nested values, kept its brace-wrapping): `formatDictInline()`, the
+top-level counterpart matching `_format_dataclass_html()` exactly -
+comma-joined `field=value` pairs with *no* enclosing braces, since only
+*nested* dict values get pyobs-gui's `TypeName(...)`-style wrapping (here,
+just `{...}`, see the previous section's note on why no type name).
+
+Live state lines keep exactly the same `subscribeState()` lifecycle as
+before (`Component.onCompleted`/`Component.onDestruction` on the
+`Repeater` delegate, now a `Label` instead of a `ColumnLayout` wrapping a
+`KeyValueCard`) - only the visual output changed, not the subscription
+plumbing. Verified live the same way as the previous two rounds
+(`scripts/screenshot_page.py Status ... --click "Expand all"` against the
+real fixtures): every module's `Interfaces:`/`Capabilities (X):`/
+`State (X):` lines rendered correctly in one line each, including
+`IWeather`'s `readings` field recursing correctly into a list of
+per-sensor dicts (`{sensor=temp, value=15, unit=celsius, ...}`) inline
+rather than as a separate table row, and `--click "Collapse all"`
+afterward tore every subscription down cleanly with no QML errors in the
+log.
+
 ---
 
 ## Retrospective: QML vs QtWidgets
