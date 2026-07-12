@@ -11,18 +11,28 @@ import pyobs.polaris
 // TelescopeView.qml needed the exact same widget (DummyTelescope also
 // implements ITemperatures) rather than duplicating this much state/UI.
 //
-// The host page (CameraView.qml/TelescopeView.qml) still owns its own
-// findInterface()/statefulInterfaces lookup and just hands the result in
-// via `interfaceInfo` - this component manages its own subscription
-// lifecycle (Component.onCompleted/onDestruction) independently, so it
-// works the same regardless of which page embeds it.
+// Takes the host's own `statefulInterfaces` role list and does its own
+// findInterface() lookup internally (same convention as
+// FiltersPanel.qml/FocuserPanel.qml/CoolingPanel.qml) - this component
+// manages its own subscription lifecycle (Component.onCompleted/
+// onDestruction) independently, so it works the same regardless of which
+// page embeds it, and now regardless of whether that page even knows this
+// component exists (see SidebarPanelRegistry.qml).
+//
+// `availableFilters` is unused here - declared anyway so every panel
+// registered in SidebarPanelRegistry.qml shares one identical property
+// contract; see that file's own doc comment for why.
 GroupBox {
     id: root
 
-    required property var xmppClient
-    required property string jid
-    required property string moduleName // for the plot window's title
-    required property var statefulInterfaces
+    // Not `required` - see CoolingPanel.qml's own comment for why (loaded
+    // dynamically via SidebarPanelRegistry.qml's Repeater, which can only
+    // assign these properties *after* construction).
+    property var xmppClient: null
+    property string jid: ""
+    property string moduleName: "" // for the plot window's title
+    property var statefulInterfaces: []
+    property var availableFilters: [] // unused - part of the shared panel contract
 
     function findInterface(name) {
         const list = root.statefulInterfaces || []

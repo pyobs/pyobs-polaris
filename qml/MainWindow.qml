@@ -86,6 +86,12 @@ ApplicationWindow {
         id: widgetRegistry
     }
 
+    // See SidebarPanelRegistry.qml's own doc comment for how this differs
+    // from widgetRegistry above - a singleton (unlike WidgetRegistry,
+    // which lives only here) since CameraView.qml/TelescopeView.qml are
+    // separate files with no shared ancestor scope to thread a plain
+    // instance through.
+
     // Step 2: scans AppSettings::pluginsDirectory for .qml files and
     // registers each one into widgetRegistry above - see PluginLoader.qml
     // for the plugin file contract. A no-op (nothing to load) while
@@ -125,6 +131,16 @@ ApplicationWindow {
         CameraView { xmppClient: root.xmppClient; vfsEndpoints: root.vfsEndpoints; vfsClient: root.vfsClient }
     }
 
+    // Sidebar panels (SidebarPanelRegistry.qml) - unlike the page-level
+    // Components above, these take no closure-bound properties at all:
+    // xmppClient/jid/moduleName/statefulInterfaces/availableFilters are
+    // all set generically by whichever host page's Repeater loads them
+    // (see e.g. CameraView.qml's own sidebar column), never here.
+    property Component coolingPanelComponent: Component { CoolingPanel {} }
+    property Component temperaturesPanelComponent: Component { TemperaturesPanel {} }
+    property Component filtersPanelComponent: Component { FiltersPanel {} }
+    property Component focuserPanelComponent: Component { FocuserPanel {} }
+
     // Per-entry visibility (same order/length as widgetRegistry.entries),
     // recomputed explicitly on every module-list change - WidgetRegistry's
     // isVisible() is a plain query, not a live binding, same as
@@ -161,6 +177,11 @@ ApplicationWindow {
         widgetRegistry.registerForInterface("IWeather", { iconGlyph: "☁", label: "Weather", component: root.weatherComponent })
         widgetRegistry.registerForInterface("ITelescope", { iconGlyph: "🔭", label: "Telescope", component: root.telescopeComponent })
         widgetRegistry.registerForInterface("ICamera", { iconGlyph: "📷", label: "Camera", component: root.cameraComponent })
+
+        SidebarPanelRegistry.registerPanel("ICooling", root.coolingPanelComponent)
+        SidebarPanelRegistry.registerPanel("ITemperatures", root.temperaturesPanelComponent)
+        SidebarPanelRegistry.registerPanel("IFilters", root.filtersPanelComponent)
+        SidebarPanelRegistry.registerPanel("IFocuser", root.focuserPanelComponent)
 
         pluginLoader.loadAll(root.appSettings.pluginFiles())
 

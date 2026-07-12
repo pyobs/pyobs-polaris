@@ -105,6 +105,18 @@ if(APPLE)
     set_target_properties(polaris PROPERTIES MACOSX_BUNDLE TRUE)
 endif()
 
+# qt_add_qml_module's automatic QML_FILES scanning doesn't inspect a
+# file's own `pragma Singleton` to decide the generated qmldir entry -
+# without this, SidebarPanelRegistry.qml resolves as a regular
+# (non-singleton) type at runtime, and referencing it by bare type name
+# from QML (as every consumer here does, never instantiating it directly)
+# fails with a confusing "Property 'registerPanel' of object
+# SidebarPanelRegistry is not a function" rather than a clear "unknown
+# type" error - caught live, not something a clean build alone reveals.
+# Must come before qt_add_qml_module() - it reads this property when it
+# processes QML_FILES below.
+set_source_files_properties(qml/SidebarPanelRegistry.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(polaris
     URI pyobs.polaris
     VERSION 1.0
@@ -113,6 +125,7 @@ qt_add_qml_module(polaris
         qml/LoginWindow.qml
         qml/MainWindow.qml
         qml/WidgetRegistry.qml
+        qml/SidebarPanelRegistry.qml
         qml/PluginLoader.qml
         qml/views/ShellView.qml
         qml/views/LogsView.qml
@@ -133,6 +146,7 @@ qt_add_qml_module(polaris
         qml/widgets/TemperaturesPanel.qml
         qml/widgets/FiltersPanel.qml
         qml/widgets/FocuserPanel.qml
+        qml/widgets/CoolingPanel.qml
 )
 
 target_link_libraries(polaris PRIVATE

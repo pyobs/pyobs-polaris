@@ -18,13 +18,22 @@ import QtQuick.Layouts
 // convention every custom widget in this codebase already uses - needed
 // here specifically so the "IMotion" version comes from the module's
 // real disco#info rather than being guessed/hardcoded.
+//
+// `moduleName` is unused here (TemperaturesPanel.qml's own plot-window
+// title is the only consumer) - declared anyway so every panel registered
+// in SidebarPanelRegistry.qml shares one identical property contract; see
+// that file's own doc comment for why that matters.
 GroupBox {
     id: root
 
-    required property var xmppClient
-    required property string jid
-    required property var statefulInterfaces
-    required property var availableFilters // QVariantList of strings (ModuleListModel::FiltersRole)
+    // Not `required` - see CoolingPanel.qml's own comment for why (loaded
+    // dynamically via SidebarPanelRegistry.qml's Repeater, which can only
+    // assign these properties *after* construction).
+    property var xmppClient: null
+    property string jid: ""
+    property string moduleName: "" // unused - part of the shared panel contract
+    property var statefulInterfaces: []
+    property var availableFilters: [] // QVariantList of strings (ModuleListModel::FiltersRole)
 
     function findInterface(name) {
         const list = root.statefulInterfaces || []

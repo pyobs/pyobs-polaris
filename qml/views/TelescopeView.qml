@@ -28,8 +28,11 @@ import pyobs.polaris
 // source, unlike any Dummy* camera module), making this page - not
 // CameraView.qml - where those three widgets actually got live-verified.
 // All three are qml/widgets/*Panel.qml components shared verbatim with
-// CameraView.qml, not duplicated here - see that file's own comment on
-// why they were factored out.
+// CameraView.qml, not hand-wired here - both pages' fourth/third columns
+// are now a single generic SidebarPanelRegistry-driven Repeater (direct
+// follow-up: "would it make sense to make this a general thing and
+// widgets can decide whether they need a sidebar... go full registry") -
+// see SidebarPanelRegistry.qml and CameraView.qml's own matching comment.
 //
 // Status now also shows the live current-pointing readout
 // (RA/Dec and/or Alt/Az, decimal degrees) via labelCurRA/Dec/Alt/Az's
@@ -93,6 +96,19 @@ ScrollView {
                         }
                     }
                     return null
+                }
+
+                // See CameraView.qml's own copy of this function for why -
+                // this page's sidebar column is the same
+                // SidebarPanelRegistry-driven Repeater.
+                function hasAnySidebarPanel() {
+                    const registryEntries = SidebarPanelRegistry.entries
+                    for (let i = 0; i < registryEntries.length; ++i) {
+                        if (telescopeDelegate.findInterface(registryEntries[i].interface) !== null) {
+                            return true
+                        }
+                    }
+                    return false
                 }
 
                 function fieldOf(entries, key) {
@@ -722,40 +738,34 @@ ScrollView {
                         }
                     }
 
-                    // --- Filter/Focus/Temperatures: telescopewidget.ui's
-                    // own fourth sidebar, out of scope until this direct
-                    // follow-up (see the file header comment). Same
-                    // shared qml/widgets/*Panel.qml components
-                    // CameraView.qml's third column uses.
+                    // --- Fourth column: telescopewidget.ui's own fourth
+                    // sidebar (Filter/Focus/Temperatures), out of scope
+                    // until a direct follow-up (see the file header
+                    // comment) shipped it, then generalized into the same
+                    // fully generic SidebarPanelRegistry-driven Repeater
+                    // as CameraView.qml's own third column - see that
+                    // file's own comment on this Repeater for the "why".
                     ColumnLayout {
                         Layout.alignment: Qt.AlignTop
                         Layout.preferredWidth: 220
                         spacing: 8
-                        visible: telescopeDelegate.findInterface("ITemperatures") !== null
-                            || telescopeDelegate.findInterface("IFilters") !== null
-                            || telescopeDelegate.findInterface("IFocuser") !== null
+                        visible: telescopeDelegate.hasAnySidebarPanel()
 
-                        TemperaturesPanel {
-                            Layout.fillWidth: true
-                            xmppClient: root.xmppClient
-                            jid: telescopeDelegate.jid
-                            moduleName: telescopeDelegate.name
-                            statefulInterfaces: telescopeDelegate.statefulInterfaces
-                        }
+                        Repeater {
+                            model: SidebarPanelRegistry.entries
 
-                        FiltersPanel {
-                            Layout.fillWidth: true
-                            xmppClient: root.xmppClient
-                            jid: telescopeDelegate.jid
-                            statefulInterfaces: telescopeDelegate.statefulInterfaces
-                            availableFilters: telescopeDelegate.filters
-                        }
+                            delegate: Loader {
+                                Layout.fillWidth: true
+                                sourceComponent: modelData.component
 
-                        FocuserPanel {
-                            Layout.fillWidth: true
-                            xmppClient: root.xmppClient
-                            jid: telescopeDelegate.jid
-                            statefulInterfaces: telescopeDelegate.statefulInterfaces
+                                onLoaded: {
+                                    item.xmppClient = root.xmppClient
+                                    item.jid = telescopeDelegate.jid
+                                    item.moduleName = telescopeDelegate.name
+                                    item.statefulInterfaces = Qt.binding(() => telescopeDelegate.statefulInterfaces)
+                                    item.availableFilters = Qt.binding(() => telescopeDelegate.filters)
+                                }
+                            }
                         }
                     }
 

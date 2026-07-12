@@ -94,6 +94,21 @@ ScrollView {
                     return null
                 }
 
+                // Whether *any* SidebarPanelRegistry-registered panel
+                // applies to this module - lets the sidebar column itself
+                // collapse to nothing when none do, without this page
+                // needing to hardcode which interfaces the registry
+                // happens to hold panels for (see SidebarPanelRegistry.qml).
+                function hasAnySidebarPanel() {
+                    const registryEntries = SidebarPanelRegistry.entries
+                    for (let i = 0; i < registryEntries.length; ++i) {
+                        if (cameraDelegate.findInterface(registryEntries[i].interface) !== null) {
+                            return true
+                        }
+                    }
+                    return false
+                }
+
                 function fieldOf(entries, key) {
                     const list = entries || []
                     for (let i = 0; i < list.length; ++i) {
@@ -113,7 +128,6 @@ ScrollView {
                 readonly property var windowInterface: findInterface("IWindow")
                 readonly property var gainInterface: findInterface("IGain")
                 readonly property var imageFormatInterface: findInterface("IImageFormat")
-                readonly property var coolingInterface: findInterface("ICooling")
                 readonly property bool hasAbort: findInterface("IAbortable") !== null
 
                 property var exposureSubscription: null
@@ -123,7 +137,6 @@ ScrollView {
                 property var windowSubscription: null
                 property var gainSubscription: null
                 property var imageFormatSubscription: null
-                property var coolingSubscription: null
 
                 function refreshSubscriptions() {
                     if (exposureSubscription) { exposureSubscription.unsubscribe(); exposureSubscription = null }
@@ -133,7 +146,6 @@ ScrollView {
                     if (windowSubscription) { windowSubscription.unsubscribe(); windowSubscription = null }
                     if (gainSubscription) { gainSubscription.unsubscribe(); gainSubscription = null }
                     if (imageFormatSubscription) { imageFormatSubscription.unsubscribe(); imageFormatSubscription = null }
-                    if (coolingSubscription) { coolingSubscription.unsubscribe(); coolingSubscription = null }
 
                     if (visible && exposureInterface) {
                         exposureSubscription = root.xmppClient.subscribeState(
@@ -163,10 +175,6 @@ ScrollView {
                         imageFormatSubscription = root.xmppClient.subscribeState(
                             jid, "IImageFormat", imageFormatInterface.version, cameraDelegate)
                     }
-                    if (visible && coolingInterface) {
-                        coolingSubscription = root.xmppClient.subscribeState(
-                            jid, "ICooling", coolingInterface.version, cameraDelegate)
-                    }
                 }
 
                 onVisibleChanged: refreshSubscriptions()
@@ -177,7 +185,6 @@ ScrollView {
                 onWindowInterfaceChanged: refreshSubscriptions()
                 onGainInterfaceChanged: refreshSubscriptions()
                 onImageFormatInterfaceChanged: refreshSubscriptions()
-                onCoolingInterfaceChanged: refreshSubscriptions()
                 Component.onCompleted: {
                     refreshSubscriptions()
                     checkForNewImage()
@@ -190,7 +197,6 @@ ScrollView {
                 readonly property var windowState: windowSubscription ? windowSubscription.value : undefined
                 readonly property var gainState: gainSubscription ? gainSubscription.value : undefined
                 readonly property var imageFormatState: imageFormatSubscription ? imageFormatSubscription.value : undefined
-                readonly property var coolingState: coolingSubscription ? coolingSubscription.value : undefined
 
                 readonly property string exposureStatus: fieldOf(exposureState, "status") || ""
                 readonly property real exposureProgress: fieldOf(exposureState, "progress") || 0
@@ -1259,160 +1265,53 @@ ScrollView {
                         }
                     }
 
-                    // --- Third column: ICooling, ITemperatures,
-                    // IFilters, IFocuser - mirrors camerawidget.ui's own
+                    // --- Third column: mirrors camerawidget.ui's own
                     // right-hand sidebar position for Cooling/
-                    // Temperatures/FITS headers. ITemperatures/IFilters/
-                    // IFocuser were all originally out of scope (see
-                    // TODO.md's ITelescope-MVP deferral) and shipped in
-                    // separate follow-up passes as directly requested.
-                    //
-                    // ITemperatures ("the camera page is missing a widget
-                    // for ITemperatures, right? check pyobs-gui") ports
-                    // pyobs-gui's temperatureswidget.py/
-                    // temperaturesplotwidget.py; the plot itself needed
-                    // plot::PlotItem extended with genuine multi-series
-                    // support (`series`/`xTicksAsTime`, see PlotItem.h) -
-                    // AutoFocusView's/AcquisitionView's own single-series
-                    // usage is untouched.
-                    //
-                    // IFilters/IFocuser ("finish the camera page with
-                    // filter/focus. both can also show up for the
-                    // telescope.") port filterwidget.py/focuswidget.py.
-                    // Neither is live-testable against a real ICamera
-                    // module in this dev environment - no Dummy* camera
-                    // implements either (confirmed from pyobs-core
-                    // source) - so these two are schema-verified only on
-                    // this page, same accepted precedent as IAbortable
-                    // (TODO.md). `DummyTelescope` does implement all
-                    // three (IFilters/IFocuser/ITemperatures), which is
-                    // where these actually got live-verified - see
-                    // TelescopeView.qml.
-                    //
-                    // All three of ITemperatures/IFilters/IFocuser are
-                    // factored into standalone qml/widgets/*Panel.qml
-                    // components (not left inline here) specifically so
-                    // TelescopeView.qml could reuse them verbatim instead
-                    // of duplicating this much state/UI a second time.
+                    // Temperatures/FITS headers. Originally a hand-wired
+                    // Cooling GroupBox plus, once shipped as direct
+                    // follow-up requests, ITemperatures/IFilters/IFocuser
+                    // panels (see DEVELOPMENT.md for the ports/live-
+                    // verification notes on each) - generalized into a
+                    // fully generic SidebarPanelRegistry-driven Repeater
+                    // once TelescopeView.qml needed the exact same sidebar
+                    // shape too ("would it make sense to make this a
+                    // general thing and widgets can decide whether they
+                    // need a sidebar... go full registry"). This column no
+                    // longer hardcodes a single interface/panel name -
+                    // adding a new sidebar panel anywhere in this project
+                    // now only means registering it in MainWindow.qml,
+                    // never touching this file or TelescopeView.qml again.
                     ColumnLayout {
                         Layout.preferredWidth: 220
                         Layout.maximumWidth: 220
                         Layout.alignment: Qt.AlignTop
                         spacing: 8
-                        visible: cameraDelegate.coolingInterface !== null
-                            || cameraDelegate.findInterface("ITemperatures") !== null
-                            || cameraDelegate.findInterface("IFilters") !== null
-                            || cameraDelegate.findInterface("IFocuser") !== null
+                        visible: cameraDelegate.hasAnySidebarPanel()
 
-                        GroupBox {
-                            title: "Cooling"
-                            Layout.fillWidth: true
-                            visible: cameraDelegate.coolingInterface !== null
+                        Repeater {
+                            model: SidebarPanelRegistry.entries
 
-                            ColumnLayout {
-                                width: parent.width
-                                spacing: 6
+                            delegate: Loader {
+                                Layout.fillWidth: true
+                                sourceComponent: modelData.component
 
-                                readonly property bool currentEnabled: !!cameraDelegate.fieldOf(cameraDelegate.coolingState, "enabled")
-                                readonly property var currentSetpoint: cameraDelegate.fieldOf(cameraDelegate.coolingState, "setpoint")
-                                readonly property var currentPower: cameraDelegate.fieldOf(cameraDelegate.coolingState, "power")
-
-                                property bool lastSyncedEnabled: false
-                                property real lastSyncedSetpoint: NaN
-
-                                onCurrentEnabledChanged: {
-                                    const wasSynced = coolingCheck.checked === lastSyncedEnabled
-                                    lastSyncedEnabled = currentEnabled
-                                    if (wasSynced) {
-                                        coolingCheck.checked = currentEnabled
-                                    }
-                                }
-
-                                onCurrentSetpointChanged: {
-                                    if (currentSetpoint === undefined || currentSetpoint === null) {
-                                        return
-                                    }
-                                    const wasSynced = isNaN(lastSyncedSetpoint) || Math.round(setpointSpin.value) === Math.round(lastSyncedSetpoint * 10)
-                                    lastSyncedSetpoint = currentSetpoint
-                                    if (wasSynced) {
-                                        setpointSpin.value = Math.round(currentSetpoint * 10)
-                                    }
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    CheckBox {
-                                        id: coolingCheck
-                                        text: "Enabled"
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    Label {
-                                        text: parent.parent.currentEnabled
-                                            ? (parent.parent.currentPower !== undefined && parent.parent.currentPower !== null
-                                               ? parent.parent.currentPower + "%" : "")
-                                            : "OFF"
-                                        color: "grey"
-                                    }
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Label { text: "Setpoint:" }
-                                    Label {
-                                        text: parent.parent.currentEnabled && parent.parent.currentSetpoint !== undefined && parent.parent.currentSetpoint !== null
-                                            ? parent.parent.currentSetpoint.toFixed(1) + "°C" : "-"
-                                        color: "grey"
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    SpinBox {
-                                        id: setpointSpin
-                                        from: -1000
-                                        to: 500
-                                        editable: true
-                                        textFromValue: (value) => (value / 10).toFixed(1)
-                                        valueFromText: (text) => Math.round(parseFloat(text) * 10)
-                                    }
-                                    Label { text: "°C" }
-                                }
-
-                                Button {
-                                    Layout.fillWidth: true
-                                    text: "Apply"
-                                    onClicked: {
-                                        cameraDelegate.lastError = ""
-                                        root.xmppClient.executeMethod(
-                                            jid, "set_cooling", [coolingCheck.checked, setpointSpin.value / 10],
-                                            function (result) {
-                                                if (!result.success) {
-                                                    cameraDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
-                                                }
-                                            })
-                                    }
+                                // Every registered panel shares one
+                                // identical property contract (see
+                                // SidebarPanelRegistry.qml) - statefulInterfaces/
+                                // availableFilters need Qt.binding(), not a
+                                // plain value, since this module's own role
+                                // data can update in place (dataChanged)
+                                // for the same still-loaded delegate
+                                // instance without ever being destroyed/
+                                // recreated.
+                                onLoaded: {
+                                    item.xmppClient = root.xmppClient
+                                    item.jid = cameraDelegate.jid
+                                    item.moduleName = cameraDelegate.name
+                                    item.statefulInterfaces = Qt.binding(() => cameraDelegate.statefulInterfaces)
+                                    item.availableFilters = Qt.binding(() => cameraDelegate.filters)
                                 }
                             }
-                        }
-
-                        TemperaturesPanel {
-                            Layout.fillWidth: true
-                            xmppClient: root.xmppClient
-                            jid: cameraDelegate.jid
-                            moduleName: cameraDelegate.name
-                            statefulInterfaces: cameraDelegate.statefulInterfaces
-                        }
-
-                        FiltersPanel {
-                            Layout.fillWidth: true
-                            xmppClient: root.xmppClient
-                            jid: cameraDelegate.jid
-                            statefulInterfaces: cameraDelegate.statefulInterfaces
-                            availableFilters: cameraDelegate.filters
-                        }
-
-                        FocuserPanel {
-                            Layout.fillWidth: true
-                            xmppClient: root.xmppClient
-                            jid: cameraDelegate.jid
-                            statefulInterfaces: cameraDelegate.statefulInterfaces
                         }
                     }
                 }

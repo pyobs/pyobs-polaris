@@ -11,12 +11,21 @@ import QtQuick.Layouts
 //
 // Takes the host's own `statefulInterfaces` role list and does its own
 // findInterface() lookups internally, same convention as FiltersPanel.qml.
+//
+// `moduleName`/`availableFilters` are unused here - declared anyway so
+// every panel registered in SidebarPanelRegistry.qml shares one identical
+// property contract; see that file's own doc comment for why.
 GroupBox {
     id: root
 
-    required property var xmppClient
-    required property string jid
-    required property var statefulInterfaces
+    // Not `required` - see CoolingPanel.qml's own comment for why (loaded
+    // dynamically via SidebarPanelRegistry.qml's Repeater, which can only
+    // assign these properties *after* construction).
+    property var xmppClient: null
+    property string jid: ""
+    property string moduleName: "" // unused - part of the shared panel contract
+    property var statefulInterfaces: []
+    property var availableFilters: [] // unused - part of the shared panel contract
 
     function findInterface(name) {
         const list = root.statefulInterfaces || []
