@@ -725,6 +725,26 @@ ScrollView {
                         }
                     }
 
+                    // Spacer *before* the sidebar, not after it - this
+                    // RowLayout's own width is the page's full available
+                    // width (Layout.fillWidth: true, line 308), but
+                    // Status/Move/Offsets/SidebarColumn's combined natural
+                    // width is usually less than that. The leftover space
+                    // has to go somewhere; putting the spacer here (right
+                    // before the sidebar) keeps SidebarColumn - and
+                    // crucially its collapse/expand handle - pinned to the
+                    // window's actual right edge regardless of window
+                    // width or collapsed state. A trailing spacer *after*
+                    // SidebarColumn instead (the original placement)
+                    // looked fine while the sidebar was a fixed 220px
+                    // column, but once it could collapse down to just the
+                    // handle's own slim width, that handle ended up
+                    // stranded next to Offsets with a large gap before the
+                    // true window edge - direct report: "the arrow for
+                    // opening it is not at the edge of the window, but
+                    // right next to the last widget".
+                    Item { Layout.fillWidth: true }
+
                     // --- Fourth column: telescopewidget.ui's own fourth
                     // sidebar (Filter/Focus/Temperatures), out of scope
                     // until a direct follow-up (see the file header
@@ -744,8 +764,6 @@ ScrollView {
                         statefulInterfaces: telescopeDelegate.statefulInterfaces
                         availableFilters: telescopeDelegate.filters
                     }
-
-                    Item { Layout.fillWidth: true }
                 }
             }
         }
