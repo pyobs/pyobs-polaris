@@ -124,8 +124,71 @@ ColumnLayout {
         visible: false
     }
 
-    function copyEntryToClipboard(entry) {
-        clipboardHelper.text = root.entryAsText(entry)
+    // Multi-row selection, keyed by each entry's own `uuid` (EventLogModel::
+    // PyobsEvent::uuid, already present on every entry entriesOfType()
+    // returns) rather than a positional array index - indices into
+    // filteredEvents would silently point at a *different* entry the
+    // moment the module/level filters change (a real correctness risk,
+    // not hypothetical: toggling a module checkbox recomputes
+    // filteredEvents entirely), while a uuid stays meaningful regardless
+    // of what's currently filtered in or out. A plain array, not a Set -
+    // same "QML property bindings only notify on reassignment either way"
+    // reasoning hiddenModules above already uses.
+    property var selectedUuids: []
+    // Last-clicked uuid, for Shift-click range selection - separate from
+    // selectedUuids itself since the anchor must survive Ctrl-click
+    // toggling entries in/out of the selection.
+    property string selectionAnchorUuid: ""
+
+    // Plain click selects just this entry; Ctrl-click toggles it into/out
+    // of the current selection (anchor moves to it either way); Shift-
+    // click selects the whole range between the anchor and this entry,
+    // computed from filteredEvents' *current* order (the visual order the
+    // user actually clicked through - matches standard list/table
+    // multi-select UX in every desktop app, not just this one).
+    function selectRow(entry, modifiers) {
+        const uuid = entry.uuid
+        if (modifiers & Qt.ControlModifier) {
+            if (root.selectedUuids.includes(uuid)) {
+                root.selectedUuids = root.selectedUuids.filter((u) => u !== uuid)
+            } else {
+                root.selectedUuids = root.selectedUuids.concat([uuid])
+            }
+            root.selectionAnchorUuid = uuid
+        } else if (modifiers & Qt.ShiftModifier && root.selectionAnchorUuid !== "") {
+            const list = root.filteredEvents
+            const anchorIdx = list.findIndex((e) => e.uuid === root.selectionAnchorUuid)
+            const clickedIdx = list.findIndex((e) => e.uuid === uuid)
+            if (anchorIdx === -1 || clickedIdx === -1) {
+                root.selectedUuids = [uuid]
+            } else {
+                const lo = Math.min(anchorIdx, clickedIdx)
+                const hi = Math.max(anchorIdx, clickedIdx)
+                root.selectedUuids = list.slice(lo, hi + 1).map((e) => e.uuid)
+            }
+        } else {
+            root.selectedUuids = [uuid]
+            root.selectionAnchorUuid = uuid
+        }
+    }
+
+    // Right-clicking a row that's already part of a multi-selection keeps
+    // the whole selection (so "Copy" on the context menu copies all of
+    // it) - right-clicking outside the current selection replaces it with
+    // just that one row first, matching standard file-manager/list
+    // right-click behavior.
+    function ensureRowSelected(entry) {
+        if (!root.selectedUuids.includes(entry.uuid)) {
+            root.selectedUuids = [entry.uuid]
+            root.selectionAnchorUuid = entry.uuid
+        }
+    }
+
+    function copySelectedToClipboard() {
+        const lines = root.filteredEvents
+            .filter((e) => root.selectedUuids.includes(e.uuid))
+            .map((e) => root.entryAsText(e))
+        clipboardHelper.text = lines.join("\n")
         clipboardHelper.selectAll()
         clipboardHelper.copy()
     }
@@ -151,7 +214,11 @@ ColumnLayout {
 
         Button {
             text: "Clear"
-            onClicked: root.xmppClient.events.clear()
+            onClicked: {
+                root.xmppClient.events.clear()
+                root.selectedUuids = []
+                root.selectionAnchorUuid = ""
+            }
         }
     }
 
@@ -180,18 +247,22 @@ ColumnLayout {
         model: root.filteredEvents
         onCountChanged: positionViewAtEnd()
 
-        // Item, not a bare RowLayout, as the delegate root - a right-click
-        // "Copy" context menu needs a MouseArea sibling of the RowLayout
-        // (not squeezed inside it as a layout cell, which would distort
-        // the row), and MouseArea/Menu both need a plain Item to anchor
-        // against. acceptedButtons: Qt.RightButton only, so this never
-        // intercepts anything else the row itself might want (nothing
-        // does today, but this doesn't foreclose it later).
+        // Item, not a bare RowLayout, as the delegate root - the
+        // selection-highlight Rectangle and the click-handling MouseArea
+        // both need to be siblings of the RowLayout (not squeezed inside
+        // it as layout cells, which would distort the row), and both need
+        // a plain Item to anchor against.
         delegate: Item {
             id: logRow
             required property var modelData
             width: ListView.view.width
             height: rowLayout.implicitHeight
+
+            Rectangle {
+                anchors.fill: parent
+                visible: root.selectedUuids.includes(logRow.modelData.uuid)
+                color: "#2d5a8c"
+            }
 
             RowLayout {
                 id: rowLayout
@@ -220,17 +291,28 @@ ColumnLayout {
                 }
             }
 
+            // Left button drives selection (plain/Ctrl/Shift-click - see
+            // root.selectRow()'s own comment); right button opens the
+            // "Copy" menu, first folding a click outside the current
+            // selection down to just that one row (root.ensureRowSelected()).
             MouseArea {
                 anchors.fill: parent
-                acceptedButtons: Qt.RightButton
-                onClicked: contextMenu.popup()
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onClicked: (mouse) => {
+                    if (mouse.button === Qt.RightButton) {
+                        root.ensureRowSelected(logRow.modelData)
+                        contextMenu.popup()
+                    } else {
+                        root.selectRow(logRow.modelData, mouse.modifiers)
+                    }
+                }
             }
 
             Menu {
                 id: contextMenu
                 MenuItem {
-                    text: "Copy"
-                    onTriggered: root.copyEntryToClipboard(logRow.modelData)
+                    text: root.selectedUuids.length > 1 ? "Copy (" + root.selectedUuids.length + " rows)" : "Copy"
+                    onTriggered: root.copySelectedToClipboard()
                 }
             }
         }

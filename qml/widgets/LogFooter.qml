@@ -69,8 +69,52 @@ ColumnLayout {
         visible: false
     }
 
-    function copyEntryToClipboard(entry) {
-        clipboardHelper.text = root.entryAsText(entry)
+    // Multi-row selection - see LogsView.qml's identical comment on why
+    // this is keyed by each entry's own uuid rather than a positional
+    // array index (this page has no filtering, so that risk is smaller
+    // here, but keeping the exact same idiom both places is worth more
+    // than a slightly simpler index-based version only this file uses).
+    property var selectedUuids: []
+    property string selectionAnchorUuid: ""
+
+    function selectRow(entry, modifiers) {
+        const uuid = entry.uuid
+        if (modifiers & Qt.ControlModifier) {
+            if (root.selectedUuids.includes(uuid)) {
+                root.selectedUuids = root.selectedUuids.filter((u) => u !== uuid)
+            } else {
+                root.selectedUuids = root.selectedUuids.concat([uuid])
+            }
+            root.selectionAnchorUuid = uuid
+        } else if (modifiers & Qt.ShiftModifier && root.selectionAnchorUuid !== "") {
+            const list = root.logEvents
+            const anchorIdx = list.findIndex((e) => e.uuid === root.selectionAnchorUuid)
+            const clickedIdx = list.findIndex((e) => e.uuid === uuid)
+            if (anchorIdx === -1 || clickedIdx === -1) {
+                root.selectedUuids = [uuid]
+            } else {
+                const lo = Math.min(anchorIdx, clickedIdx)
+                const hi = Math.max(anchorIdx, clickedIdx)
+                root.selectedUuids = list.slice(lo, hi + 1).map((e) => e.uuid)
+            }
+        } else {
+            root.selectedUuids = [uuid]
+            root.selectionAnchorUuid = uuid
+        }
+    }
+
+    function ensureRowSelected(entry) {
+        if (!root.selectedUuids.includes(entry.uuid)) {
+            root.selectedUuids = [entry.uuid]
+            root.selectionAnchorUuid = entry.uuid
+        }
+    }
+
+    function copySelectedToClipboard() {
+        const lines = root.logEvents
+            .filter((e) => root.selectedUuids.includes(e.uuid))
+            .map((e) => root.entryAsText(e))
+        clipboardHelper.text = lines.join("\n")
         clipboardHelper.selectAll()
         clipboardHelper.copy()
     }
@@ -86,13 +130,20 @@ ColumnLayout {
         onCountChanged: positionViewAtEnd()
 
         // See LogsView.qml's identical comment for why this is a plain
-        // Item (not a bare RowLayout) - the right-click "Copy" MouseArea
-        // needs a sibling, not a layout cell of its own.
+        // Item (not a bare RowLayout) - the selection-highlight Rectangle
+        // and the click-handling MouseArea both need to be siblings of
+        // the RowLayout, not layout cells of it.
         delegate: Item {
             id: logRow
             required property var modelData
             width: ListView.view.width
             height: rowLayout.implicitHeight
+
+            Rectangle {
+                anchors.fill: parent
+                visible: root.selectedUuids.includes(logRow.modelData.uuid)
+                color: "#2d5a8c"
+            }
 
             RowLayout {
                 id: rowLayout
@@ -123,15 +174,22 @@ ColumnLayout {
 
             MouseArea {
                 anchors.fill: parent
-                acceptedButtons: Qt.RightButton
-                onClicked: contextMenu.popup()
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onClicked: (mouse) => {
+                    if (mouse.button === Qt.RightButton) {
+                        root.ensureRowSelected(logRow.modelData)
+                        contextMenu.popup()
+                    } else {
+                        root.selectRow(logRow.modelData, mouse.modifiers)
+                    }
+                }
             }
 
             Menu {
                 id: contextMenu
                 MenuItem {
-                    text: "Copy"
-                    onTriggered: root.copyEntryToClipboard(logRow.modelData)
+                    text: root.selectedUuids.length > 1 ? "Copy (" + root.selectedUuids.length + " rows)" : "Copy"
+                    onTriggered: root.copySelectedToClipboard()
                 }
             }
         }
