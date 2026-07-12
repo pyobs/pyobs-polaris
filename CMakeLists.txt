@@ -55,6 +55,8 @@ qt_add_executable(polaris
     src/comm/VfsClient.cpp
     src/comm/SimbadClient.h
     src/comm/SimbadClient.cpp
+    src/comm/JplHorizonsClient.h
+    src/comm/JplHorizonsClient.cpp
     src/comm/ModuleInfo.h
     src/comm/ModuleListModel.h
     src/comm/ModuleListModel.cpp

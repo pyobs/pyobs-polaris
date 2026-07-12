@@ -60,6 +60,10 @@ QtObject {
         id: simbadClient
     }
 
+    property var _jplHorizonsClient: JplHorizonsClient {
+        id: jplHorizonsClient
+    }
+
     property var _loginWindow: LoginWindow {
         xmppClient: xmppClient
         appSettings: appSettings
@@ -73,6 +77,7 @@ QtObject {
         vfsEndpoints: vfsEndpointsModel
         vfsClient: vfsClient
         simbadClient: simbadClient
+        jplHorizonsClient: jplHorizonsClient
         visible: xmppClient.status === "connected"
     }
 }

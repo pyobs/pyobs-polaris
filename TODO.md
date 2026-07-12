@@ -160,14 +160,15 @@ stub when actually read (just shows the Sun's current position, doesn't
 convert the typed value) - not a trustworthy reference to port from
 as-is.
 
-**Still explicitly out of scope even once unblocked**: JPL Horizons/MPC
-lookups (network dependency, unrelated to any of this), the compass
-widget. SIMBAD name resolution - once listed alongside these two - is
-done (`comm::SimbadClient`, talks SIMBAD's own TAP/ADQL service directly
-rather than pulling in astroquery, see `DEVELOPMENT.md`'s own write-up);
-JPL Horizons/MPC remain out of scope purely because nothing in this
-project needs their APIs specifically yet, not because of any technical
-blocker SIMBAD's own solution didn't already clear. The rest of
+**Still explicitly out of scope even once unblocked**: MPC lookups
+(network dependency, unrelated to any of this), the compass widget.
+SIMBAD name resolution and JPL Horizons ephemeris lookup - both once
+listed alongside MPC here - are done (`comm::SimbadClient`/
+`comm::JplHorizonsClient`, both talk their respective service's own HTTP
+API directly rather than pulling in astroquery, see `DEVELOPMENT.md`'s
+own write-ups); MPC remains out of scope purely because nothing in this
+project needs its API specifically yet, not because of any technical
+blocker the other two's own solutions didn't already clear. The rest of
 telescopewidget.ui's own fourth sidebar (Filter/Focus/Temperatures) is
 done - see `DEVELOPMENT.md`'s `TelescopeView.qml`/`CameraView.qml`
 follow-ups.

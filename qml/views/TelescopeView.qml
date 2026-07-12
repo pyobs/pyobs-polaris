@@ -5,25 +5,30 @@ import pyobs.polaris
 
 // Dedicated page for ITelescope modules, ported from pyobs-gui's
 // telescopewidget.py - MVP scope only (see TODO.md for what's
-// deliberately out of scope: solar-frame pointing, JPL Horizons/MPC/
+// deliberately out of scope: solar-frame pointing, MPC lookups,
 // orbit-elements lookups, the jog/compass widget). Sexagesimal RA/Dec
-// input and SIMBAD name resolution used to be on that list too - both
-// shipped as direct follow-ups: Move's RA/Dec fields now accept
-// "12:00:00"/"45:30:00" alongside plain decimal degrees via the
-// Sexagesimal QML singleton (src/util/Sexagesimal.h - see that file's
-// own comment for the parsing rule and why a bare number still means
-// degrees, not hours, unlike pyobs-gui's own astropy-based parsing), and
-// a "Simbad" button next to a name field resolves any SIMBAD-known
-// identifier ("M31", "Sirius", ...) straight into those same fields via
-// comm::SimbadClient (src/comm/SimbadClient.h - talks SIMBAD's own
-// TAP/ADQL service directly, no astroquery dependency needed). ITelescope
-// itself is a bare IMotion marker (confirmed against
-// pyobs.interfaces.ITelescope source), so the base block below is
-// identical to RoofView.qml's; Status/Move/Offsets stack under it, each
-// gated on the module actually implementing the relevant capability
-// interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/IOffsetsAltAz) -
-// see DEVELOPMENT.md for the live-verification caveat around
-// IOffsetsAltAz specifically.
+// input, SIMBAD name resolution, and JPL Horizons ephemeris lookup used
+// to be on that list too - all three shipped as direct follow-ups:
+// Move's RA/Dec fields now accept "12:00:00"/"45:30:00" alongside plain
+// decimal degrees via the Sexagesimal QML singleton (src/util/
+// Sexagesimal.h - see that file's own comment for the parsing rule and
+// why a bare number still means degrees, not hours, unlike pyobs-gui's
+// own astropy-based parsing); a "Simbad" button next to a name field
+// resolves any SIMBAD-known identifier ("M31", "Sirius", ...) straight
+// into those same fields via comm::SimbadClient (src/comm/SimbadClient.h
+// - talks SIMBAD's own TAP/ADQL service directly, no astroquery
+// dependency needed); and a "JPL Horizons" button does the same for
+// solar-system bodies ("Ceres", "499" for Mars, ...) via
+// comm::JplHorizonsClient (src/comm/JplHorizonsClient.h - same "talk the
+// HTTP API directly" reasoning, but a genuinely different kind of lookup
+// than Simbad's: a computed *current* position for a moving body, not a
+// fixed catalog one). ITelescope itself is a bare IMotion marker
+// (confirmed against pyobs.interfaces.ITelescope source), so the base
+// block below is identical to RoofView.qml's; Status/Move/Offsets stack
+// under it, each gated on the module actually implementing the relevant
+// capability interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/
+// IOffsetsAltAz) - see DEVELOPMENT.md for the live-verification caveat
+// around IOffsetsAltAz specifically.
 //
 // Layout: four GroupBoxes side by side (Status/Move/Offsets/Filter-Focus-
 // Temperatures), the first three ported from telescopewidget.ui's own
@@ -69,6 +74,7 @@ ScrollView {
     required property var xmppClient
     required property var appSettings
     required property var simbadClient
+    required property var jplHorizonsClient
 
     clip: true
 
@@ -275,6 +281,45 @@ ScrollView {
                         telescopeDelegate.simbadQuerying = false
                         telescopeDelegate.simbadStatusIsError = true
                         telescopeDelegate.simbadStatusText = errorMessage
+                    }
+                }
+
+                // JPL Horizons name resolution - same shape as the Simbad
+                // block above (own requestId/querying/status properties,
+                // own Connections block against root.jplHorizonsClient),
+                // kept as an entirely separate set of properties rather
+                // than sharing Simbad's so a user can freely use either
+                // (or both, one after the other) without them clobbering
+                // each other's in-flight state.
+                property string pendingJplHorizonsRequestId: ""
+                property bool jplHorizonsQuerying: false
+                property string jplHorizonsStatusText: ""
+                property bool jplHorizonsStatusIsError: false
+
+                Connections {
+                    target: root.jplHorizonsClient
+                    function onQueryReady(requestId, ra, dec, targetName) {
+                        if (requestId !== telescopeDelegate.pendingJplHorizonsRequestId
+                                || telescopeDelegate.pendingJplHorizonsRequestId === "") {
+                            return
+                        }
+                        telescopeDelegate.pendingJplHorizonsRequestId = ""
+                        telescopeDelegate.jplHorizonsQuerying = false
+                        telescopeDelegate.jplHorizonsStatusIsError = false
+                        telescopeDelegate.jplHorizonsStatusText = "→ " + targetName + ": RA " + ra.toFixed(6)
+                            + "°, Dec " + dec.toFixed(6) + "°"
+                        raField.text = ra.toFixed(6)
+                        decField.text = dec.toFixed(6)
+                    }
+                    function onQueryFailed(requestId, errorMessage) {
+                        if (requestId !== telescopeDelegate.pendingJplHorizonsRequestId
+                                || telescopeDelegate.pendingJplHorizonsRequestId === "") {
+                            return
+                        }
+                        telescopeDelegate.pendingJplHorizonsRequestId = ""
+                        telescopeDelegate.jplHorizonsQuerying = false
+                        telescopeDelegate.jplHorizonsStatusIsError = true
+                        telescopeDelegate.jplHorizonsStatusText = errorMessage
                     }
                 }
 
@@ -577,6 +622,50 @@ ScrollView {
                                 visible: moveTypeCombo.currentText === "RA/Dec" && telescopeDelegate.simbadStatusText.length > 0
                                 text: telescopeDelegate.simbadStatusText
                                 color: telescopeDelegate.simbadStatusIsError ? "red" : "grey"
+                                wrapMode: Text.WordWrap
+                            }
+
+                            // JPL Horizons name resolution - ports pyobs-gui's own
+                            // buttonJplHorizonsQuery/textJplHorizonsName
+                            // (telescopewidget.py's _query_jpl_horizons()). Unlike
+                            // Simbad above (a fixed catalog position), Horizons
+                            // computes a solar-system body's actual current
+                            // position (light-time corrected, for "now") rather
+                            // than a static one - meaningfully different data, not
+                            // just a different data source, hence its own separate
+                            // field/button/status rather than merging with Simbad's.
+                            // Talks Horizons' own HTTP API directly
+                            // (comm::JplHorizonsClient, src/comm/JplHorizonsClient.h),
+                            // same "no astroquery dependency needed" reasoning as
+                            // SimbadClient.
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: moveTypeCombo.currentText === "RA/Dec"
+
+                                TextField {
+                                    id: jplHorizonsNameField
+                                    Layout.fillWidth: true
+                                    placeholderText: "JPL Horizons body name (e.g. Ceres, Mars)"
+                                    enabled: !telescopeDelegate.jplHorizonsQuerying
+                                }
+                                Button {
+                                    text: telescopeDelegate.jplHorizonsQuerying ? "Querying…" : "JPL Horizons"
+                                    enabled: !telescopeDelegate.jplHorizonsQuerying && jplHorizonsNameField.text.length > 0
+                                    onClicked: {
+                                        const requestId = telescopeDelegate.jid + "|jplhorizons|" + Date.now()
+                                        telescopeDelegate.pendingJplHorizonsRequestId = requestId
+                                        telescopeDelegate.jplHorizonsQuerying = true
+                                        telescopeDelegate.jplHorizonsStatusText = ""
+                                        root.jplHorizonsClient.queryByName(requestId, jplHorizonsNameField.text)
+                                    }
+                                }
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                visible: moveTypeCombo.currentText === "RA/Dec" && telescopeDelegate.jplHorizonsStatusText.length > 0
+                                text: telescopeDelegate.jplHorizonsStatusText
+                                color: telescopeDelegate.jplHorizonsStatusIsError ? "red" : "grey"
                                 wrapMode: Text.WordWrap
                             }
 

@@ -117,6 +117,24 @@ target_link_libraries(tst_simbadclient PRIVATE Qt6::Test Qt6::Network Qt6::Qml)
 
 add_test(NAME tst_simbadclient COMMAND tst_simbadclient)
 
+# Also compiles CoordinateTransform.cpp/libnova, unlike tst_vfsclient/
+# tst_simbadclient above - JplHorizonsClient.cpp reuses
+# coordxform::nowJulianDay() for its TLIST parameter rather than
+# duplicating a second "current time as Julian Day" helper (see that
+# file's own header comment).
+add_executable(tst_jplhorizonsclient
+    comm/tst_jplhorizonsclient.cpp
+    ${CMAKE_SOURCE_DIR}/src/comm/JplHorizonsClient.h
+    ${CMAKE_SOURCE_DIR}/src/comm/JplHorizonsClient.cpp
+    ${CMAKE_SOURCE_DIR}/src/util/CoordinateTransform.h
+    ${CMAKE_SOURCE_DIR}/src/util/CoordinateTransform.cpp
+)
+target_include_directories(tst_jplhorizonsclient PRIVATE ${CMAKE_SOURCE_DIR}/src/comm ${CMAKE_SOURCE_DIR}/src/util)
+target_link_libraries(tst_jplhorizonsclient PRIVATE Qt6::Test Qt6::Network Qt6::Qml libnova)
+target_compile_definitions(tst_jplhorizonsclient PRIVATE LIBNOVA_SHARED)
+
+add_test(NAME tst_jplhorizonsclient COMMAND tst_jplhorizonsclient)
+
 add_executable(tst_modulelistmodel
     comm/tst_modulelistmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/comm/ModuleInfo.h
