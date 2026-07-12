@@ -128,7 +128,12 @@ ApplicationWindow {
         TelescopeView { xmppClient: root.xmppClient; appSettings: root.appSettings }
     }
     property Component cameraComponent: Component {
-        CameraView { xmppClient: root.xmppClient; vfsEndpoints: root.vfsEndpoints; vfsClient: root.vfsClient }
+        CameraView {
+            xmppClient: root.xmppClient
+            vfsEndpoints: root.vfsEndpoints
+            vfsClient: root.vfsClient
+            appSettings: root.appSettings
+        }
     }
 
     // Sidebar panels (SidebarPanelRegistry.qml) - unlike the page-level

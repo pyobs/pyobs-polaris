@@ -52,6 +52,7 @@ ScrollView {
     required property var xmppClient
     required property var vfsEndpoints
     required property var vfsClient
+    required property var appSettings
 
     clip: true
 
@@ -92,21 +93,6 @@ ScrollView {
                         }
                     }
                     return null
-                }
-
-                // Whether *any* SidebarPanelRegistry-registered panel
-                // applies to this module - lets the sidebar column itself
-                // collapse to nothing when none do, without this page
-                // needing to hardcode which interfaces the registry
-                // happens to hold panels for (see SidebarPanelRegistry.qml).
-                function hasAnySidebarPanel() {
-                    const registryEntries = SidebarPanelRegistry.entries
-                    for (let i = 0; i < registryEntries.length; ++i) {
-                        if (cameraDelegate.findInterface(registryEntries[i].interface) !== null) {
-                            return true
-                        }
-                    }
-                    return false
                 }
 
                 function fieldOf(entries, key) {
@@ -1276,91 +1262,25 @@ ScrollView {
                     // once TelescopeView.qml needed the exact same sidebar
                     // shape too ("would it make sense to make this a
                     // general thing and widgets can decide whether they
-                    // need a sidebar... go full registry"). This column no
-                    // longer hardcodes a single interface/panel name -
-                    // adding a new sidebar panel anywhere in this project
-                    // now only means registering it in MainWindow.qml,
-                    // never touching this file or TelescopeView.qml again.
-                    ColumnLayout {
-                        Layout.preferredWidth: 220
-                        Layout.maximumWidth: 220
+                    // need a sidebar... go full registry"), then factored
+                    // out into SidebarColumn.qml once it also grew a
+                    // resize handle and collapse toggle that
+                    // TelescopeView.qml's own fourth column needed
+                    // identically ("the sidebar should have the same size
+                    // over several widgets") - see that file's own header
+                    // comment for the shape/rationale. Adding a new
+                    // sidebar panel anywhere in this project still only
+                    // means registering it in MainWindow.qml, never
+                    // touching this file, TelescopeView.qml, or
+                    // SidebarColumn.qml again.
+                    SidebarColumn {
                         Layout.alignment: Qt.AlignTop
-                        spacing: 8
-                        visible: cameraDelegate.hasAnySidebarPanel()
-
-                        Repeater {
-                            model: SidebarPanelRegistry.entries
-
-                            delegate: Loader {
-                                id: panelLoader
-                                Layout.fillWidth: true
-                                // A GroupBox (every registered panel's root)
-                                // binds its own `width` to `implicitWidth` as
-                                // part of being a Control - from Loader's
-                                // perspective that counts as the item having
-                                // set its own explicit width, so Loader's
-                                // usual "resize my item to match me" behavior
-                                // never kicks in (unlike a plain ColumnLayout-
-                                // rooted page, which has no such self-binding
-                                // and does get auto-resized). Without this,
-                                // each panel's real width was whatever its
-                                // own widest row happened to need, not the
-                                // sidebar column's actual width - visible live
-                                // as a stray right-edge gap on any panel whose
-                                // content wasn't already coincidentally wide
-                                // (e.g. TemperaturesPanel, next to Cooling's
-                                // wider Setpoint-row-driven GroupBox).
-                                //
-                                // Likewise, this Loader's own `visible` is
-                                // never tied to the loaded panel's own
-                                // `visible: interfaceInfo !== null` - Loader
-                                // and the GroupBox it loads are two separate
-                                // Items, and a hidden GroupBox still has a
-                                // real (nonzero) implicitHeight from its
-                                // title+content, which the *Loader* (still
-                                // visible, still that tall) then reserves
-                                // space for in this ColumnLayout regardless.
-                                // On TelescopeView.qml specifically, the
-                                // first registered panel (CoolingPanel) is
-                                // exactly this case - hidden (no ICooling)
-                                // but still reserving its own height above
-                                // Temperatures, showing up as a stray top
-                                // margin. Computed directly from the same
-                                // findInterface() check every panel already
-                                // does internally, rather than reading
-                                // `panelLoader.item.visible` back through the
-                                // Loader - that indirection turned out not to
-                                // reliably re-evaluate live (caught by
-                                // watching it silently stay stuck at its
-                                // initial `false` even once the loaded
-                                // panel's own `interfaceInfo` had resolved
-                                // correctly - never fully root-caused, not
-                                // worth chasing further when this direct,
-                                // simpler check works and matches
-                                // hasAnySidebarPanel()'s own logic below).
-                                visible: cameraDelegate.findInterface(modelData.interface) !== null
-
-                                sourceComponent: modelData.component
-
-                                // Every registered panel shares one
-                                // identical property contract (see
-                                // SidebarPanelRegistry.qml) - statefulInterfaces/
-                                // availableFilters need Qt.binding(), not a
-                                // plain value, since this module's own role
-                                // data can update in place (dataChanged)
-                                // for the same still-loaded delegate
-                                // instance without ever being destroyed/
-                                // recreated.
-                                onLoaded: {
-                                    item.xmppClient = root.xmppClient
-                                    item.jid = cameraDelegate.jid
-                                    item.moduleName = cameraDelegate.name
-                                    item.statefulInterfaces = Qt.binding(() => cameraDelegate.statefulInterfaces)
-                                    item.availableFilters = Qt.binding(() => cameraDelegate.filters)
-                                    item.width = Qt.binding(() => panelLoader.width)
-                                }
-                            }
-                        }
+                        xmppClient: root.xmppClient
+                        appSettings: root.appSettings
+                        jid: cameraDelegate.jid
+                        moduleName: cameraDelegate.name
+                        statefulInterfaces: cameraDelegate.statefulInterfaces
+                        availableFilters: cameraDelegate.filters
                     }
                 }
             }

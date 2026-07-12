@@ -50,6 +50,17 @@ class AppSettings : public QObject
                    observerLongitudeChanged)
     Q_PROPERTY(double observerElevation READ observerElevation WRITE setObserverElevation NOTIFY
                    observerElevationChanged)
+    // Right-hand sidebar (SidebarColumn.qml, CameraView.qml/TelescopeView.qml's
+    // Cooling/Temperatures/Filters/Focuser column) width and collapsed
+    // state - one shared pair of settings for every page using
+    // SidebarColumn.qml, not per-page, matching the direct instruction
+    // "the sidebar should have the same size over several widgets".
+    // sidebarWidth deliberately keeps its last value while collapsed
+    // (collapsing doesn't zero it) so re-expanding restores what the user
+    // had before, matching how e.g. VS Code's own collapsible sidebar
+    // behaves.
+    Q_PROPERTY(double sidebarWidth READ sidebarWidth WRITE setSidebarWidth NOTIFY sidebarWidthChanged)
+    Q_PROPERTY(bool sidebarCollapsed READ sidebarCollapsed WRITE setSidebarCollapsed NOTIFY sidebarCollapsedChanged)
 
 public:
     explicit AppSettings(QObject *parent = nullptr);
@@ -66,6 +77,11 @@ public:
     void setObserverLongitude(double value);
     double observerElevation() const;
     void setObserverElevation(double value);
+
+    double sidebarWidth() const;
+    void setSidebarWidth(double value);
+    bool sidebarCollapsed() const;
+    void setSidebarCollapsed(bool value);
 
     // Getters above default to 0.0 when unset - indistinguishable from a
     // real location at (0,0). This is the actual "has the user set this
@@ -97,6 +113,8 @@ Q_SIGNALS:
     void observerLatitudeChanged();
     void observerLongitudeChanged();
     void observerElevationChanged();
+    void sidebarWidthChanged();
+    void sidebarCollapsedChanged();
 
 private:
     QSettings m_settings;

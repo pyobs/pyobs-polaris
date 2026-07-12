@@ -98,19 +98,6 @@ ScrollView {
                     return null
                 }
 
-                // See CameraView.qml's own copy of this function for why -
-                // this page's sidebar column is the same
-                // SidebarPanelRegistry-driven Repeater.
-                function hasAnySidebarPanel() {
-                    const registryEntries = SidebarPanelRegistry.entries
-                    for (let i = 0; i < registryEntries.length; ++i) {
-                        if (telescopeDelegate.findInterface(registryEntries[i].interface) !== null) {
-                            return true
-                        }
-                    }
-                    return false
-                }
-
                 function fieldOf(entries, key) {
                     const list = entries || []
                     for (let i = 0; i < list.length; ++i) {
@@ -743,52 +730,19 @@ ScrollView {
                     // until a direct follow-up (see the file header
                     // comment) shipped it, then generalized into the same
                     // fully generic SidebarPanelRegistry-driven Repeater
-                    // as CameraView.qml's own third column - see that
-                    // file's own comment on this Repeater for the "why".
-                    ColumnLayout {
+                    // as CameraView.qml's own third column, then factored
+                    // into SidebarColumn.qml (resize handle + collapse
+                    // toggle, shared width/collapsed state) once this page
+                    // needed that identically too - see that file's own
+                    // header comment.
+                    SidebarColumn {
                         Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: 220
-                        spacing: 8
-                        visible: telescopeDelegate.hasAnySidebarPanel()
-
-                        Repeater {
-                            model: SidebarPanelRegistry.entries
-
-                            delegate: Loader {
-                                id: panelLoader
-                                Layout.fillWidth: true
-                                // See CameraView.qml's own copy of this
-                                // Repeater for why both of these are needed -
-                                // a GroupBox's own implicit-width self-binding
-                                // defeats Loader's usual auto-resize-to-me
-                                // behavior, and a hidden GroupBox still has a
-                                // real implicitHeight this Loader (a distinct,
-                                // still-*visible* Item) would otherwise keep
-                                // reserving space for. This page is in fact
-                                // where the second bug was actually spotted
-                                // live - CoolingPanel is always hidden here
-                                // (DummyTelescope has no ICooling) but sits
-                                // first in registry order, so it showed up as
-                                // a stray top margin above Temperatures.
-                                // Computed directly via findInterface(), not
-                                // by reading `panelLoader.item.visible` back
-                                // through the Loader - see CameraView.qml's
-                                // own comment on why that indirection didn't
-                                // reliably re-evaluate live.
-                                visible: telescopeDelegate.findInterface(modelData.interface) !== null
-
-                                sourceComponent: modelData.component
-
-                                onLoaded: {
-                                    item.xmppClient = root.xmppClient
-                                    item.jid = telescopeDelegate.jid
-                                    item.moduleName = telescopeDelegate.name
-                                    item.statefulInterfaces = Qt.binding(() => telescopeDelegate.statefulInterfaces)
-                                    item.availableFilters = Qt.binding(() => telescopeDelegate.filters)
-                                    item.width = Qt.binding(() => panelLoader.width)
-                                }
-                            }
-                        }
+                        xmppClient: root.xmppClient
+                        appSettings: root.appSettings
+                        jid: telescopeDelegate.jid
+                        moduleName: telescopeDelegate.name
+                        statefulInterfaces: telescopeDelegate.statefulInterfaces
+                        availableFilters: telescopeDelegate.filters
                     }
 
                     Item { Layout.fillWidth: true }

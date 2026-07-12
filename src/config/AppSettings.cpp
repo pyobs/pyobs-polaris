@@ -12,6 +12,9 @@ constexpr auto kPluginsDirectoryKey = "plugins/directory";
 constexpr auto kObserverLatitudeKey = "observer/latitude";
 constexpr auto kObserverLongitudeKey = "observer/longitude";
 constexpr auto kObserverElevationKey = "observer/elevation";
+constexpr auto kSidebarWidthKey = "sidebar/width";
+constexpr auto kSidebarCollapsedKey = "sidebar/collapsed";
+constexpr double kDefaultSidebarWidth = 220.0;
 } // namespace
 
 AppSettings::AppSettings(QObject *parent)
@@ -92,6 +95,36 @@ void AppSettings::setObserverElevation(double value)
 
     m_settings.setValue(kObserverElevationKey, value);
     Q_EMIT observerElevationChanged();
+}
+
+double AppSettings::sidebarWidth() const
+{
+    return m_settings.value(kSidebarWidthKey, kDefaultSidebarWidth).toDouble();
+}
+
+void AppSettings::setSidebarWidth(double value)
+{
+    if (value == sidebarWidth()) {
+        return;
+    }
+
+    m_settings.setValue(kSidebarWidthKey, value);
+    Q_EMIT sidebarWidthChanged();
+}
+
+bool AppSettings::sidebarCollapsed() const
+{
+    return m_settings.value(kSidebarCollapsedKey, false).toBool();
+}
+
+void AppSettings::setSidebarCollapsed(bool value)
+{
+    if (value == sidebarCollapsed()) {
+        return;
+    }
+
+    m_settings.setValue(kSidebarCollapsedKey, value);
+    Q_EMIT sidebarCollapsedChanged();
 }
 
 bool AppSettings::hasObserverLocation() const

@@ -26,6 +26,8 @@ private slots:
     void observerLocationDefaultsToZeroAndUnset();
     void observerLocationPersistsAndNotifies();
     void hasObserverLocationRequiresBothLatAndLon();
+    void sidebarWidthDefaultsAndPersists();
+    void sidebarCollapsedDefaultsAndPersists();
 };
 
 void TestAppSettings::initTestCase()
@@ -174,6 +176,44 @@ void TestAppSettings::hasObserverLocationRequiresBothLatAndLon()
 
     settings.setObserverLongitude(13.405);
     QVERIFY(settings.hasObserverLocation());
+}
+
+void TestAppSettings::sidebarWidthDefaultsAndPersists()
+{
+    AppSettings settings;
+    QCOMPARE(settings.sidebarWidth(), 220.0);
+
+    QSignalSpy spy(&settings, &AppSettings::sidebarWidthChanged);
+    settings.setSidebarWidth(300.0);
+
+    QCOMPARE(settings.sidebarWidth(), 300.0);
+    QCOMPARE(spy.count(), 1);
+
+    AppSettings reloaded;
+    QCOMPARE(reloaded.sidebarWidth(), 300.0);
+
+    spy.clear();
+    settings.setSidebarWidth(300.0);
+    QCOMPARE(spy.count(), 0);
+}
+
+void TestAppSettings::sidebarCollapsedDefaultsAndPersists()
+{
+    AppSettings settings;
+    QVERIFY(!settings.sidebarCollapsed());
+
+    QSignalSpy spy(&settings, &AppSettings::sidebarCollapsedChanged);
+    settings.setSidebarCollapsed(true);
+
+    QVERIFY(settings.sidebarCollapsed());
+    QCOMPARE(spy.count(), 1);
+
+    AppSettings reloaded;
+    QVERIFY(reloaded.sidebarCollapsed());
+
+    spy.clear();
+    settings.setSidebarCollapsed(true);
+    QCOMPARE(spy.count(), 0);
 }
 
 QTEST_MAIN(TestAppSettings)

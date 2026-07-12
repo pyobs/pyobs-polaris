@@ -147,6 +147,7 @@ qt_add_qml_module(polaris
         qml/widgets/FiltersPanel.qml
         qml/widgets/FocuserPanel.qml
         qml/widgets/CoolingPanel.qml
+        qml/widgets/SidebarColumn.qml
 )
 
 target_link_libraries(polaris PRIVATE
