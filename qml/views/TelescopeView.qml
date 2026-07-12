@@ -5,13 +5,19 @@ import pyobs.polaris
 
 // Dedicated page for ITelescope modules, ported from pyobs-gui's
 // telescopewidget.py - MVP scope only (see TODO.md for what's
-// deliberately out of scope: sexagesimal RA/Dec parsing, solar-frame
-// pointing, SIMBAD/Horizons/MPC/orbit-elements lookups, the jog/compass
-// widget). ITelescope itself is a bare IMotion marker (confirmed against
-// pyobs.interfaces.ITelescope source), so the base block below is
-// identical to RoofView.qml's; Status/Move/Offsets stack under it, each
-// gated on the module actually implementing the relevant capability
-// interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/IOffsetsAltAz) -
+// deliberately out of scope: solar-frame pointing, SIMBAD/Horizons/MPC/
+// orbit-elements lookups, the jog/compass widget). Sexagesimal RA/Dec
+// input used to be on that list too - shipped as a direct follow-up
+// (Move's RA/Dec fields now accept "12:00:00"/"45:30:00" alongside plain
+// decimal degrees via the Sexagesimal QML singleton, src/util/
+// Sexagesimal.h - see that file's own comment for the parsing rule and
+// why a bare number still means degrees, not hours, unlike pyobs-gui's
+// own astropy-based parsing). ITelescope itself is a bare IMotion marker
+// (confirmed against pyobs.interfaces.ITelescope source), so the base
+// block below is identical to RoofView.qml's; Status/Move/Offsets stack
+// under it, each gated on the module actually implementing the relevant
+// capability interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/
+// IOffsetsAltAz) -
 // see DEVELOPMENT.md for the live-verification caveat around
 // IOffsetsAltAz specifically.
 //
@@ -489,19 +495,34 @@ ScrollView {
                                 Layout.fillWidth: true
                                 visible: moveTypeCombo.currentText === "RA/Dec"
 
-                                Label { text: "RA [deg]:" }
+                                // Accepts either plain decimal degrees
+                                // (unchanged from before, e.g. "180.5") or
+                                // sexagesimal notation (e.g. "12:00:00" -
+                                // hours for RA, "45:30:00" for Dec; colon,
+                                // space, or h/m/s-letter separators all
+                                // work, seconds optional) via the
+                                // Sexagesimal QML singleton (src/util/
+                                // Sexagesimal.h) - previously out of scope
+                                // (TODO.md), a direct follow-up request.
+                                // No `validator: DoubleValidator{}` (that
+                                // would reject the colons/letters
+                                // sexagesimal notation needs) - validity
+                                // is instead computed via
+                                // Sexagesimal.parseRa()/parseDec() not
+                                // being NaN, checked directly wherever
+                                // `acceptableInput` would have been used
+                                // (the Move button's `enabled` below).
+                                Label { text: "RA:" }
                                 TextField {
                                     id: raField
                                     Layout.fillWidth: true
-                                    placeholderText: "0.0"
-                                    validator: DoubleValidator {}
+                                    placeholderText: "180.5 or 12:00:00"
                                 }
-                                Label { text: "Dec [deg]:" }
+                                Label { text: "Dec:" }
                                 TextField {
                                     id: decField
                                     Layout.fillWidth: true
-                                    placeholderText: "0.0"
-                                    validator: DoubleValidator {}
+                                    placeholderText: "45.0 or 45:00:00"
                                 }
                             }
 
@@ -566,8 +587,8 @@ ScrollView {
                                         return "Set observer location above to preview"
                                     }
                                     if (moveTypeCombo.currentText === "RA/Dec") {
-                                        const ra = parseFloat(raField.text)
-                                        const dec = parseFloat(decField.text)
+                                        const ra = Sexagesimal.parseRa(raField.text)
+                                        const dec = Sexagesimal.parseDec(decField.text)
                                         if (isNaN(ra) || isNaN(dec)) {
                                             return ""
                                         }
@@ -587,12 +608,14 @@ ScrollView {
                                 Layout.fillWidth: true
                                 text: "Move"
                                 enabled: telescopeDelegate.motionReady && (
-                                    (moveTypeCombo.currentText === "RA/Dec" && raField.acceptableInput && decField.acceptableInput)
+                                    (moveTypeCombo.currentText === "RA/Dec"
+                                        && !isNaN(Sexagesimal.parseRa(raField.text))
+                                        && !isNaN(Sexagesimal.parseDec(decField.text)))
                                     || moveTypeCombo.currentText === "Alt/Az")
                                 onClicked: {
                                     if (moveTypeCombo.currentText === "RA/Dec") {
                                         telescopeDelegate.runWithParams(
-                                            "move_radec", [parseFloat(raField.text), parseFloat(decField.text)])
+                                            "move_radec", [Sexagesimal.parseRa(raField.text), Sexagesimal.parseDec(decField.text)])
                                     } else if (moveTypeCombo.currentText === "Alt/Az") {
                                         telescopeDelegate.runWithParams(
                                             "move_altaz", [altSpin.value, azSpin.value])

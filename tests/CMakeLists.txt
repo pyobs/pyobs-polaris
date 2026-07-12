@@ -202,6 +202,20 @@ target_compile_definitions(tst_coordinatetransform PRIVATE LIBNOVA_SHARED)
 
 add_test(NAME tst_coordinatetransform COMMAND tst_coordinatetransform)
 
+# No Qml/Network/Xml functionally needed either - Sexagesimal.cpp's pure
+# parseCoordinate() has zero XMPP/QML dependency - but the header's
+# QML_ELEMENT/QML_SINGLETON macros need qqmlintegration.h, so Qt6::Qml is
+# still required to compile, same as tst_coordinatetransform above.
+add_executable(tst_sexagesimal
+    util/tst_sexagesimal.cpp
+    ${CMAKE_SOURCE_DIR}/src/util/Sexagesimal.h
+    ${CMAKE_SOURCE_DIR}/src/util/Sexagesimal.cpp
+)
+target_include_directories(tst_sexagesimal PRIVATE ${CMAKE_SOURCE_DIR}/src/util)
+target_link_libraries(tst_sexagesimal PRIVATE Qt6::Test Qt6::Qml)
+
+add_test(NAME tst_sexagesimal COMMAND tst_sexagesimal)
+
 # No Qml/Network/Xml needed either - FitsImage.cpp has zero Qt-object/QML
 # dependency (see its own header comment), just cfitsio.
 add_executable(tst_fitsimage

@@ -86,6 +86,8 @@ qt_add_executable(polaris
     src/shell/ShellCommandParser.cpp
     src/util/CoordinateTransform.h
     src/util/CoordinateTransform.cpp
+    src/util/Sexagesimal.h
+    src/util/Sexagesimal.cpp
     src/fits/FitsImage.h
     src/fits/FitsImage.cpp
     src/fits/FitsStretch.h

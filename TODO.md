@@ -54,6 +54,61 @@ hot-reloading native plugins, or a permission/sandboxing model beyond
 
 ---
 
+## ACL / permitted-methods gating
+
+**Goal:** hide/disable controls the current XMPP user's ACL doesn't allow,
+matching pyobs-gui's own `base.py` (`BaseWidget._fetch_permitted_methods()`/
+`permitted(method)`): every widget there fetches
+`IModule.get_permitted_methods()` once per module and gates each button
+(Init/Park/Stop/Move/every Set/Reset button, per-widget) on membership in
+that cached set, falling back to "everything permitted" if the fetch
+fails or the method isn't implemented.
+
+**Why this isn't already covered elsewhere in this doc:** never designed
+against, not a deliberate clean-room cut - only noticed when directly
+asked to compare `TelescopeView.qml` against `telescopewidget.py`
+control-by-control. Confirmed wire-available, not a limitation of this
+project's XMPP-only approach: `get_permitted_methods` is a real command
+every `IModule` advertises in disco#info (visible in this project's own
+fixture dumps, e.g. `camera@localhost`'s: `interface IModule v1: command
+get_permitted_methods ( )`) - so this is a genuine, currently-unaddressed
+capability gap between the two clients, not a scope cut worth recording
+as "out of scope".
+
+**Why this is cross-cutting, not page-specific:** pyobs-gui's
+`permitted()` lives on `BaseWidget`, the common base every one of its
+widgets inherits - every page in this project (`RoofView`/
+`TelescopeView`/`CameraView`/`AutoFocusView`/`AcquisitionView`/
+`AutoGuidingView`/`ModeView`/`WeatherView`, and any future
+`SidebarPanelRegistry` panel) would need the same gating on every
+RPC-triggering button, not just `TelescopeView.qml`'s Init/Park/Stop/
+Move/offset buttons that prompted noticing this.
+
+**Shape once designed:**
+- Fetch `get_permitted_methods()` once per module - likely folded into
+  the existing disco#info discovery flow (`XmppClient`/`Discovery.cpp`),
+  not per-widget, to avoid every widget showing the same module
+  redundantly re-fetching the same list.
+- Cache the result (or `null`/absent on failure - "treat everything as
+  permitted", matching pyobs-gui's own fail-open default) somewhere
+  QML-reachable, most naturally a new `ModuleListModel` role mirroring
+  `InterfacesRole`/`CapabilitiesRole`'s existing narrow-role precedent.
+- Every `Button.enabled` expression that currently only checks motion
+  status/interface presence would additionally check permission - a
+  mechanical but genuinely *wide* change (every page at once), which is
+  exactly why the plumbing should be designed once and applied
+  project-wide in a single pass rather than gating pages one at a time.
+- Method-name matching must exactly match whatever string
+  `get_permitted_methods()` actually returns per method - confirm
+  against a live pyobs-core module, not assumed from source (this
+  project's own standing rule for wire behavior).
+
+**Deliberately not in scope even once this ships:** actual ACL
+*configuration* - that's a pyobs-core/server-side concept this project
+never writes to, only reflects what the server already reports.
+
+---
+
 ## Solar-frame pointing (`IPointingHGS`/`IPointingHelioprojective`) — blocked
 
 **Split out of the original "`ITelescope` follow-up: libnova, destination
