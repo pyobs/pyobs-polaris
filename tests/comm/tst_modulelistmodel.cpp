@@ -26,6 +26,8 @@ private slots:
     void windowExtentIsEmptyWithoutIWindowCapabilities();
     void imageFormatsComeFromIImageFormatCapabilities();
     void imageFormatsIsEmptyWithoutIImageFormatCapabilities();
+    void filtersComeFromIFiltersCapabilities();
+    void filtersIsEmptyWithoutIFiltersCapabilities();
     void commandSchemasExposeFullParamList();
     void commandSchemasMarkOptionalParamsAndUnwrapTheirType();
     void commandSchemasIsEmptyWithoutCommands();
@@ -303,6 +305,37 @@ void TestModuleListModel::imageFormatsIsEmptyWithoutIImageFormatCapabilities()
     model.upsert(makeModule(QStringLiteral("camera@localhost")));
 
     QVERIFY(model.data(model.index(0), ModuleListModel::ImageFormatsRole).toList().isEmpty());
+}
+
+void TestModuleListModel::filtersComeFromIFiltersCapabilities()
+{
+    ModuleInfo info = makeModule(QStringLiteral("telescope@localhost"));
+    info.capabilities.insert(
+        QStringLiteral("IFilters"),
+        codec::WireValue(codec::WireDict {
+            { QStringLiteral("filters"),
+              codec::WireValue(codec::WireList {
+                  codec::WireValue(QStringLiteral("clear")),
+                  codec::WireValue(QStringLiteral("B")),
+                  codec::WireValue(QStringLiteral("V")),
+                  codec::WireValue(QStringLiteral("R")),
+              }) },
+        }));
+
+    ModuleListModel model;
+    model.upsert(info);
+
+    const QVariantList filters = model.data(model.index(0), ModuleListModel::FiltersRole).toList();
+    QCOMPARE(filters, QVariantList({ QStringLiteral("clear"), QStringLiteral("B"), QStringLiteral("V"),
+                                     QStringLiteral("R") }));
+}
+
+void TestModuleListModel::filtersIsEmptyWithoutIFiltersCapabilities()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("telescope@localhost")));
+
+    QVERIFY(model.data(model.index(0), ModuleListModel::FiltersRole).toList().isEmpty());
 }
 
 void TestModuleListModel::commandSchemasExposeFullParamList()

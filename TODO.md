@@ -107,7 +107,9 @@ as-is.
 
 **Still explicitly out of scope even once unblocked**: SIMBAD/JPL
 Horizons/MPC lookups (network dependency, unrelated to any of this), the
-compass widget, the Filter/Focus/Temperatures sidebar.
+compass widget. The rest of telescopewidget.ui's own fourth sidebar
+(Filter/Focus/Temperatures) is done - see `DEVELOPMENT.md`'s
+`TelescopeView.qml`/`CameraView.qml` follow-ups.
 
 ---
 

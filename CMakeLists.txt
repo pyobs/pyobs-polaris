@@ -130,6 +130,9 @@ qt_add_qml_module(polaris
         qml/widgets/KeyValueCard.qml
         qml/widgets/LogFooter.qml
         qml/widgets/WireValueFormat.js
+        qml/widgets/TemperaturesPanel.qml
+        qml/widgets/FiltersPanel.qml
+        qml/widgets/FocuserPanel.qml
 )
 
 target_link_libraries(polaris PRIVATE

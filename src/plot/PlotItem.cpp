@@ -69,11 +69,20 @@ const QVector<QColor> kDefaultSeriesColors = {
 // on the plot's edge, and guards the degenerate zero-range case (one
 // point, or all-identical values) with a fixed fallback span instead of
 // dividing by zero when it's later used to normalize into pixel space.
-void pad(double &lo, double &hi)
+// `degenerateFallback`, if non-negative, overrides the default "10% of
+// abs(lo), or 1.0" guess for that degenerate case - needed for
+// xTicksAsTime's epoch-seconds x-axis (see paint()'s own call site):
+// "10% of an epoch timestamp" is on the order of years, wildly wrong for
+// a single-instant time-series plot (e.g. a sensor whose state has only
+// ever been pushed once), unlike every other axis this function pads,
+// where the plotted values themselves are already a sensible magnitude
+// to take 10% of.
+void pad(double &lo, double &hi, double degenerateFallback = -1.0)
 {
     const double span = hi - lo;
     if (span <= 0.0) {
-        const double fallback = std::abs(lo) > 1e-9 ? std::abs(lo) * 0.1 : 1.0;
+        const double fallback = degenerateFallback >= 0.0
+            ? degenerateFallback : (std::abs(lo) > 1e-9 ? std::abs(lo) * 0.1 : 1.0);
         lo -= fallback;
         hi += fallback;
     } else {
@@ -364,7 +373,7 @@ void PlotItem::paint(QPainter *painter)
         xMin = std::min(xMin, m_referenceX);
         xMax = std::max(xMax, m_referenceX);
     }
-    pad(xMin, xMax);
+    pad(xMin, xMax, m_xTicksAsTime ? 60.0 : -1.0);
     pad(yMin, yMax);
 
     QFont tickFont(painter->font().family(), 8);

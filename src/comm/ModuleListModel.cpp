@@ -208,6 +208,24 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         }
         return result;
     }
+    case FiltersRole: {
+        QVariantList result;
+        const auto it = info.capabilities.constFind(QStringLiteral("IFilters"));
+        if (it == info.capabilities.constEnd() || !it.value().isDict()) {
+            return result;
+        }
+        for (const auto &field : it.value().toDict()) {
+            if (field.first != QStringLiteral("filters") || !field.second.isList()) {
+                continue;
+            }
+            for (const codec::WireValue &filter : field.second.toList()) {
+                if (filter.isString()) {
+                    result.push_back(filter.toString());
+                }
+            }
+        }
+        return result;
+    }
     case PresenceStateRole:
         return info.presenceState;
     case PresenceErrorRole:
@@ -244,6 +262,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { BinningOptionsRole, "binningOptions" },
         { WindowExtentRole, "windowExtent" },
         { ImageFormatsRole, "imageFormats" },
+        { FiltersRole, "filters" },
         { PresenceStateRole, "presenceState" },
         { PresenceErrorRole, "presenceError" },
         { CapabilitiesRole, "capabilities" },

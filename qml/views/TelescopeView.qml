@@ -7,20 +7,31 @@ import pyobs.polaris
 // telescopewidget.py - MVP scope only (see TODO.md for what's
 // deliberately out of scope: sexagesimal RA/Dec parsing, solar-frame
 // pointing, SIMBAD/Horizons/MPC/orbit-elements lookups, the jog/compass
-// widget, Filter/Focus/Temperatures). ITelescope itself is a bare
-// IMotion marker (confirmed against pyobs.interfaces.ITelescope source),
-// so the base block below is identical to RoofView.qml's; Status/Move/
-// Offsets stack under it, each gated on the module actually implementing
-// the relevant capability interface (IPointingRaDec/IPointingAltAz/
-// IOffsetsRaDec/IOffsetsAltAz) - see DEVELOPMENT.md for the
-// live-verification caveat around IOffsetsAltAz specifically.
+// widget). ITelescope itself is a bare IMotion marker (confirmed against
+// pyobs.interfaces.ITelescope source), so the base block below is
+// identical to RoofView.qml's; Status/Move/Offsets stack under it, each
+// gated on the module actually implementing the relevant capability
+// interface (IPointingRaDec/IPointingAltAz/IOffsetsRaDec/IOffsetsAltAz) -
+// see DEVELOPMENT.md for the live-verification caveat around
+// IOffsetsAltAz specifically.
 //
-// Layout: three GroupBoxes side by side (Status/Move/Offsets), ported
-// from telescopewidget.ui's own QHBoxLayout structure (read directly) -
-// that file has a fourth column (CompassMoveWidget, the jog control) and
-// a separate sidebar (Filter/Focus/Temperatures), both already out of
-// scope here, so this only carries the three columns Polaris actually
-// implements. Status now also shows the live current-pointing readout
+// Layout: four GroupBoxes side by side (Status/Move/Offsets/Filter-Focus-
+// Temperatures), the first three ported from telescopewidget.ui's own
+// QHBoxLayout structure (read directly) - that file has a fifth column
+// (CompassMoveWidget, the jog control) still out of scope here. The
+// fourth column (Filter/Focus/Temperatures) was out of scope initially
+// (this page only carried the three original columns) but shipped in a
+// direct follow-up ("finish the camera page with filter/focus. both can
+// also show up for the telescope. the telescope page also misses the
+// temperatures in the right sidebar.") - `DummyTelescope` implements all
+// three of IFilters/IFocuser/ITemperatures (confirmed from pyobs-core
+// source, unlike any Dummy* camera module), making this page - not
+// CameraView.qml - where those three widgets actually got live-verified.
+// All three are qml/widgets/*Panel.qml components shared verbatim with
+// CameraView.qml, not duplicated here - see that file's own comment on
+// why they were factored out.
+//
+// Status now also shows the live current-pointing readout
 // (RA/Dec and/or Alt/Az, decimal degrees) via labelCurRA/Dec/Alt/Az's
 // own IPointingRaDec/IPointingAltAz state subscriptions - a real gap
 // this pass filled in, not just a visual port; Polaris previously only
@@ -72,6 +83,7 @@ ScrollView {
                 required property string jid
                 required property string name
                 required property var statefulInterfaces
+                required property var filters
 
                 function findInterface(interfaceName) {
                     const list = statefulInterfaces || []
@@ -707,6 +719,43 @@ ScrollView {
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // --- Filter/Focus/Temperatures: telescopewidget.ui's
+                    // own fourth sidebar, out of scope until this direct
+                    // follow-up (see the file header comment). Same
+                    // shared qml/widgets/*Panel.qml components
+                    // CameraView.qml's third column uses.
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: 220
+                        spacing: 8
+                        visible: telescopeDelegate.findInterface("ITemperatures") !== null
+                            || telescopeDelegate.findInterface("IFilters") !== null
+                            || telescopeDelegate.findInterface("IFocuser") !== null
+
+                        TemperaturesPanel {
+                            Layout.fillWidth: true
+                            xmppClient: root.xmppClient
+                            jid: telescopeDelegate.jid
+                            moduleName: telescopeDelegate.name
+                            statefulInterfaces: telescopeDelegate.statefulInterfaces
+                        }
+
+                        FiltersPanel {
+                            Layout.fillWidth: true
+                            xmppClient: root.xmppClient
+                            jid: telescopeDelegate.jid
+                            statefulInterfaces: telescopeDelegate.statefulInterfaces
+                            availableFilters: telescopeDelegate.filters
+                        }
+
+                        FocuserPanel {
+                            Layout.fillWidth: true
+                            xmppClient: root.xmppClient
+                            jid: telescopeDelegate.jid
+                            statefulInterfaces: telescopeDelegate.statefulInterfaces
                         }
                     }
 

@@ -91,6 +91,12 @@ public:
         // hasn't reported IImageFormat capabilities - CameraView.qml's
         // IImageFormat ComboBox population.
         ImageFormatsRole,
+        // QVariantList of plain strings decoded from IFilters capabilities'
+        // "filters" field, empty list if the module hasn't reported
+        // IFilters capabilities - FiltersPanel.qml's filter selection
+        // ComboBox population. Same narrow-scope discipline as
+        // ImageFormatsRole above.
+        FiltersRole,
         // "ready" / "error" / "local", derived from presence show/status -
         // see ModuleInfo::presenceState. The Status page's health badge.
         PresenceStateRole,
