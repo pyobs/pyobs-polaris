@@ -6,9 +6,9 @@ import pyobs.polaris
 // Dedicated page for ITelescope modules, ported from pyobs-gui's
 // telescopewidget.py - MVP scope only (see TODO.md for what's
 // deliberately out of scope: solar-frame pointing, MPC lookups,
-// orbit-elements lookups, the jog/compass widget). Sexagesimal RA/Dec
-// input, SIMBAD name resolution, and JPL Horizons ephemeris lookup used
-// to be on that list too - all three shipped as direct follow-ups:
+// orbit-elements lookups). Sexagesimal RA/Dec input, SIMBAD name
+// resolution, JPL Horizons ephemeris lookup, and the jog/compass widget
+// used to be on that list too - all four shipped as direct follow-ups:
 // Move's RA/Dec fields now accept "12:00:00"/"45:30:00" alongside plain
 // decimal degrees via the Sexagesimal QML singleton (src/util/
 // Sexagesimal.h - see that file's own comment for the parsing rule and
@@ -30,12 +30,14 @@ import pyobs.polaris
 // IOffsetsAltAz) - see DEVELOPMENT.md for the live-verification caveat
 // around IOffsetsAltAz specifically.
 //
-// Layout: four GroupBoxes side by side (Status/Move/Offsets/Filter-Focus-
-// Temperatures), the first three ported from telescopewidget.ui's own
-// QHBoxLayout structure (read directly) - that file has a fifth column
-// (CompassMoveWidget, the jog control) still out of scope here. The
-// fourth column (Filter/Focus/Temperatures) was out of scope initially
-// (this page only carried the three original columns) but shipped in a
+// Layout: five GroupBoxes side by side (Status/Move/Offsets/Compass/
+// Filter-Focus-Temperatures), the first four ported from
+// telescopewidget.ui's own QHBoxLayout structure (read directly) -
+// Compass (compassmovewidget.py's N/S/E/W jog buttons) was the last of
+// that original four to ship, see its own GroupBox comment below for the
+// design decisions. The fifth column (Filter/Focus/Temperatures) was out
+// of scope initially (this page only carried the three original
+// Status/Move/Offsets columns) but shipped in a
 // direct follow-up ("finish the camera page with filter/focus. both can
 // also show up for the telescope. the telescope page also misses the
 // temperatures in the right sidebar.") - `DummyTelescope` implements all
@@ -264,6 +266,65 @@ ScrollView {
                             telescopeDelegate.lastError = (result.errorClass ? result.errorClass + ": " : "") + result.errorMessage
                         }
                     })
+                }
+
+                // Compass GroupBox's own N/S/E/W handler (compassmovewidget.py's
+                // __move_offset(), same fallback chain: IOffsetsRaDec directly if
+                // present, else IOffsetsAltAz only when the module also reports
+                // IPointingAltAz - needed to convert the compass's sky-relative
+                // step into an alt/az-frame offset). compassStepSpin is a forward
+                // id reference into the Compass GroupBox below, same idiom
+                // raOffsetSpin/decOffsetSpin already rely on from
+                // onRaDecOffsetsStateChanged above.
+                function moveCompass(direction) {
+                    const stepDeg = compassStepSpin.value / 3600
+                    if (telescopeDelegate.raDecOffsetsInterface !== null) {
+                        let ra = telescopeDelegate.fieldOf(telescopeDelegate.raDecOffsetsState, "ra") || 0
+                        let dec = telescopeDelegate.fieldOf(telescopeDelegate.raDecOffsetsState, "dec") || 0
+                        if (direction === "N") dec += stepDeg
+                        else if (direction === "S") dec -= stepDeg
+                        else if (direction === "E") ra += stepDeg
+                        else if (direction === "W") ra -= stepDeg
+                        telescopeDelegate.runWithParams("set_offsets_radec", [ra, dec])
+                    } else if (telescopeDelegate.altAzOffsetsInterface !== null && telescopeDelegate.altAzPointingInterface !== null) {
+                        if (!telescopeDelegate.hasModuleLocation) {
+                            return
+                        }
+                        const lat = telescopeDelegate.moduleLocation.latitude
+                        const lon = telescopeDelegate.moduleLocation.longitude
+                        const elev = telescopeDelegate.moduleLocation.elevation
+                        const alt0 = telescopeDelegate.currentAlt
+                        const az0 = telescopeDelegate.currentAz
+                        if (alt0 === undefined || alt0 === null || az0 === undefined || az0 === null) {
+                            return
+                        }
+                        const offAlt = telescopeDelegate.fieldOf(telescopeDelegate.altAzOffsetsState, "alt") || 0
+                        const offAz = telescopeDelegate.fieldOf(telescopeDelegate.altAzOffsetsState, "az") || 0
+
+                        // Re-express the current alt/az offset as an equivalent
+                        // ra/dec delta at the telescope's current pointing (a
+                        // two-point difference through CoordinateTransform's
+                        // existing libnova-backed position transform, the same
+                        // singleton the Move destination preview above already
+                        // uses - not pyobs-gui's own astropy
+                        // spherical_offsets_by()/spherical_offsets_to(), which
+                        // isn't available here), apply the compass step in ra/dec
+                        // terms, then convert the result back to an alt/az
+                        // offset. Schema-verified only, like the Offsets
+                        // GroupBox's own Alt/Az row above - no built-in Dummy*
+                        // module implements IOffsetsAltAz to test this against
+                        // live (see DEVELOPMENT.md).
+                        const base = CoordinateTransform.horizontalToEquatorial(alt0, az0, lat, lon, elev)
+                        const offsetPointing = CoordinateTransform.horizontalToEquatorial(alt0 + offAlt, az0 + offAz, lat, lon, elev)
+                        let dRa = offsetPointing.ra - base.ra
+                        let dDec = offsetPointing.dec - base.dec
+                        if (direction === "N") dDec += stepDeg
+                        else if (direction === "S") dDec -= stepDeg
+                        else if (direction === "E") dRa += stepDeg
+                        else if (direction === "W") dRa -= stepDeg
+                        const target = CoordinateTransform.equatorialToHorizontal(base.ra + dRa, base.dec + dDec, lat, lon, elev)
+                        telescopeDelegate.runWithParams("set_offsets_altaz", [target.alt - alt0, target.az - az0])
+                    }
                 }
 
                 // Simbad name resolution (see the Move GroupBox's own
@@ -939,6 +1000,103 @@ ScrollView {
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    // --- Compass: telescopewidget.ui's own compassmovewidget -
+                    // N/S/E/W jog buttons that nudge the persistent offset one
+                    // step at a time, rather than the Offsets GroupBox's own
+                    // "type an absolute value and Set it" idiom. Visible under
+                    // the same fallback chain moveCompass() above uses:
+                    // IOffsetsRaDec if present, else IOffsetsAltAz only if the
+                    // module also reports IPointingAltAz. Standard compass-rose
+                    // layout here (N top, S bottom, E right, W left), not a
+                    // literal port of compassmovewidget.ui's own button grid,
+                    // which has East on the left/West on the right -
+                    // pyobs-gui's own DEV_telescopewidget_layout.md flags that
+                    // placement as an open, never-resolved question ("could be
+                    // intentional... could be a leftover icon swap"), so
+                    // there's nothing concrete to port faithfully either way.
+                    // Buttons colored blue like Move, matching
+                    // compassmovewidget.py's own colorize_button(..., blue)
+                    // calls for all four (same semantic-color pass the Move/
+                    // Init/Park/Stop buttons above already got).
+                    GroupBox {
+                        title: "Compass"
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: 160
+                        visible: telescopeDelegate.raDecOffsetsInterface !== null
+                            || (telescopeDelegate.altAzOffsetsInterface !== null && telescopeDelegate.altAzPointingInterface !== null)
+
+                        ColumnLayout {
+                            width: parent.width
+                            spacing: 4
+
+                            Label {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: "Step [arcsec]"
+                                color: "grey"
+                            }
+
+                            GridLayout {
+                                Layout.alignment: Qt.AlignHCenter
+                                columns: 3
+                                rowSpacing: 4
+                                columnSpacing: 4
+
+                                Item { Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
+                                Button {
+                                    text: "N"
+                                    Layout.preferredWidth: 36
+                                    Layout.preferredHeight: 36
+                                    enabled: telescopeDelegate.motionReady
+                                    palette.button: "#1565c0"
+                                    palette.buttonText: "white"
+                                    onClicked: telescopeDelegate.moveCompass("N")
+                                }
+                                Item { Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
+
+                                Button {
+                                    text: "W"
+                                    Layout.preferredWidth: 36
+                                    Layout.preferredHeight: 36
+                                    enabled: telescopeDelegate.motionReady
+                                    palette.button: "#1565c0"
+                                    palette.buttonText: "white"
+                                    onClicked: telescopeDelegate.moveCompass("W")
+                                }
+                                SpinBox {
+                                    id: compassStepSpin
+                                    Layout.preferredWidth: 70
+                                    Layout.preferredHeight: 36
+                                    from: 0
+                                    to: 999
+                                    stepSize: 10
+                                    value: 30
+                                    editable: true
+                                }
+                                Button {
+                                    text: "E"
+                                    Layout.preferredWidth: 36
+                                    Layout.preferredHeight: 36
+                                    enabled: telescopeDelegate.motionReady
+                                    palette.button: "#1565c0"
+                                    palette.buttonText: "white"
+                                    onClicked: telescopeDelegate.moveCompass("E")
+                                }
+
+                                Item { Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
+                                Button {
+                                    text: "S"
+                                    Layout.preferredWidth: 36
+                                    Layout.preferredHeight: 36
+                                    enabled: telescopeDelegate.motionReady
+                                    palette.button: "#1565c0"
+                                    palette.buttonText: "white"
+                                    onClicked: telescopeDelegate.moveCompass("S")
+                                }
+                                Item { Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
                             }
                         }
                     }

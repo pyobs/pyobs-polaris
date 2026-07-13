@@ -161,17 +161,19 @@ convert the typed value) - not a trustworthy reference to port from
 as-is.
 
 **Still explicitly out of scope even once unblocked**: MPC lookups
-(network dependency, unrelated to any of this), the compass widget.
-SIMBAD name resolution and JPL Horizons ephemeris lookup - both once
+(network dependency, unrelated to any of this). SIMBAD name resolution,
+JPL Horizons ephemeris lookup, and the compass widget - all three once
 listed alongside MPC here - are done (`comm::SimbadClient`/
 `comm::JplHorizonsClient`, both talk their respective service's own HTTP
-API directly rather than pulling in astroquery, see `DEVELOPMENT.md`'s
-own write-ups); MPC remains out of scope purely because nothing in this
-project needs its API specifically yet, not because of any technical
-blocker the other two's own solutions didn't already clear. The rest of
-telescopewidget.ui's own fourth sidebar (Filter/Focus/Temperatures) is
-done - see `DEVELOPMENT.md`'s `TelescopeView.qml`/`CameraView.qml`
-follow-ups.
+API directly rather than pulling in astroquery; the compass widget is
+`TelescopeView.qml`'s own "Compass" `GroupBox`, N/S/E/W jog buttons
+ported from `compassmovewidget.py` - see `DEVELOPMENT.md`'s own
+write-ups for all three); MPC remains out of scope purely because
+nothing in this project needs its API specifically yet, not because of
+any technical blocker the other two's own solutions didn't already
+clear. The rest of telescopewidget.ui's own fourth sidebar (Filter/Focus/
+Temperatures) is done - see `DEVELOPMENT.md`'s `TelescopeView.qml`/
+`CameraView.qml` follow-ups.
 
 ---
 
