@@ -366,6 +366,15 @@ ScrollView {
                     return idx >= 0 ? idx : 0
                 }
 
+                // For the collapsed Stretch/Colormap summary label below -
+                // every value in both combos' models is just its label
+                // lowercased ("Linear" -> "linear", "Gray" -> "gray", ...),
+                // so this is enough without a second value->label lookup
+                // table duplicating the combo models.
+                function capitalize(value) {
+                    return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value
+                }
+
                 function checkForNewImage() {
                     if (!cameraDelegate.autoUpdate) {
                         return
@@ -1127,61 +1136,93 @@ ScrollView {
                         // Tone curve / colormap / trimsec - the rest of
                         // qfitswidget's own toolbar (fitswidget.ui's
                         // comboStretch/comboColormap/checkColormapReverse/
-                        // checkTrimSec), split onto its own row rather
-                        // than crammed into the Cuts/Zoom row above -
-                        // this page's columns are narrower than
-                        // qfitswidget's own standalone window, and a
-                        // RowLayout child wider than its column already
-                        // bit this exact page once (see
-                        // DEVELOPMENT.md's CameraView.qml layout-pass
-                        // write-up).
-                        // Flow, same reasoning as the Cuts/Zoom row above -
-                        // no fillWidth spacer to pin "trimsec" to the far
-                        // right anymore, it just flows after "reversed".
-                        Flow {
+                        // checkTrimSec). Unlike Cuts/Zoom above (adjusted
+                        // constantly while actually looking at an image),
+                        // these are "set once and forget" - collapsed into
+                        // a readonly summary label plus a button that opens
+                        // the real controls in a Popup, instead of a whole
+                        // extra always-visible toolbar row (direct
+                        // instruction - a previous pass already had to
+                        // split this onto its own row to avoid a
+                        // RowLayout-overflow clip, see DEVELOPMENT.md's
+                        // CameraView.qml layout-pass write-up; this goes
+                        // further and removes the row entirely).
+                        RowLayout {
                             Layout.fillWidth: true
                             spacing: 8
-                            Label { text: "Stretch:" }
-                            ComboBox {
-                                id: toneCurveCombo
-                                textRole: "label"
-                                valueRole: "value"
-                                model: [
-                                    { label: "Linear", value: "linear" },
-                                    { label: "Log", value: "log" },
-                                    { label: "Sqrt", value: "sqrt" },
-                                    { label: "Squared", value: "squared" },
-                                    { label: "Asinh", value: "asinh" },
-                                ]
-                                currentIndex: cameraDelegate.indexOfStringValue(
-                                    ["linear", "log", "sqrt", "squared", "asinh"], fitsImageItem.toneCurve)
-                                onActivated: fitsImageItem.toneCurve = currentValue
+
+                            Label {
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                                color: "grey"
+                                text: cameraDelegate.capitalize(fitsImageItem.toneCurve) + " · "
+                                    + cameraDelegate.capitalize(fitsImageItem.colormap)
+                                    + (fitsImageItem.reversedColormap ? " (reversed)" : "")
+                                    + (fitsImageItem.trimSecEnabled ? " · trimsec" : "")
                             }
-                            Label { text: "Colormap:" }
-                            ComboBox {
-                                id: colormapCombo
-                                textRole: "label"
-                                valueRole: "value"
-                                model: [
-                                    { label: "Gray", value: "gray" },
-                                    { label: "Viridis", value: "viridis" },
-                                    { label: "Hot", value: "hot" },
-                                    { label: "Cool", value: "cool" },
-                                    { label: "Jet", value: "jet" },
-                                ]
-                                currentIndex: cameraDelegate.indexOfStringValue(
-                                    ["gray", "viridis", "hot", "cool", "jet"], fitsImageItem.colormap)
-                                onActivated: fitsImageItem.colormap = currentValue
+                            Button {
+                                text: "Display settings…"
+                                onClicked: displaySettingsPopup.open()
                             }
-                            CheckBox {
-                                text: "reversed"
-                                checked: fitsImageItem.reversedColormap
-                                onToggled: fitsImageItem.reversedColormap = checked
-                            }
-                            CheckBox {
-                                text: "trimsec"
-                                checked: fitsImageItem.trimSecEnabled
-                                onToggled: fitsImageItem.trimSecEnabled = checked
+                        }
+
+                        Popup {
+                            id: displaySettingsPopup
+                            modal: true
+                            focus: true
+                            anchors.centerIn: Overlay.overlay
+
+                            ColumnLayout {
+                                spacing: 8
+
+                                RowLayout {
+                                    Label { text: "Stretch:" }
+                                    ComboBox {
+                                        id: toneCurveCombo
+                                        Layout.fillWidth: true
+                                        textRole: "label"
+                                        valueRole: "value"
+                                        model: [
+                                            { label: "Linear", value: "linear" },
+                                            { label: "Log", value: "log" },
+                                            { label: "Sqrt", value: "sqrt" },
+                                            { label: "Squared", value: "squared" },
+                                            { label: "Asinh", value: "asinh" },
+                                        ]
+                                        currentIndex: cameraDelegate.indexOfStringValue(
+                                            ["linear", "log", "sqrt", "squared", "asinh"], fitsImageItem.toneCurve)
+                                        onActivated: fitsImageItem.toneCurve = currentValue
+                                    }
+                                }
+                                RowLayout {
+                                    Label { text: "Colormap:" }
+                                    ComboBox {
+                                        id: colormapCombo
+                                        Layout.fillWidth: true
+                                        textRole: "label"
+                                        valueRole: "value"
+                                        model: [
+                                            { label: "Gray", value: "gray" },
+                                            { label: "Viridis", value: "viridis" },
+                                            { label: "Hot", value: "hot" },
+                                            { label: "Cool", value: "cool" },
+                                            { label: "Jet", value: "jet" },
+                                        ]
+                                        currentIndex: cameraDelegate.indexOfStringValue(
+                                            ["gray", "viridis", "hot", "cool", "jet"], fitsImageItem.colormap)
+                                        onActivated: fitsImageItem.colormap = currentValue
+                                    }
+                                }
+                                CheckBox {
+                                    text: "reversed"
+                                    checked: fitsImageItem.reversedColormap
+                                    onToggled: fitsImageItem.reversedColormap = checked
+                                }
+                                CheckBox {
+                                    text: "trimsec"
+                                    checked: fitsImageItem.trimSecEnabled
+                                    onToggled: fitsImageItem.trimSecEnabled = checked
+                                }
                             }
                         }
 
