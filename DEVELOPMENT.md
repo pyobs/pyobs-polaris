@@ -65,6 +65,18 @@ too, not just the code.
   once.
 - `patchelf` is only needed for cutting a release (see "Releases" below),
   not for day-to-day building.
+- **GCC 15.2.0 gotcha**: on a machine where `conan profile detect` picked
+  gcc-15 (e.g. Ubuntu 26.04), `conan install . --build=missing` can fail
+  building `cfitsio` with `internal compiler error: in fold_convert_loc,
+  at fold-const.cc:2665` — a genuine GCC ICE optimizing `Do_Deref` in
+  cfitsio 4.6.3's bison-generated `eval_y.c` at default Release (`-O3`),
+  not a bug in this project's code. Fix by scoping a lower optimization
+  level to just that package, added to `~/.conan2/profiles/default`'s
+  `[conf]` section (or pass ad hoc via `-c`):
+  ```
+  [conf]
+  cfitsio/*:tools.build:cflags=['-O1']
+  ```
 
 ### Build
 
