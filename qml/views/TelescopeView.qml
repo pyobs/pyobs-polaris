@@ -976,54 +976,80 @@ ScrollView {
                             width: parent.width
                             spacing: 10
 
-                            RowLayout {
+                            ColumnLayout {
                                 Layout.fillWidth: true
                                 visible: telescopeDelegate.raDecOffsetsInterface !== null
                                     || (telescopeDelegate.altAzOffsetsInterface !== null && telescopeDelegate.altAzPointingInterface !== null)
                                 spacing: 4
 
-                                Label { text: "Jog step [arcsec]:"; color: "grey" }
-                                SpinBox {
-                                    id: compassStepSpin
-                                    Layout.preferredWidth: 70
-                                    from: 0
-                                    to: 999
-                                    stepSize: 10
-                                    value: 30
-                                    editable: true
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label { text: "Jog step [arcsec]:"; color: "grey" }
+                                    SpinBox {
+                                        id: compassStepSpin
+                                        Layout.preferredWidth: 70
+                                        from: 0
+                                        to: 999
+                                        stepSize: 10
+                                        value: 30
+                                        editable: true
+                                    }
+                                    Item { Layout.fillWidth: true }
                                 }
-                                Item { Layout.fillWidth: true }
-                                Button {
-                                    text: "▲"
-                                    Layout.preferredWidth: 32
-                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
-                                    palette.button: "#1565c0"
-                                    palette.buttonText: "white"
-                                    onClicked: telescopeDelegate.moveCompass("N")
-                                }
-                                Button {
-                                    text: "◀"
-                                    Layout.preferredWidth: 32
-                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
-                                    palette.button: "#1565c0"
-                                    palette.buttonText: "white"
-                                    onClicked: telescopeDelegate.moveCompass("W")
-                                }
-                                Button {
-                                    text: "▶"
-                                    Layout.preferredWidth: 32
-                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
-                                    palette.button: "#1565c0"
-                                    palette.buttonText: "white"
-                                    onClicked: telescopeDelegate.moveCompass("E")
-                                }
-                                Button {
-                                    text: "▼"
-                                    Layout.preferredWidth: 32
-                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
-                                    palette.button: "#1565c0"
-                                    palette.buttonText: "white"
-                                    onClicked: telescopeDelegate.moveCompass("S")
+
+                                // Inverted-T arrow-key layout (▲ alone on
+                                // row one, ◀▼▶ on row two) rather than the
+                                // single row of four this used to be -
+                                // reads immediately as "jog controls" the
+                                // way a keyboard's own arrow-key cluster
+                                // does, instead of needing the N/S/E/W
+                                // labels the original Compass GroupBox had
+                                // to spell out.
+                                GridLayout {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    columns: 3
+                                    rowSpacing: 4
+                                    columnSpacing: 4
+
+                                    Item { Layout.preferredWidth: 32; Layout.preferredHeight: 32 }
+                                    Button {
+                                        text: "▲"
+                                        Layout.preferredWidth: 32
+                                        Layout.preferredHeight: 32
+                                        enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
+                                        palette.button: "#1565c0"
+                                        palette.buttonText: "white"
+                                        onClicked: telescopeDelegate.moveCompass("N")
+                                    }
+                                    Item { Layout.preferredWidth: 32; Layout.preferredHeight: 32 }
+
+                                    Button {
+                                        text: "◀"
+                                        Layout.preferredWidth: 32
+                                        Layout.preferredHeight: 32
+                                        enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
+                                        palette.button: "#1565c0"
+                                        palette.buttonText: "white"
+                                        onClicked: telescopeDelegate.moveCompass("W")
+                                    }
+                                    Button {
+                                        text: "▼"
+                                        Layout.preferredWidth: 32
+                                        Layout.preferredHeight: 32
+                                        enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
+                                        palette.button: "#1565c0"
+                                        palette.buttonText: "white"
+                                        onClicked: telescopeDelegate.moveCompass("S")
+                                    }
+                                    Button {
+                                        text: "▶"
+                                        Layout.preferredWidth: 32
+                                        Layout.preferredHeight: 32
+                                        enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
+                                        palette.button: "#1565c0"
+                                        palette.buttonText: "white"
+                                        onClicked: telescopeDelegate.moveCompass("E")
+                                    }
                                 }
                             }
 
