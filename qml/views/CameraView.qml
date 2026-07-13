@@ -1161,6 +1161,7 @@ ScrollView {
                                     + (fitsImageItem.trimSecEnabled ? " · trimsec" : "")
                             }
                             Button {
+                                id: displaySettingsButton
                                 text: "Display settings…"
                                 onClicked: displaySettingsPopup.open()
                             }
@@ -1168,9 +1169,10 @@ ScrollView {
 
                         Popup {
                             id: displaySettingsPopup
-                            modal: true
+                            parent: displaySettingsButton
+                            x: parent.width - width
+                            y: parent.height + 4
                             focus: true
-                            anchors.centerIn: Overlay.overlay
 
                             ColumnLayout {
                                 spacing: 8
