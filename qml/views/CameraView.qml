@@ -1030,10 +1030,20 @@ ScrollView {
                         Layout.alignment: Qt.AlignTop
                         spacing: 4
 
-                        RowLayout {
+                        // Flow, not RowLayout - when the image column gets
+                        // squeezed narrow (fixed-width control sidebar +
+                        // SidebarColumn leaving little room left), these
+                        // controls need to wrap onto another line instead
+                        // of clipping (the exact RowLayout-overflow gotcha
+                        // this file's own header comment already
+                        // references). No fillWidth spacer to push Cuts/
+                        // Zoom to the right anymore - Flow doesn't support
+                        // one, so "Image" just flows left of them with
+                        // normal spacing instead of being pinned apart.
+                        Flow {
                             Layout.fillWidth: true
+                            spacing: 8
                             Label { text: "Image"; font.bold: true }
-                            Item { Layout.fillWidth: true }
                             Label { text: "Cuts:" }
                             ComboBox {
                                 id: cutsCombo
@@ -1125,8 +1135,12 @@ ScrollView {
                         // bit this exact page once (see
                         // DEVELOPMENT.md's CameraView.qml layout-pass
                         // write-up).
-                        RowLayout {
+                        // Flow, same reasoning as the Cuts/Zoom row above -
+                        // no fillWidth spacer to pin "trimsec" to the far
+                        // right anymore, it just flows after "reversed".
+                        Flow {
                             Layout.fillWidth: true
+                            spacing: 8
                             Label { text: "Stretch:" }
                             ComboBox {
                                 id: toneCurveCombo
@@ -1164,7 +1178,6 @@ ScrollView {
                                 checked: fitsImageItem.reversedColormap
                                 onToggled: fitsImageItem.reversedColormap = checked
                             }
-                            Item { Layout.fillWidth: true }
                             CheckBox {
                                 text: "trimsec"
                                 checked: fitsImageItem.trimSecEnabled
@@ -1230,7 +1243,16 @@ ScrollView {
                         // + butAutoSave, butSaveTo) - see checkForNewImage()/
                         // onFileReady() above for the actual behavior; this
                         // is just the controls for it.
-                        RowLayout {
+                        // Flow, same reasoning as the Cuts/Zoom and Stretch/
+                        // Colormap rows above - no fillWidth spacers to
+                        // separate the Auto-update/Auto-save/Save-to groups
+                        // anymore, they just flow adjacent with normal
+                        // spacing. The path label's width is now a plain
+                        // property instead of Layout.maximumWidth (Flow
+                        // doesn't process Layout attached properties on its
+                        // children, unlike RowLayout) - still needed so
+                        // elide actually has a bound to truncate against.
+                        Flow {
                             Layout.fillWidth: true
                             spacing: 8
 
@@ -1239,15 +1261,13 @@ ScrollView {
                                 checked: cameraDelegate.autoUpdate
                                 onToggled: cameraDelegate.autoUpdate = checked
                             }
-                            Item { Layout.fillWidth: true }
                             CheckBox {
                                 text: "Auto-save:"
                                 checked: cameraDelegate.autoSaveEnabled
                                 onToggled: cameraDelegate.autoSaveEnabled = checked
                             }
                             Label {
-                                Layout.fillWidth: true
-                                Layout.maximumWidth: 220
+                                width: 220
                                 elide: Text.ElideMiddle
                                 enabled: cameraDelegate.autoSaveEnabled
                                 text: cameraDelegate.autoSaveDirectory.toString().length > 0
@@ -1260,7 +1280,6 @@ ScrollView {
                                 enabled: cameraDelegate.autoSaveEnabled
                                 onClicked: autoSaveFolderDialog.open()
                             }
-                            Item { Layout.fillWidth: true }
                             Button {
                                 text: "Save to..."
                                 enabled: cameraDelegate.lastImageBytes !== null
