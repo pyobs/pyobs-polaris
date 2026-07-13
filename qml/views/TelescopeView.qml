@@ -78,6 +78,19 @@ import "../widgets/Permissions.js" as Permissions
 // telescopeDelegate's own hasModuleLocation comment), not silently
 // worked around. Purely informational either way - never changes what
 // move_radec()/move_altaz() actually send.
+//
+// Redesign pass (chat-driven, no ticket): the outer per-module container
+// switched from RowLayout to Flow so Status/Move/Offsets/Sidebar reflow
+// onto a second line on a narrower window instead of clipping (the old
+// RowLayout's fixed preferred widths summed past 1000px, and the page
+// only had a vertical ScrollView around it). Move's Simbad/JPL Horizons
+// lookup fields are now behind a "Find by name" disclosure, collapsed by
+// default, so the primary type-coordinates-and-Move flow isn't preceded
+// by two full name-lookup forms every time. The standalone Compass
+// GroupBox (N/S/E/W jog buttons) was folded into Offsets as a jog row
+// above the RA/Dec/Alt/Az spin boxes - it operated on the exact same
+// persistent offset state Offsets already displayed, so a separate panel
+// next to it read as two disconnected controls for one value.
 ScrollView {
     id: root
 
@@ -503,6 +516,19 @@ ScrollView {
                     Layout.fillWidth: true
                     spacing: 12
 
+                    // Status/Move/Offsets reflow independently inside this
+                    // Flow; the sidebar below is a sibling of the Flow, not
+                    // one of its wrapped children, specifically so it always
+                    // keeps its own fixed size and stays pinned to the top
+                    // of the row no matter how many rows the Flow wraps
+                    // into (a shared Flow child would get pushed down and
+                    // have its width fought over along with everything
+                    // else).
+                    Flow {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
+                        spacing: 12
+
                     // --- Status: motion state, Init/Park/Stop, and the
                     // live current-pointing readout - telescopewidget.ui's
                     // own groupStatus (labelStatus, buttonInit/Park/Stop,
@@ -660,97 +686,124 @@ ScrollView {
                                 }
                             }
 
-                            // SIMBAD name resolution - ports pyobs-gui's own
-                            // buttonSimbadQuery/textSimbadName (telescopewidget.py's
-                            // _query_simbad()), which fills the RA/Dec fields from
-                            // an object name via astroquery's Simbad.query_object().
-                            // This talks SIMBAD's own TAP/ADQL service directly
-                            // instead (comm::SimbadClient, src/comm/SimbadClient.h)
-                            // - no astroquery/VOTable dependency needed once a
-                            // plain CSV response is requested instead of the
-                            // service's own VOTable/XML default. Fills plain
-                            // decimal degrees (not pyobs-gui's own sexagesimal
-                            // "hmsdms" display) - simpler, and exactly as valid an
-                            // input to raField/decField below as sexagesimal
-                            // notation is, so no separate formatting code was
-                            // needed just for this.
-                            RowLayout {
+                            // Name-lookup helpers (SIMBAD + JPL Horizons),
+                            // collapsed behind a disclosure by default - both
+                            // fill raField/decField below but aren't needed
+                            // for the common "I already have coordinates"
+                            // path, so they no longer sit permanently open
+                            // between the coordinate-type combo and the
+                            // fields they feed.
+                            ColumnLayout {
+                                id: findByNameSection
                                 Layout.fillWidth: true
                                 visible: moveTypeCombo.currentText === "RA/Dec"
+                                spacing: 4
 
-                                TextField {
-                                    id: simbadNameField
-                                    Layout.fillWidth: true
-                                    placeholderText: "Simbad object name (e.g. M31, Sirius)"
-                                    enabled: !telescopeDelegate.simbadQuerying
-                                }
+                                property bool expanded: false
+
                                 Button {
-                                    text: telescopeDelegate.simbadQuerying ? "Querying…" : "Simbad"
-                                    palette.button: "#2e7d32"
-                                    palette.buttonText: "white"
-                                    enabled: !telescopeDelegate.simbadQuerying && simbadNameField.text.length > 0
-                                    onClicked: {
-                                        const requestId = telescopeDelegate.jid + "|simbad|" + Date.now()
-                                        telescopeDelegate.pendingSimbadRequestId = requestId
-                                        telescopeDelegate.simbadQuerying = true
-                                        telescopeDelegate.simbadStatusText = ""
-                                        root.simbadClient.queryByName(requestId, simbadNameField.text)
+                                    flat: true
+                                    Layout.fillWidth: true
+                                    text: (findByNameSection.expanded ? "▾ " : "▸ ") + "Find by name (Simbad / JPL Horizons)"
+                                    onClicked: findByNameSection.expanded = !findByNameSection.expanded
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    visible: findByNameSection.expanded
+                                    spacing: 6
+
+                                    // SIMBAD name resolution - ports pyobs-gui's own
+                                    // buttonSimbadQuery/textSimbadName (telescopewidget.py's
+                                    // _query_simbad()), which fills the RA/Dec fields from
+                                    // an object name via astroquery's Simbad.query_object().
+                                    // This talks SIMBAD's own TAP/ADQL service directly
+                                    // instead (comm::SimbadClient, src/comm/SimbadClient.h)
+                                    // - no astroquery/VOTable dependency needed once a
+                                    // plain CSV response is requested instead of the
+                                    // service's own VOTable/XML default. Fills plain
+                                    // decimal degrees (not pyobs-gui's own sexagesimal
+                                    // "hmsdms" display) - simpler, and exactly as valid an
+                                    // input to raField/decField below as sexagesimal
+                                    // notation is, so no separate formatting code was
+                                    // needed just for this.
+                                    RowLayout {
+                                        Layout.fillWidth: true
+
+                                        TextField {
+                                            id: simbadNameField
+                                            Layout.fillWidth: true
+                                            placeholderText: "Simbad object name (e.g. M31, Sirius)"
+                                            enabled: !telescopeDelegate.simbadQuerying
+                                        }
+                                        Button {
+                                            text: telescopeDelegate.simbadQuerying ? "Querying…" : "Simbad"
+                                            palette.button: "#2e7d32"
+                                            palette.buttonText: "white"
+                                            enabled: !telescopeDelegate.simbadQuerying && simbadNameField.text.length > 0
+                                            onClicked: {
+                                                const requestId = telescopeDelegate.jid + "|simbad|" + Date.now()
+                                                telescopeDelegate.pendingSimbadRequestId = requestId
+                                                telescopeDelegate.simbadQuerying = true
+                                                telescopeDelegate.simbadStatusText = ""
+                                                root.simbadClient.queryByName(requestId, simbadNameField.text)
+                                            }
+                                        }
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        visible: telescopeDelegate.simbadStatusText.length > 0
+                                        text: telescopeDelegate.simbadStatusText
+                                        color: telescopeDelegate.simbadStatusIsError ? "red" : "grey"
+                                        wrapMode: Text.WordWrap
+                                    }
+
+                                    // JPL Horizons name resolution - ports pyobs-gui's own
+                                    // buttonJplHorizonsQuery/textJplHorizonsName
+                                    // (telescopewidget.py's _query_jpl_horizons()). Unlike
+                                    // Simbad above (a fixed catalog position), Horizons
+                                    // computes a solar-system body's actual current
+                                    // position (light-time corrected, for "now") rather
+                                    // than a static one - meaningfully different data, not
+                                    // just a different data source, hence its own separate
+                                    // field/button/status rather than merging with Simbad's.
+                                    // Talks Horizons' own HTTP API directly
+                                    // (comm::JplHorizonsClient, src/comm/JplHorizonsClient.h),
+                                    // same "no astroquery dependency needed" reasoning as
+                                    // SimbadClient.
+                                    RowLayout {
+                                        Layout.fillWidth: true
+
+                                        TextField {
+                                            id: jplHorizonsNameField
+                                            Layout.fillWidth: true
+                                            placeholderText: "JPL Horizons body name (e.g. Ceres, Mars)"
+                                            enabled: !telescopeDelegate.jplHorizonsQuerying
+                                        }
+                                        Button {
+                                            text: telescopeDelegate.jplHorizonsQuerying ? "Querying…" : "JPL Horizons"
+                                            palette.button: "#2e7d32"
+                                            palette.buttonText: "white"
+                                            enabled: !telescopeDelegate.jplHorizonsQuerying && jplHorizonsNameField.text.length > 0
+                                            onClicked: {
+                                                const requestId = telescopeDelegate.jid + "|jplhorizons|" + Date.now()
+                                                telescopeDelegate.pendingJplHorizonsRequestId = requestId
+                                                telescopeDelegate.jplHorizonsQuerying = true
+                                                telescopeDelegate.jplHorizonsStatusText = ""
+                                                root.jplHorizonsClient.queryByName(requestId, jplHorizonsNameField.text)
+                                            }
+                                        }
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        visible: telescopeDelegate.jplHorizonsStatusText.length > 0
+                                        text: telescopeDelegate.jplHorizonsStatusText
+                                        color: telescopeDelegate.jplHorizonsStatusIsError ? "red" : "grey"
+                                        wrapMode: Text.WordWrap
                                     }
                                 }
-                            }
-
-                            Label {
-                                Layout.fillWidth: true
-                                visible: moveTypeCombo.currentText === "RA/Dec" && telescopeDelegate.simbadStatusText.length > 0
-                                text: telescopeDelegate.simbadStatusText
-                                color: telescopeDelegate.simbadStatusIsError ? "red" : "grey"
-                                wrapMode: Text.WordWrap
-                            }
-
-                            // JPL Horizons name resolution - ports pyobs-gui's own
-                            // buttonJplHorizonsQuery/textJplHorizonsName
-                            // (telescopewidget.py's _query_jpl_horizons()). Unlike
-                            // Simbad above (a fixed catalog position), Horizons
-                            // computes a solar-system body's actual current
-                            // position (light-time corrected, for "now") rather
-                            // than a static one - meaningfully different data, not
-                            // just a different data source, hence its own separate
-                            // field/button/status rather than merging with Simbad's.
-                            // Talks Horizons' own HTTP API directly
-                            // (comm::JplHorizonsClient, src/comm/JplHorizonsClient.h),
-                            // same "no astroquery dependency needed" reasoning as
-                            // SimbadClient.
-                            RowLayout {
-                                Layout.fillWidth: true
-                                visible: moveTypeCombo.currentText === "RA/Dec"
-
-                                TextField {
-                                    id: jplHorizonsNameField
-                                    Layout.fillWidth: true
-                                    placeholderText: "JPL Horizons body name (e.g. Ceres, Mars)"
-                                    enabled: !telescopeDelegate.jplHorizonsQuerying
-                                }
-                                Button {
-                                    text: telescopeDelegate.jplHorizonsQuerying ? "Querying…" : "JPL Horizons"
-                                    palette.button: "#2e7d32"
-                                    palette.buttonText: "white"
-                                    enabled: !telescopeDelegate.jplHorizonsQuerying && jplHorizonsNameField.text.length > 0
-                                    onClicked: {
-                                        const requestId = telescopeDelegate.jid + "|jplhorizons|" + Date.now()
-                                        telescopeDelegate.pendingJplHorizonsRequestId = requestId
-                                        telescopeDelegate.jplHorizonsQuerying = true
-                                        telescopeDelegate.jplHorizonsStatusText = ""
-                                        root.jplHorizonsClient.queryByName(requestId, jplHorizonsNameField.text)
-                                    }
-                                }
-                            }
-
-                            Label {
-                                Layout.fillWidth: true
-                                visible: moveTypeCombo.currentText === "RA/Dec" && telescopeDelegate.jplHorizonsStatusText.length > 0
-                                text: telescopeDelegate.jplHorizonsStatusText
-                                color: telescopeDelegate.jplHorizonsStatusIsError ? "red" : "grey"
-                                wrapMode: Text.WordWrap
                             }
 
                             GridLayout {
@@ -901,15 +954,78 @@ ScrollView {
                     // buttons - there's no equivalent "shutter action" here
                     // to batch onto, matching telescopewidget.ui's own
                     // per-row set/reset buttons.
+                    //
+                    // The jog row at the top used to be a separate Compass
+                    // GroupBox (compassmovewidget.py's N/S/E/W jog buttons,
+                    // nudging the same persistent offset one step at a time
+                    // rather than typing an absolute value) - folded in here
+                    // since it operated on the exact same offset state this
+                    // box already displays, and having it as its own
+                    // adjacent panel read as two disconnected controls for
+                    // one value. Same fallback chain as before (IOffsetsRaDec
+                    // directly if present, else IOffsetsAltAz only when the
+                    // module also reports IPointingAltAz - see moveCompass()
+                    // above), just relocated.
                     GroupBox {
                         title: "Offsets"
                         Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: 220
+                        Layout.preferredWidth: 240
                         visible: telescopeDelegate.raDecOffsetsInterface !== null || telescopeDelegate.altAzOffsetsInterface !== null
 
                         ColumnLayout {
                             width: parent.width
                             spacing: 10
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: telescopeDelegate.raDecOffsetsInterface !== null
+                                    || (telescopeDelegate.altAzOffsetsInterface !== null && telescopeDelegate.altAzPointingInterface !== null)
+                                spacing: 4
+
+                                Label { text: "Jog step [arcsec]:"; color: "grey" }
+                                SpinBox {
+                                    id: compassStepSpin
+                                    Layout.preferredWidth: 70
+                                    from: 0
+                                    to: 999
+                                    stepSize: 10
+                                    value: 30
+                                    editable: true
+                                }
+                                Item { Layout.fillWidth: true }
+                                Button {
+                                    text: "▲"
+                                    Layout.preferredWidth: 32
+                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
+                                    palette.button: "#1565c0"
+                                    palette.buttonText: "white"
+                                    onClicked: telescopeDelegate.moveCompass("N")
+                                }
+                                Button {
+                                    text: "◀"
+                                    Layout.preferredWidth: 32
+                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
+                                    palette.button: "#1565c0"
+                                    palette.buttonText: "white"
+                                    onClicked: telescopeDelegate.moveCompass("W")
+                                }
+                                Button {
+                                    text: "▶"
+                                    Layout.preferredWidth: 32
+                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
+                                    palette.button: "#1565c0"
+                                    palette.buttonText: "white"
+                                    onClicked: telescopeDelegate.moveCompass("E")
+                                }
+                                Button {
+                                    text: "▼"
+                                    Layout.preferredWidth: 32
+                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
+                                    palette.button: "#1565c0"
+                                    palette.buttonText: "white"
+                                    onClicked: telescopeDelegate.moveCompass("S")
+                                }
+                            }
 
                             ColumnLayout {
                                 Layout.fillWidth: true
@@ -1017,134 +1133,21 @@ ScrollView {
                             }
                         }
                     }
-
-                    // --- Compass: telescopewidget.ui's own compassmovewidget -
-                    // N/S/E/W jog buttons that nudge the persistent offset one
-                    // step at a time, rather than the Offsets GroupBox's own
-                    // "type an absolute value and Set it" idiom. Visible under
-                    // the same fallback chain moveCompass() above uses:
-                    // IOffsetsRaDec if present, else IOffsetsAltAz only if the
-                    // module also reports IPointingAltAz. Standard compass-rose
-                    // layout here (N top, S bottom, E right, W left), not a
-                    // literal port of compassmovewidget.ui's own button grid,
-                    // which has East on the left/West on the right -
-                    // pyobs-gui's own DEV_telescopewidget_layout.md flags that
-                    // placement as an open, never-resolved question ("could be
-                    // intentional... could be a leftover icon swap"), so
-                    // there's nothing concrete to port faithfully either way.
-                    // Buttons colored blue like Move, matching
-                    // compassmovewidget.py's own colorize_button(..., blue)
-                    // calls for all four (same semantic-color pass the Move/
-                    // Init/Park/Stop buttons above already got).
-                    GroupBox {
-                        title: "Compass"
-                        Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: 160
-                        visible: telescopeDelegate.raDecOffsetsInterface !== null
-                            || (telescopeDelegate.altAzOffsetsInterface !== null && telescopeDelegate.altAzPointingInterface !== null)
-
-                        ColumnLayout {
-                            width: parent.width
-                            spacing: 4
-
-                            Label {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: "Step [arcsec]"
-                                color: "grey"
-                            }
-
-                            GridLayout {
-                                Layout.alignment: Qt.AlignHCenter
-                                columns: 3
-                                rowSpacing: 4
-                                columnSpacing: 4
-
-                                Item { Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
-                                Button {
-                                    text: "N"
-                                    Layout.preferredWidth: 36
-                                    Layout.preferredHeight: 36
-                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
-                                    palette.button: "#1565c0"
-                                    palette.buttonText: "white"
-                                    onClicked: telescopeDelegate.moveCompass("N")
-                                }
-                                Item { Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
-
-                                Button {
-                                    text: "W"
-                                    Layout.preferredWidth: 36
-                                    Layout.preferredHeight: 36
-                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
-                                    palette.button: "#1565c0"
-                                    palette.buttonText: "white"
-                                    onClicked: telescopeDelegate.moveCompass("W")
-                                }
-                                SpinBox {
-                                    id: compassStepSpin
-                                    Layout.preferredWidth: 70
-                                    Layout.preferredHeight: 36
-                                    from: 0
-                                    to: 999
-                                    stepSize: 10
-                                    value: 30
-                                    editable: true
-                                }
-                                Button {
-                                    text: "E"
-                                    Layout.preferredWidth: 36
-                                    Layout.preferredHeight: 36
-                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
-                                    palette.button: "#1565c0"
-                                    palette.buttonText: "white"
-                                    onClicked: telescopeDelegate.moveCompass("E")
-                                }
-
-                                Item { Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
-                                Button {
-                                    text: "S"
-                                    Layout.preferredWidth: 36
-                                    Layout.preferredHeight: 36
-                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
-                                    palette.button: "#1565c0"
-                                    palette.buttonText: "white"
-                                    onClicked: telescopeDelegate.moveCompass("S")
-                                }
-                                Item { Layout.preferredWidth: 36; Layout.preferredHeight: 36 }
-                            }
-                        }
                     }
 
-                    // Spacer *before* the sidebar, not after it - this
-                    // RowLayout's own width is the page's full available
-                    // width (Layout.fillWidth: true, line 308), but
-                    // Status/Move/Offsets/SidebarColumn's combined natural
-                    // width is usually less than that. The leftover space
-                    // has to go somewhere; putting the spacer here (right
-                    // before the sidebar) keeps SidebarColumn - and
-                    // crucially its collapse/expand handle - pinned to the
-                    // window's actual right edge regardless of window
-                    // width or collapsed state. A trailing spacer *after*
-                    // SidebarColumn instead (the original placement)
-                    // looked fine while the sidebar was a fixed 220px
-                    // column, but once it could collapse down to just the
-                    // handle's own slim width, that handle ended up
-                    // stranded next to Offsets with a large gap before the
-                    // true window edge - direct report: "the arrow for
-                    // opening it is not at the edge of the window, but
-                    // right next to the last widget".
-                    Item { Layout.fillWidth: true }
-
-                    // --- Fourth column: telescopewidget.ui's own fourth
-                    // sidebar (Filter/Focus/Temperatures), out of scope
-                    // until a direct follow-up (see the file header
-                    // comment) shipped it, then generalized into the same
-                    // fully generic SidebarPanelRegistry-driven Repeater
-                    // as CameraView.qml's own third column, then factored
-                    // into SidebarColumn.qml (resize handle + collapse
-                    // toggle, shared width/collapsed state) once this page
-                    // needed that identically too - see that file's own
-                    // header comment.
+                    // --- Sidebar: telescopewidget.ui's own fourth sidebar
+                    // (Filter/Focus/Temperatures), out of scope until a
+                    // direct follow-up (see the file header comment)
+                    // shipped it, then generalized into the same fully
+                    // generic SidebarPanelRegistry-driven Repeater as
+                    // CameraView.qml's own third column, then factored into
+                    // SidebarColumn.qml (resize handle + collapse toggle,
+                    // shared width/collapsed state) once this page needed
+                    // that identically too - see that file's own header
+                    // comment. Kept as a sibling of the Flow above (see that
+                    // Flow's own comment) rather than one of its wrapped
+                    // children, so it never moves or resizes as
+                    // Status/Move/Offsets reflow.
                     SidebarColumn {
                         Layout.alignment: Qt.AlignTop
                         xmppClient: root.xmppClient
