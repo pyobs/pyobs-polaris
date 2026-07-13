@@ -33,6 +33,7 @@ GroupBox {
     property string moduleName: "" // for the plot window's title
     property var statefulInterfaces: []
     property var availableFilters: [] // unused - part of the shared panel contract
+    property var permittedMethods: null // unused - part of the shared panel contract (ITemperatures has no commands)
 
     function findInterface(name) {
         const list = root.statefulInterfaces || []

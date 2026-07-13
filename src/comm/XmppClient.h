@@ -170,6 +170,18 @@ private:
     void fetchModuleInfo(const QString &bareJid, const QString &fullJid, const QString &presenceState,
                          const QString &presenceError);
 
+    // ACL gating (TODO.md): fired from fetchModuleInfo() above once
+    // disco#info resolves, if the module declares IModule.
+    // get_permitted_methods() - a second, RPC-level round trip (a
+    // different wire protocol than disco#info, so not folded into that
+    // fetch itself). On success, decodes the returned method-name list
+    // into ModuleListModel::setPermittedMethods(); on any failure, leaves
+    // the module's ModuleInfo::permittedMethods at its fresh-upsert()
+    // nullopt default - fail open, matching pyobs-gui's own
+    // BaseWidget.permitted() fallback.
+    void fetchPermittedMethods(const QString &bareJid, const QString &fullJid,
+                               const QMap<QString, codec::InterfaceSchema> &interfaces);
+
     // Without this, a client that connects *after* modules are already
     // online never learns about them - live presence pushes only fire for
     // state *changes*, not the already-online state at connect time. Called

@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+import "Permissions.js" as Permissions
+
 // Self-contained ICooling widget - moved verbatim out of CameraView.qml's
 // old inline third-column GroupBox once TelescopeView.qml's own sidebar
 // needed the exact same "self-contained sidebar panel" shape as
@@ -40,6 +42,7 @@ GroupBox {
     property string moduleName: "" // unused - part of the shared panel contract
     property var statefulInterfaces: []
     property var availableFilters: [] // unused - part of the shared panel contract
+    property var permittedMethods: null
 
     function findInterface(name) {
         const list = root.statefulInterfaces || []
@@ -178,6 +181,7 @@ GroupBox {
         Button {
             Layout.fillWidth: true
             text: "Apply"
+            enabled: Permissions.isPermitted(root.permittedMethods, "set_cooling")
             onClicked: {
                 root.lastError = ""
                 root.xmppClient.executeMethod(

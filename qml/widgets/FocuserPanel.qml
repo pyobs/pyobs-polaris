@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+import "Permissions.js" as Permissions
+
 // Self-contained IFocuser widget - ports pyobs-gui's focuswidget.py:
 // current focus/focus-offset readout plus Set focus/Set offset/Reset
 // offset buttons (set_focus/set_focus_offset). IFocuser extends IMotion
@@ -26,6 +28,7 @@ GroupBox {
     property string moduleName: "" // unused - part of the shared panel contract
     property var statefulInterfaces: []
     property var availableFilters: [] // unused - part of the shared panel contract
+    property var permittedMethods: null
 
     function findInterface(name) {
         const list = root.statefulInterfaces || []
@@ -170,7 +173,7 @@ GroupBox {
             // Qt::GlobalColor + black text.
             palette.button: "#2e7d32"
             palette.buttonText: "white"
-            enabled: !root.running && root.motionReady
+            enabled: !root.running && root.motionReady && Permissions.isPermitted(root.permittedMethods, "set_focus")
             onClicked: root.run("set_focus", [focusSpin.value / 1000])
         }
 
@@ -196,7 +199,7 @@ GroupBox {
                 text: "Set offset"
                 palette.button: "#2e7d32"
                 palette.buttonText: "white"
-                enabled: !root.running && root.motionReady
+                enabled: !root.running && root.motionReady && Permissions.isPermitted(root.permittedMethods, "set_focus_offset")
                 onClicked: root.run("set_focus_offset", [offsetSpin.value / 1000])
             }
             Button {
@@ -204,7 +207,7 @@ GroupBox {
                 text: "Reset offset"
                 palette.button: "#f9a825"
                 palette.buttonText: "black"
-                enabled: !root.running && root.motionReady
+                enabled: !root.running && root.motionReady && Permissions.isPermitted(root.permittedMethods, "set_focus_offset")
                 onClicked: {
                     offsetSpin.value = 0
                     root.run("set_focus_offset", [0])

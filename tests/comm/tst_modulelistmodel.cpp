@@ -48,6 +48,9 @@ private slots:
     void allCommandsListsOneEntryPerCommandAcrossModules();
     void allCommandsDedupesACommandDeclaredByMultipleInterfaces();
     void allCommandsIsEmptyWithNoModules();
+    void permittedMethodsIsUndefinedBeforeFetch();
+    void setPermittedMethodsUpdatesInPlaceAndEmitsDataChanged();
+    void setPermittedMethodsOnUnknownJidIsANoOp();
 };
 
 namespace {
@@ -662,6 +665,42 @@ void TestModuleListModel::allCommandsIsEmptyWithNoModules()
 {
     ModuleListModel model;
     QVERIFY(model.allCommands().isEmpty());
+}
+
+void TestModuleListModel::permittedMethodsIsUndefinedBeforeFetch()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("roof@localhost")));
+
+    // QVariant() (undefined in QML) means "not yet fetched, or the fetch
+    // failed" - fail open, not "permits nothing".
+    QVERIFY(!model.data(model.index(0), ModuleListModel::PermittedMethodsRole).isValid());
+}
+
+void TestModuleListModel::setPermittedMethodsUpdatesInPlaceAndEmitsDataChanged()
+{
+    ModuleListModel model;
+    model.upsert(makeModule(QStringLiteral("roof@localhost")));
+
+    QSignalSpy spy(&model, &ModuleListModel::dataChanged);
+    model.setPermittedMethods(QStringLiteral("roof@localhost"),
+                              { QStringLiteral("init"), QStringLiteral("open") });
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(model.data(model.index(0), ModuleListModel::PermittedMethodsRole).toStringList(),
+             QStringList({ QStringLiteral("init"), QStringLiteral("open") }));
+    // Rest of the row is untouched.
+    QCOMPARE(model.data(model.index(0), ModuleListModel::JidRole).toString(), QStringLiteral("roof@localhost"));
+}
+
+void TestModuleListModel::setPermittedMethodsOnUnknownJidIsANoOp()
+{
+    ModuleListModel model;
+    QSignalSpy spy(&model, &ModuleListModel::dataChanged);
+
+    model.setPermittedMethods(QStringLiteral("roof@localhost"), { QStringLiteral("init") });
+
+    QCOMPARE(spy.count(), 0);
 }
 
 QTEST_MAIN(TestModuleListModel)

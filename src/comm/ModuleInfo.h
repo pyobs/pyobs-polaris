@@ -5,6 +5,8 @@
 
 #include <QMap>
 #include <QString>
+#include <QStringList>
+#include <optional>
 
 namespace comm {
 
@@ -17,6 +19,17 @@ struct ModuleInfo {
     QMap<QString, codec::InterfaceSchema> interfaces;
     QMap<QString, codec::EventSchema> events;
     QMap<QString, codec::WireValue> capabilities; // interface name -> decoded capabilities
+
+    // ACL gating (TODO.md's "ACL / permitted-methods gating"): nullopt means
+    // not yet fetched, or the get_permitted_methods() RPC failed - fail
+    // open (everything permitted), matching pyobs-gui's own BaseWidget.
+    // permitted() fallback. Populated by XmppClient after disco#info
+    // resolves, via a second, RPC-level round trip (a different wire
+    // protocol than disco#info, so not folded into fetchModuleInfo()
+    // itself) - see XmppClient::fetchPermittedMethods(). Left untouched by
+    // ModuleListModel::updatePresence(), same as every other disco#info-
+    // derived field here.
+    std::optional<QStringList> permittedMethods;
 
     // Module lifecycle state from presence (show/status), not disco#info -
     // mirrors pyobs-core's ModuleState ("ready"/"error"/"local"; "closed"

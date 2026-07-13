@@ -3,6 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import pyobs.polaris
 
+import "../widgets/Permissions.js" as Permissions
+
 // Dedicated page for IRoof modules, promoted from the former RoofWidget
 // (previously embedded in the now-removed Dashboard) on direct request -
 // only reachable via the sidebar while at least one connected module
@@ -53,6 +55,7 @@ ColumnLayout {
             required property string jid
             required property string name
             required property var statefulInterfaces
+            required property var permittedMethods
 
             function findInterface(interfaceName) {
                 const list = statefulInterfaces || []
@@ -146,7 +149,7 @@ ColumnLayout {
                             text: "Open"
                             palette.button: "#2e7d32"
                             palette.buttonText: "white"
-                            enabled: roofDelegate.running === ""
+                            enabled: roofDelegate.running === "" && Permissions.isPermitted(roofDelegate.permittedMethods, "init")
                             onClicked: roofDelegate.run("init", 0)
                         }
                         Button {
@@ -154,7 +157,7 @@ ColumnLayout {
                             text: "Close"
                             palette.button: "#f9a825"
                             palette.buttonText: "black"
-                            enabled: roofDelegate.running === ""
+                            enabled: roofDelegate.running === "" && Permissions.isPermitted(roofDelegate.permittedMethods, "park")
                             onClicked: roofDelegate.run("park", 0)
                         }
                         Button {
@@ -162,7 +165,7 @@ ColumnLayout {
                             text: "Stop"
                             palette.button: "#c62828"
                             palette.buttonText: "white"
-                            enabled: roofDelegate.running === ""
+                            enabled: roofDelegate.running === "" && Permissions.isPermitted(roofDelegate.permittedMethods, "stop_motion")
                             onClicked: roofDelegate.run("stop_motion", 1)
                         }
                     }

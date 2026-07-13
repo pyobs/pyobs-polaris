@@ -3,6 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import pyobs.polaris
 
+import "../widgets/Permissions.js" as Permissions
+
 // Dedicated page for IAutoFocus modules, ported from pyobs-gui's
 // autofocuswidget.py (AutoFocusWidget) - see TODO.md. Only reachable via
 // the sidebar while at least one connected module implements IAutoFocus
@@ -46,6 +48,7 @@ ColumnLayout {
             required property string jid
             required property string name
             required property var statefulInterfaces
+            required property var permittedMethods
 
             // Plain indexed loop, not Array.isArray()/.map()/.filter() -
             // matches RoofView.qml's own findInterface() exactly, a
@@ -253,7 +256,7 @@ ColumnLayout {
                         Button {
                             Layout.fillWidth: true
                             text: "Run Auto Focus"
-                            enabled: !autoFocusDelegate.running
+                            enabled: !autoFocusDelegate.running && Permissions.isPermitted(autoFocusDelegate.permittedMethods, "auto_focus")
                             onClicked: {
                                 autoFocusDelegate.lastError = ""
                                 root.xmppClient.executeMethod(
@@ -269,7 +272,7 @@ ColumnLayout {
                         Button {
                             Layout.fillWidth: true
                             text: "Abort"
-                            enabled: autoFocusDelegate.running
+                            enabled: autoFocusDelegate.running && Permissions.isPermitted(autoFocusDelegate.permittedMethods, "abort")
                             onClicked: root.xmppClient.executeMethod(autoFocusDelegate.jid, "abort", 0)
                         }
                     }

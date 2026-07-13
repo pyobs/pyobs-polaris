@@ -4,6 +4,8 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 import pyobs.polaris
 
+import "../widgets/Permissions.js" as Permissions
+
 // Dedicated page for ICamera modules, ported from pyobs-gui's
 // camerawidget.py. ICamera itself is IData + IExposure (confirmed from
 // source) - IExposure's state class is inherited by ICamera the same way
@@ -84,6 +86,21 @@ ScrollView {
                 required property var windowExtent
                 required property var imageFormats
                 required property var filters
+                required property var permittedMethods
+
+                // Whether every RPC applyPendingSettingsThenExpose() is
+                // about to fire (conditionally: set_window/set_gain+
+                // set_offset/set_exposure_time, always: grab_data) is
+                // actually permitted - gates the Expose button as one unit
+                // rather than letting it fire a partial batch that's bound
+                // to fail partway through on a forbidden call.
+                readonly property bool exposeIsPermitted:
+                    Permissions.isPermitted(cameraDelegate.permittedMethods, "grab_data")
+                    && (!cameraDelegate.windowInterface || Permissions.isPermitted(cameraDelegate.permittedMethods, "set_window"))
+                    && (!cameraDelegate.gainInterface || (Permissions.isPermitted(cameraDelegate.permittedMethods, "set_gain")
+                        && Permissions.isPermitted(cameraDelegate.permittedMethods, "set_offset")))
+                    && (!cameraDelegate.exposureTimeInterface || cameraDelegate.currentImageType === "bias"
+                        || Permissions.isPermitted(cameraDelegate.permittedMethods, "set_exposure_time"))
 
                 function findInterface(interfaceName) {
                     const list = statefulInterfaces || []
@@ -698,6 +715,7 @@ ScrollView {
                                     ComboBox {
                                         id: binningCombo
                                         Layout.fillWidth: true
+                                        enabled: Permissions.isPermitted(cameraDelegate.permittedMethods, "set_binning")
                                         model: cameraDelegate.binningOptions || []
                                         onActivated: {
                                             const parts = currentText.split("x")
@@ -743,6 +761,7 @@ ScrollView {
                                     ComboBox {
                                         id: imageFormatCombo
                                         Layout.fillWidth: true
+                                        enabled: Permissions.isPermitted(cameraDelegate.permittedMethods, "set_image_format")
                                         model: cameraDelegate.imageFormats || []
                                         onActivated: {
                                             cameraDelegate.lastError = ""
@@ -824,6 +843,7 @@ ScrollView {
                                     ComboBox {
                                         id: imageTypeCombo
                                         Layout.fillWidth: true
+                                        enabled: Permissions.isPermitted(cameraDelegate.permittedMethods, "set_image_type")
                                         textRole: "label"
                                         valueRole: "value"
                                         model: [
@@ -924,7 +944,7 @@ ScrollView {
                                         text: "Expose"
                                         palette.button: "#2e7d32"
                                         palette.buttonText: "white"
-                                        enabled: cameraDelegate.remainingExposures === 0
+                                        enabled: cameraDelegate.remainingExposures === 0 && cameraDelegate.exposeIsPermitted
                                         onClicked: {
                                             cameraDelegate.lastError = ""
                                             cameraDelegate.applyPendingSettingsThenExpose()
@@ -937,6 +957,7 @@ ScrollView {
                                         palette.button: "#c62828"
                                         palette.buttonText: "white"
                                         enabled: cameraDelegate.remainingExposures > 0
+                                            && (cameraDelegate.remainingExposures > 1 || Permissions.isPermitted(cameraDelegate.permittedMethods, "abort"))
                                         onClicked: {
                                             if (cameraDelegate.remainingExposures > 1) {
                                                 // Mid-sequence: just stop the
@@ -1281,6 +1302,7 @@ ScrollView {
                         moduleName: cameraDelegate.name
                         statefulInterfaces: cameraDelegate.statefulInterfaces
                         availableFilters: cameraDelegate.filters
+                        permittedMethods: cameraDelegate.permittedMethods
                     }
                 }
             }

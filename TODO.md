@@ -54,9 +54,9 @@ hot-reloading native plugins, or a permission/sandboxing model beyond
 
 ---
 
-## ACL / permitted-methods gating
+## ACL / permitted-methods gating — done
 
-**Goal:** hide/disable controls the current XMPP user's ACL doesn't allow,
+**Goal (met):** hide/disable controls the current XMPP user's ACL doesn't allow,
 matching pyobs-gui's own `base.py` (`BaseWidget._fetch_permitted_methods()`/
 `permitted(method)`): every widget there fetches
 `IModule.get_permitted_methods()` once per module and gates each button
@@ -84,26 +84,20 @@ widgets inherits - every page in this project (`RoofView`/
 RPC-triggering button, not just `TelescopeView.qml`'s Init/Park/Stop/
 Move/offset buttons that prompted noticing this.
 
-**Shape once designed:**
-- Fetch `get_permitted_methods()` once per module - likely folded into
-  the existing disco#info discovery flow (`XmppClient`/`Discovery.cpp`),
-  not per-widget, to avoid every widget showing the same module
-  redundantly re-fetching the same list.
-- Cache the result (or `null`/absent on failure - "treat everything as
-  permitted", matching pyobs-gui's own fail-open default) somewhere
-  QML-reachable, most naturally a new `ModuleListModel` role mirroring
-  `InterfacesRole`/`CapabilitiesRole`'s existing narrow-role precedent.
-- Every `Button.enabled` expression that currently only checks motion
-  status/interface presence would additionally check permission - a
-  mechanical but genuinely *wide* change (every page at once), which is
-  exactly why the plumbing should be designed once and applied
-  project-wide in a single pass rather than gating pages one at a time.
-- Method-name matching must exactly match whatever string
-  `get_permitted_methods()` actually returns per method - confirm
-  against a live pyobs-core module, not assumed from source (this
-  project's own standing rule for wire behavior).
+**Shape shipped** (see `DEVELOPMENT.md`'s own "ACL / permitted-methods
+gating" write-up for the full design/verification trail): `get_permitted_
+methods()` fetched once per module, folded into the existing disco#info
+discovery flow (a second RPC round trip right after `XmppClient::
+fetchModuleInfo()` upserts) rather than per-widget; cached on a new
+`ModuleListModel::PermittedMethodsRole` (`nullopt`/undefined = fail open,
+matching pyobs-gui's own default), same narrow-role precedent as
+`InterfacesRole`/`CapabilitiesRole`; a new shared `qml/widgets/
+Permissions.js` predicate applied to every RPC-triggering control across
+every page in one project-wide pass, exactly as anticipated above.
+Method-name matching confirmed against a live `DummyTelescope`, not
+assumed from source.
 
-**Deliberately not in scope even once this ships:** actual ACL
+**Deliberately not in scope even now that this has shipped:** actual ACL
 *configuration* - that's a pyobs-core/server-side concept this project
 never writes to, only reflects what the server already reports.
 

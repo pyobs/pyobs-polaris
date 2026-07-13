@@ -27,11 +27,11 @@ import QtQml
 // a navigation target, just a conditionally-visible chunk of UI.
 //
 // Every registered panel shares one identical property contract -
-// xmppClient, jid, moduleName, statefulInterfaces, availableFilters -
-// even though any given panel only reads some of them (see e.g.
+// xmppClient, jid, moduleName, statefulInterfaces, availableFilters,
+// permittedMethods - even though any given panel only reads some of them (see e.g.
 // FocuserPanel.qml's own "unused - part of the shared panel contract"
 // properties). That uniformity is what lets the consuming Repeater
-// (CameraView.qml/TelescopeView.qml) set all five on every loaded panel
+// (CameraView.qml/TelescopeView.qml) set all six on every loaded panel
 // generically, without needing to special-case which properties a
 // particular registration's component actually cares about.
 QtObject {

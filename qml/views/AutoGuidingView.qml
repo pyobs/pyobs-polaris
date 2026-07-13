@@ -3,6 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import pyobs.polaris
 
+import "../widgets/Permissions.js" as Permissions
+
 // Dedicated page for IAutoGuiding modules, ported from pyobs-gui's
 // autoguidingwidget.py (AutoGuidingWidget) - see TODO.md. Only reachable
 // via the sidebar while at least one connected module implements
@@ -63,6 +65,7 @@ ScrollView {
                 required property string jid
                 required property string name
                 required property var statefulInterfaces
+                required property var permittedMethods
 
                 // Plain indexed loop, not Array.isArray()/.map()/.filter() -
                 // matches RoofView.qml's findInterface()/AutoFocusView.qml's
@@ -300,7 +303,7 @@ ScrollView {
                             Button {
                                 Layout.fillWidth: true
                                 text: "Start"
-                                enabled: !autoGuidingDelegate.running
+                                enabled: !autoGuidingDelegate.running && Permissions.isPermitted(autoGuidingDelegate.permittedMethods, "start")
                                 onClicked: {
                                     autoGuidingDelegate.lastError = ""
                                     root.xmppClient.executeMethod(
@@ -315,7 +318,7 @@ ScrollView {
                             Button {
                                 Layout.fillWidth: true
                                 text: "Stop"
-                                enabled: autoGuidingDelegate.running
+                                enabled: autoGuidingDelegate.running && Permissions.isPermitted(autoGuidingDelegate.permittedMethods, "stop")
                                 onClicked: root.xmppClient.executeMethod(autoGuidingDelegate.jid, "stop", 0)
                             }
                         }
@@ -337,6 +340,7 @@ ScrollView {
                                 to: 60000
                                 value: 1000
                                 editable: true
+                                enabled: Permissions.isPermitted(autoGuidingDelegate.permittedMethods, "set_exposure_time")
                                 textFromValue: (value) => (value / 1000).toFixed(3)
                                 valueFromText: (text) => Math.round(parseFloat(text) * 1000)
                                 onValueModified: {

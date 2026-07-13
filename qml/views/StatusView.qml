@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import pyobs.polaris
 import "../widgets/WireValueFormat.js" as WireValueFormat
+import "../widgets/Permissions.js" as Permissions
 
 // Ports pyobs-gui's StatusWidget (statuswidget.py): a flat table of every
 // connected module's name, version and live presence state (ready/error/
@@ -147,6 +148,7 @@ ColumnLayout {
             required property var interfaces
             required property var statefulInterfaces
             required property var capabilities
+            required property var permittedMethods
 
             readonly property bool expanded: root.isExpanded(jid)
 
@@ -200,6 +202,7 @@ ColumnLayout {
                     Button {
                         text: "Clear error"
                         visible: statusDelegate.presenceState === "error"
+                        enabled: Permissions.isPermitted(statusDelegate.permittedMethods, "reset_error")
                         onClicked: root.xmppClient.executeMethod(statusDelegate.jid, "reset_error", 0)
                     }
                 }

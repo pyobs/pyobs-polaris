@@ -267,6 +267,11 @@ QVariant ModuleListModel::data(const QModelIndex &index, int role) const
         }
         return result;
     }
+    case PermittedMethodsRole:
+        if (!info.permittedMethods) {
+            return {};
+        }
+        return QVariant(*info.permittedMethods);
     default:
         return {};
     }
@@ -291,6 +296,7 @@ QHash<int, QByteArray> ModuleListModel::roleNames() const
         { PresenceStateRole, "presenceState" },
         { PresenceErrorRole, "presenceError" },
         { CapabilitiesRole, "capabilities" },
+        { PermittedMethodsRole, "permittedMethods" },
     };
 }
 
@@ -353,6 +359,18 @@ bool ModuleListModel::updatePresence(const QString &bareJid, const QString &stat
         }
     }
     return false;
+}
+
+void ModuleListModel::setPermittedMethods(const QString &bareJid, const QStringList &methods)
+{
+    for (int i = 0; i < m_modules.size(); ++i) {
+        if (m_modules.at(i).jid == bareJid) {
+            m_modules[i].permittedMethods = methods;
+            const QModelIndex idx = index(i);
+            Q_EMIT dataChanged(idx, idx, { PermittedMethodsRole });
+            return;
+        }
+    }
 }
 
 void ModuleListModel::remove(const QString &bareJid)

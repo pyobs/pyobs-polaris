@@ -127,6 +127,14 @@ public:
         // specific widget's specific need, this one is for a generic
         // "show me everything" drill-down.
         CapabilitiesRole,
+        // QVariant() (undefined in QML) if this module's get_permitted_
+        // methods() RPC hasn't resolved yet (or failed) - fail open,
+        // treat every method as permitted, matching pyobs-gui's own
+        // BaseWidget.permitted() fallback. Otherwise a QVariantList of
+        // plain method-name strings, checked via widgets/Permissions.js's
+        // isPermitted() at every RPC-triggering Button.enabled binding
+        // project-wide (TODO.md's "ACL / permitted-methods gating").
+        PermittedMethodsRole,
     };
     Q_ENUM(Role)
 
@@ -214,6 +222,12 @@ public:
     // place (no disco#info re-fetch) - returns false if this JID isn't in
     // the list yet, so the caller knows to fall back to a full fetch instead.
     bool updatePresence(const QString &bareJid, const QString &state, const QString &errorText);
+
+    // Called once the get_permitted_methods() RPC XmppClient fires after
+    // every disco#info fetch resolves. No-op if bareJid isn't in the list
+    // (the module went offline while the RPC was in flight) - same
+    // tolerance updatePresence() above already has, not a new gap.
+    void setPermittedMethods(const QString &bareJid, const QStringList &methods);
 
     // Empties the whole list - matches useXmpp.ts's disconnect() resetting
     // its modules ref, called from XmppClient::disconnectFromServer().

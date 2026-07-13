@@ -27,6 +27,7 @@ RowLayout {
     required property string moduleName
     required property var statefulInterfaces
     required property var availableFilters
+    required property var permittedMethods
 
     // Narrower than SidebarPanelRegistry's usual per-panel findInterface()
     // helpers (those live on each panel/delegate already) - this one only
@@ -153,6 +154,7 @@ RowLayout {
                     item.moduleName = root.moduleName
                     item.statefulInterfaces = Qt.binding(() => root.statefulInterfaces)
                     item.availableFilters = Qt.binding(() => root.availableFilters)
+                    item.permittedMethods = Qt.binding(() => root.permittedMethods)
                     item.width = Qt.binding(() => panelLoader.width)
                 }
             }

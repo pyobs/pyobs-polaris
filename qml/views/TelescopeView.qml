@@ -3,6 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import pyobs.polaris
 
+import "../widgets/Permissions.js" as Permissions
+
 // Dedicated page for ITelescope modules, ported from pyobs-gui's
 // telescopewidget.py - MVP scope only (see TODO.md for what's
 // deliberately out of scope: solar-frame pointing, MPC lookups,
@@ -113,6 +115,7 @@ ScrollView {
                 required property var statefulInterfaces
                 required property var filters
                 required property var moduleLocation
+                required property var permittedMethods
 
                 function findInterface(interfaceName) {
                     const list = statefulInterfaces || []
@@ -276,6 +279,15 @@ ScrollView {
                 // id reference into the Compass GroupBox below, same idiom
                 // raOffsetSpin/decOffsetSpin already rely on from
                 // onRaDecOffsetsStateChanged above.
+                // The RPC method the Compass buttons actually call - same
+                // IOffsetsRaDec-first fallback chain moveCompass() itself
+                // uses below, and the Compass GroupBox's own visibility
+                // condition - factored out here purely so the Compass
+                // buttons' enabled: binding can gate on the right method
+                // name without duplicating that fallback chain a third time.
+                readonly property string compassMethod: telescopeDelegate.raDecOffsetsInterface !== null
+                    ? "set_offsets_radec" : "set_offsets_altaz"
+
                 function moveCompass(direction) {
                     const stepDeg = compassStepSpin.value / 3600
                     if (telescopeDelegate.raDecOffsetsInterface !== null) {
@@ -527,7 +539,7 @@ ScrollView {
                                 Button {
                                     Layout.fillWidth: true
                                     text: "Init"
-                                    enabled: telescopeDelegate.running === ""
+                                    enabled: telescopeDelegate.running === "" && Permissions.isPermitted(telescopeDelegate.permittedMethods, "init")
                                     palette.button: "#2e7d32"
                                     palette.buttonText: "white"
                                     onClicked: telescopeDelegate.run("init", 0)
@@ -535,7 +547,7 @@ ScrollView {
                                 Button {
                                     Layout.fillWidth: true
                                     text: "Park"
-                                    enabled: telescopeDelegate.running === ""
+                                    enabled: telescopeDelegate.running === "" && Permissions.isPermitted(telescopeDelegate.permittedMethods, "park")
                                     palette.button: "#f9a825"
                                     palette.buttonText: "black"
                                     onClicked: telescopeDelegate.run("park", 0)
@@ -543,7 +555,7 @@ ScrollView {
                                 Button {
                                     Layout.fillWidth: true
                                     text: "Stop"
-                                    enabled: telescopeDelegate.running === ""
+                                    enabled: telescopeDelegate.running === "" && Permissions.isPermitted(telescopeDelegate.permittedMethods, "stop_motion")
                                     palette.button: "#c62828"
                                     palette.buttonText: "white"
                                     onClicked: telescopeDelegate.run("stop_motion", 1)
@@ -858,8 +870,10 @@ ScrollView {
                                 enabled: telescopeDelegate.motionReady && (
                                     (moveTypeCombo.currentText === "RA/Dec"
                                         && !isNaN(Sexagesimal.parseRa(raField.text))
-                                        && !isNaN(Sexagesimal.parseDec(decField.text)))
-                                    || moveTypeCombo.currentText === "Alt/Az")
+                                        && !isNaN(Sexagesimal.parseDec(decField.text))
+                                        && Permissions.isPermitted(telescopeDelegate.permittedMethods, "move_radec"))
+                                    || (moveTypeCombo.currentText === "Alt/Az"
+                                        && Permissions.isPermitted(telescopeDelegate.permittedMethods, "move_altaz")))
                                 onClicked: {
                                     if (moveTypeCombo.currentText === "RA/Dec") {
                                         telescopeDelegate.runWithParams(
@@ -927,7 +941,7 @@ ScrollView {
                                     Button {
                                         Layout.fillWidth: true
                                         text: "Set"
-                                        enabled: telescopeDelegate.motionReady
+                                        enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, "set_offsets_radec")
                                         palette.button: "#2e7d32"
                                         palette.buttonText: "white"
                                         onClicked: telescopeDelegate.runWithParams(
@@ -936,7 +950,7 @@ ScrollView {
                                     Button {
                                         Layout.fillWidth: true
                                         text: "Reset"
-                                        enabled: telescopeDelegate.motionReady
+                                        enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, "set_offsets_radec")
                                         palette.button: "#f9a825"
                                         palette.buttonText: "black"
                                         onClicked: {
@@ -981,7 +995,7 @@ ScrollView {
                                     Button {
                                         Layout.fillWidth: true
                                         text: "Set"
-                                        enabled: telescopeDelegate.motionReady
+                                        enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, "set_offsets_altaz")
                                         palette.button: "#2e7d32"
                                         palette.buttonText: "white"
                                         onClicked: telescopeDelegate.runWithParams(
@@ -990,7 +1004,7 @@ ScrollView {
                                     Button {
                                         Layout.fillWidth: true
                                         text: "Reset"
-                                        enabled: telescopeDelegate.motionReady
+                                        enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, "set_offsets_altaz")
                                         palette.button: "#f9a825"
                                         palette.buttonText: "black"
                                         onClicked: {
@@ -1050,7 +1064,7 @@ ScrollView {
                                     text: "N"
                                     Layout.preferredWidth: 36
                                     Layout.preferredHeight: 36
-                                    enabled: telescopeDelegate.motionReady
+                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
                                     palette.button: "#1565c0"
                                     palette.buttonText: "white"
                                     onClicked: telescopeDelegate.moveCompass("N")
@@ -1061,7 +1075,7 @@ ScrollView {
                                     text: "W"
                                     Layout.preferredWidth: 36
                                     Layout.preferredHeight: 36
-                                    enabled: telescopeDelegate.motionReady
+                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
                                     palette.button: "#1565c0"
                                     palette.buttonText: "white"
                                     onClicked: telescopeDelegate.moveCompass("W")
@@ -1080,7 +1094,7 @@ ScrollView {
                                     text: "E"
                                     Layout.preferredWidth: 36
                                     Layout.preferredHeight: 36
-                                    enabled: telescopeDelegate.motionReady
+                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
                                     palette.button: "#1565c0"
                                     palette.buttonText: "white"
                                     onClicked: telescopeDelegate.moveCompass("E")
@@ -1091,7 +1105,7 @@ ScrollView {
                                     text: "S"
                                     Layout.preferredWidth: 36
                                     Layout.preferredHeight: 36
-                                    enabled: telescopeDelegate.motionReady
+                                    enabled: telescopeDelegate.motionReady && Permissions.isPermitted(telescopeDelegate.permittedMethods, telescopeDelegate.compassMethod)
                                     palette.button: "#1565c0"
                                     palette.buttonText: "white"
                                     onClicked: telescopeDelegate.moveCompass("S")
@@ -1139,6 +1153,7 @@ ScrollView {
                         moduleName: telescopeDelegate.name
                         statefulInterfaces: telescopeDelegate.statefulInterfaces
                         availableFilters: telescopeDelegate.filters
+                        permittedMethods: telescopeDelegate.permittedMethods
                     }
                 }
             }

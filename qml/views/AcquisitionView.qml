@@ -3,6 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import pyobs.polaris
 
+import "../widgets/Permissions.js" as Permissions
+
 // Dedicated page for IAcquisition modules, ported from pyobs-gui's
 // acquisitionwidget.py (AcquisitionWidget) - see TODO.md. Only reachable
 // via the sidebar while at least one connected module implements
@@ -55,6 +57,7 @@ ScrollView {
                 required property string jid
                 required property string name
                 required property var statefulInterfaces
+                required property var permittedMethods
 
                 // Plain indexed loop, not Array.isArray()/.map()/.filter() -
                 // matches RoofView.qml's findInterface()/AutoFocusView.qml's
@@ -247,7 +250,7 @@ ScrollView {
 
                     Button {
                         text: "Acquire"
-                        enabled: !acquisitionDelegate.running
+                        enabled: !acquisitionDelegate.running && Permissions.isPermitted(acquisitionDelegate.permittedMethods, "acquire_target")
                         onClicked: {
                             acquisitionDelegate.lastError = ""
                             root.xmppClient.executeMethod(
@@ -261,7 +264,7 @@ ScrollView {
                     }
                     Button {
                         text: "Abort"
-                        enabled: acquisitionDelegate.running
+                        enabled: acquisitionDelegate.running && Permissions.isPermitted(acquisitionDelegate.permittedMethods, "abort")
                         onClicked: root.xmppClient.executeMethod(acquisitionDelegate.jid, "abort", 0)
                     }
                 }

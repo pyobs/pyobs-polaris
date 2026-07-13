@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+import "Permissions.js" as Permissions
+
 // Self-contained IFilters widget - ports pyobs-gui's filterwidget.py:
 // current filter readout, a combo of the filters IFilters capabilities
 // declared, and a "Set" button (set_filter). IFilters extends IMotion
@@ -34,6 +36,7 @@ GroupBox {
     property string moduleName: "" // unused - part of the shared panel contract
     property var statefulInterfaces: []
     property var availableFilters: [] // QVariantList of strings (ModuleListModel::FiltersRole)
+    property var permittedMethods: null
 
     function findInterface(name) {
         const list = root.statefulInterfaces || []
@@ -129,6 +132,7 @@ GroupBox {
             palette.button: "#2e7d32"
             palette.buttonText: "white"
             enabled: !root.running && root.motionReady && filterCombo.currentText.length > 0
+                && Permissions.isPermitted(root.permittedMethods, "set_filter")
             onClicked: {
                 root.running = true
                 root.lastError = ""

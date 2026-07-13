@@ -164,6 +164,35 @@ void XmppClient::fetchModuleInfo(const QString &bareJid, const QString &fullJid,
         // re-subscribing to an already-subscribed node from the same JID
         // is a harmless no-op server-side.
         m_eventManager->subscribeToEvents(info.jid, info.events);
+        fetchPermittedMethods(info.jid, info.fullJid, info.interfaces);
+    });
+}
+
+void XmppClient::fetchPermittedMethods(const QString &bareJid, const QString &fullJid,
+                                       const QMap<QString, codec::InterfaceSchema> &interfaces)
+{
+    const auto imodule = interfaces.constFind(QStringLiteral("IModule"));
+    if (imodule == interfaces.constEnd() || !imodule->commands.contains(QStringLiteral("get_permitted_methods"))) {
+        // No IModule, or this module's pyobs-core version doesn't declare
+        // the command - stays fail-open (ModuleInfo::permittedMethods
+        // stays nullopt from the fresh upsert() above).
+        return;
+    }
+
+    comm::executeMethod(m_client, fullJid, QStringLiteral("get_permitted_methods"), {}, {},
+                        [this, bareJid](RpcResult result) {
+        if (!result.success) {
+            // Transport error or a genuine remote fault - fail open, same
+            // as "command not declared" above. Don't touch m_modules at
+            // all, rather than writing an empty list (which would mean
+            // "permits nothing").
+            return;
+        }
+        QStringList methods;
+        for (const QVariant &entry : codec::toQVariant(result.value).toList()) {
+            methods.push_back(entry.toString());
+        }
+        m_modules->setPermittedMethods(bareJid, methods);
     });
 }
 

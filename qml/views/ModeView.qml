@@ -3,6 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import pyobs.polaris
 
+import "../widgets/Permissions.js" as Permissions
+
 // Dedicated page for IMode modules, ported from pyobs-gui's modewidget.py
 // (ModeWidget) - see TODO.md. Only reachable via the sidebar while at
 // least one connected module implements IMode (see MainWindow.qml's
@@ -66,6 +68,7 @@ ColumnLayout {
             required property string name
             required property var statefulInterfaces
             required property var modeGroups
+            required property var permittedMethods
 
             function findInterface(interfaceName) {
                 const list = statefulInterfaces || []
@@ -291,7 +294,7 @@ ColumnLayout {
                     Button {
                         Layout.fillWidth: true
                         text: "Set"
-                        enabled: modeDelegate.initialized
+                        enabled: modeDelegate.initialized && Permissions.isPermitted(modeDelegate.permittedMethods, "set_mode")
                         onClicked: modeDelegate.applyStagedModes()
                     }
 
