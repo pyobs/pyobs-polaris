@@ -165,9 +165,18 @@ def _walk(node, predicate, results: list, depth: int = 0, max_depth: int = 25) -
             _walk(child, predicate, results, depth + 1, max_depth)
 
 
+# A checkable QQC2 Button (e.g. a popup trigger that stays visibly
+# pressed while its popup is open) reports its AT-SPI role as "check
+# box" or "toggle button" instead of "button" - caught live when
+# CameraView.qml's "Display settings…" button grew `checkable: true`
+# and this script's own button lookup silently stopped finding it.
+BUTTON_ROLE_NAMES = {"button", "push button", "toggle button", "check box"}
+
+
 def find_buttons(app, name: str, showing_only: bool = False) -> list:
-    """Finds every "button"-role node named `name` in the app's
-    accessibility tree. Every module's page delegate exists in the tree
+    """Finds every button-like-role node named `name` in the app's
+    accessibility tree (see BUTTON_ROLE_NAMES above for which roles
+    count). Every module's page delegate exists in the tree
     simultaneously regardless of which page is actually showing (see
     MainWindow.qml's StackLayout - all children are eagerly
     instantiated), so a bare name search can return several matches for
@@ -177,7 +186,7 @@ def find_buttons(app, name: str, showing_only: bool = False) -> list:
     results: list = []
 
     def predicate(node) -> bool:
-        if node.get_role_name() != "button" or node.get_name() != name:
+        if node.get_role_name() not in BUTTON_ROLE_NAMES or node.get_name() != name:
             return False
         if not showing_only:
             return True

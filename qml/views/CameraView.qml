@@ -1163,10 +1163,24 @@ ScrollView {
                             Button {
                                 id: displaySettingsButton
                                 text: "Display settings…"
-                                onClicked: displaySettingsPopup.open()
+                                highlighted: displaySettingsPopup.visible
+                                onClicked: displaySettingsPopup.visible
+                                    ? displaySettingsPopup.close() : displaySettingsPopup.open()
                             }
                         }
 
+                        // The button is the popup's trigger, not just its
+                        // opener - toggles closed on a second click rather
+                        // than only ever opening. Reads displaySettingsPopup.
+                        // visible directly (not a checkable Button's own
+                        // `checked`) - checkable turned out to report a
+                        // separate "Toggle" accessibility action next to
+                        // "Press" that could flip `checked` independently of
+                        // an actual click, which is one component too many
+                        // for what's just "is the popup open or not"; Popup's
+                        // own visible is already that single source of
+                        // truth, so read it directly instead of mirroring it
+                        // into a second property that can drift out of sync.
                         Popup {
                             id: displaySettingsPopup
                             parent: displaySettingsButton
