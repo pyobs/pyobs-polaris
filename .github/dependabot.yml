@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # C++/CMake/Conan project -- no Python or npm ecosystem applies here. This keeps the pinned
+  # GitHub Actions versions used in .github/workflows/build.yml up to date.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    target-branch: "develop"
+    labels:
+      - "dependencies"
