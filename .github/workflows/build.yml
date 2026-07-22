@@ -159,7 +159,7 @@ jobs:
       # dependency (e.g. cfitsio) shows up - conanfile.txt has no requires
       # yet, see conanfile.txt for why (qxmpp is deliberately not one).
       - name: Restore Conan packages cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.conan2
           key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt') }}
@@ -176,7 +176,7 @@ jobs:
       # time. A real GIT_TAG bump still invalidates it correctly since that
       # only lives in cmake/Dependencies.cmake now.
       - name: Restore FetchContent-vendored dependency builds cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: build/Release/_deps
           key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
@@ -248,14 +248,14 @@ jobs:
       # keys are immutable; actions/cache/save just skips with a notice).
       - name: Save Conan packages cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.conan2
           key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt') }}
 
       - name: Save FetchContent-vendored dependency builds cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: build/Release/_deps
           key: fetchcontent-deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
