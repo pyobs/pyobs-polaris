@@ -77,7 +77,7 @@ jobs:
     env:
       CCACHE_SLOPPINESS: pch_defines,time_macros
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Ninja+MSVC needs the MSVC dev environment (cl.exe, INCLUDE/LIB env
       # vars) active in the shell *before* CMake configures - unlike the
