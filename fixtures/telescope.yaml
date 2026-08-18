@@ -28,7 +28,7 @@
 # ModuleLocationRole comment) - without this block the module reports no
 # location at all, which the client now treats as an error rather than
 # falling back to a client-side value.
-class: pyobs.modules.telescope.DummyTelescope
+class: pyobs.modules.telescope.dummyradectelescope.DummyRaDecTelescope
 
 location:
   longitude: 13.405
