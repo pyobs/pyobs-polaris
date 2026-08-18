@@ -29,7 +29,6 @@
 # location at all, which the client now treats as an error rather than
 # falling back to a client-side value.
 class: pyobs.modules.telescope.DummyTelescope
-name: DummyTelescope
 
 location:
   longitude: 13.405

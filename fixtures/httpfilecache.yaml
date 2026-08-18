@@ -22,7 +22,6 @@
 # at this server's port 37075) and the same dev ejabberd server the other
 # fixtures use.
 class: pyobs.modules.utils.HttpFileCache
-name: HttpFileCache
 port: 37075
 
 comm:

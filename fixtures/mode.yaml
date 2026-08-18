@@ -19,7 +19,6 @@
 # effect regardless. Worth an __init__.py fix upstream at some point, not
 # blocking this fixture.
 class: pyobs.modules.utils.dummymode.DummyMode
-name: DummyMode
 
 comm:
   <<: *comm
