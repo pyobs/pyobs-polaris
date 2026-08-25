@@ -1,0 +1,32 @@
+# Doxygen config for pyobs-polaris's C++ API reference, consumed by doxysphinx (see
+# ../pyobs-core/specs/steering/docs-structure-by-project-group.md's gui-nonpython group) to
+# produce Sphinx .rst pages rendered with the fleet's usual sphinx_rtd_theme. Build order:
+# doxygen Doxyfile && doxysphinx build docs/source docs/build/html Doxyfile && sphinx-build ...
+#
+# Only qml/ is excluded from INPUT — Doxygen doesn't parse QML; the qml/views/*.qml screens are
+# documented by hand in docs/source/index.rst's "Views" section instead.
+
+PROJECT_NAME           = "pyobs-polaris"
+OUTPUT_LANGUAGE        = English
+
+INPUT                  = src
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.cpp
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+
+# Required by doxysphinx: output must live inside the Sphinx source root, without per-file
+# subdirectories, and with the classic (non-treeview, indexed) HTML layout.
+OUTPUT_DIRECTORY        = docs/source/api
+HTML_OUTPUT              = .
+CREATE_SUBDIRS          = NO
+GENERATE_TREEVIEW       = NO
+DISABLE_INDEX           = NO
+SEARCHENGINE            = NO
+GENERATE_TAGFILE        = docs/source/api/tagfile.xml
+DOT_IMAGE_FORMAT        = svg
+
+QUIET                   = YES
+WARN_IF_UNDOCUMENTED    = NO

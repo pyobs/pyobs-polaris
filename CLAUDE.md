@@ -25,15 +25,20 @@ repo — not vendored):
 - `src/views/RoofView.vue` — the pattern for a custom, interface-specific
   widget built on top of the generic plumbing
 
-**`DEVELOPMENT.md` is the primary reference** for this project: full
-environment setup, a phase-by-phase history of every completed feature
-with its design decisions and gotchas, the plugin file contract, and the
-release process. `TODO.md` tracks what's planned next. Read the relevant
-section of `DEVELOPMENT.md` before touching an area you haven't worked in
-— many non-obvious constraints (Qt version skew, QML scoping traps, wire
-protocol quirks) are documented there and nowhere else. If a change
-reveals something `DEVELOPMENT.md`/`TODO.md` didn't anticipate, **fix
-those docs too, not just the code**.
+**`specs/` is the primary design-history reference** for this project (see `specs/index.md`):
+`specs/design/` has one doc per shipped feature (design decisions and gotchas), `specs/adrs/` has
+genuine architectural decisions (e.g. QML vs QtWidgets), `specs/steering/` has standing
+contributor guidance (environment setup, release process, handoff notes — this used to be inline
+in `DEVELOPMENT.md`, migrated out 2026-08-25). `DEVELOPMENT.md` itself is now just a short pointer
+into `specs/`. `TODO.md` tracks what's planned next. Read the relevant `specs/design/*.md` before
+touching an area you haven't worked in — many non-obvious constraints (Qt version skew, QML
+scoping traps, wire protocol quirks) are documented there and nowhere else. If a change reveals
+something `specs/`/`TODO.md` didn't anticipate, **fix those docs too, not just the code**.
+
+The "Build, test, run" section below is this file's own operational summary for getting a build
+running — see `specs/steering/environment-setup.md` for the fuller write-up (live-verification
+fixture setup, the AT-SPI-driven live-verification technique) if this section doesn't cover what
+you need.
 
 ## Build, test, run
 
@@ -76,7 +81,7 @@ ctest --test-dir build/Release -R tst_wirevalue --output-on-failure
 - `patchelf` only needed for cutting a release, not day-to-day building
 
 ### Live verification, not just unit tests
-Every completed phase in `DEVELOPMENT.md` was verified against a **real
+Every completed feature (see `specs/design/`) was verified against a **real
 ejabberd server and real running pyobs-core modules**, not just unit
 tests — this project's whole premise is that the wire protocol is the
 source of truth. Keep that bar for new work: `fixtures/*.yaml` holds the
@@ -88,7 +93,7 @@ verify live. Add a new `fixtures/<module>.yaml` whenever a new
 interface-specific widget needs its own dummy module, rather than
 reaching for an external/uncommitted config.
 
-A headless C++ test-harness technique (see `DEVELOPMENT.md`'s
+A headless C++ test-harness technique (see `specs/steering/environment-setup.md`'s
 "Live-verification test fixtures" section) is used to verify wire
 behavior without a GUI: hand-compile a standalone `QCoreApplication`/
 `QGuiApplication` + `QQmlApplicationEngine` program linking directly
@@ -107,7 +112,7 @@ bug).
 - `tst_savedaccountsmodel`'s two keychain-backed tests skip themselves
   under CI (checks the `CI` env var) — a bare runner has no D-Bus
   keyring; getting a real headless Secret Service running was tried and
-  abandoned (see `DEVELOPMENT.md`).
+  abandoned (see `specs/design/configuration-file-and-saved-accounts.md`).
 - Releases: push a `vX.Y.Z` tag and CI builds, tests, `patchelf`-fixes the
   RUNPATH, tars up the binary + vendored `.so`s, and creates the GitHub
   release automatically (`.github/workflows/build.yml`). System Qt6 is
@@ -153,7 +158,7 @@ required. A hand-written `qml/views/*View.qml` only exists where the
 generic rendering doesn't earn its keep (e.g. `IRoof`'s
 open/close/stop buttons). New interfaces should default to relying on the
 generic path; only add a custom view when there's a concrete UX reason,
-matching the precedent in `DEVELOPMENT.md`'s phase write-ups.
+matching the precedent in `specs/design/`'s per-feature write-ups.
 
 ### Connection & subscription lifecycle (`src/comm/`)
 - `XmppClient` (QML singleton-ish, exposed as `pyobs.polaris`'s `XmppClient`
@@ -187,8 +192,8 @@ matching the precedent in `DEVELOPMENT.md`'s phase write-ups.
   interface qualifier.
 
 ### Plugin mechanism (`WidgetRegistry.qml` + `PluginLoader.qml`)
-Two-step design (see `TODO.md`/`DEVELOPMENT.md`'s "Plugin mechanism"
-sections for the full rationale):
+Two-step design (see `TODO.md` and `specs/design/plugin-mechanism-step-1-internal-widget-registry.md`/
+`specs/design/plugin-mechanism-step-2-external-qml-plugin-loading.md` for the full rationale):
 1. `WidgetRegistry.qml` — an in-memory registry mapping either an
    interface name (`registerForInterface`) or a specific module's bare
    JID (`registerForModule`, supports `exclusive: true`) to a

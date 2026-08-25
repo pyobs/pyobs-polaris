@@ -1,7 +1,7 @@
 # pyobs-polaris — todo
 
-What's planned next. See `DEVELOPMENT.md` for how to build, and for the
-design decisions/gotchas behind everything already done (Phases 0–7.5).
+What's planned next. See `specs/steering/environment-setup.md` for how to build, and
+`specs/design/` for the design decisions/gotchas behind everything already done (Phases 0–7.5).
 
 Each item below should be its own PR/commit, buildable and runnable on its
 own before moving to the next, and verified against a live ejabberd server
@@ -27,8 +27,8 @@ extensibility — modules can expose arbitrary custom interfaces beyond the
 built-ins this project ships views for, and those can't all be maintained
 in-tree.
 
-**Steps 1 and 2 are done** (see `DEVELOPMENT.md`'s "Plugin mechanism,
-step 1" and "step 2" write-ups) - `WidgetRegistry.qml` +
+**Steps 1 and 2 are done** (see `specs/design/plugin-mechanism-step-1-internal-widget-registry.md`
+and `specs/design/plugin-mechanism-step-2-external-qml-plugin-loading.md`) - `WidgetRegistry.qml` +
 `MainWindow.qml`'s generic Repeaters, and `PluginLoader.qml` +
 `AppSettings::pluginsDirectory`/`pluginFiles()`. A worked, real,
 live-verified example plugin lives at
@@ -84,8 +84,8 @@ widgets inherits - every page in this project (`RoofView`/
 RPC-triggering button, not just `TelescopeView.qml`'s Init/Park/Stop/
 Move/offset buttons that prompted noticing this.
 
-**Shape shipped** (see `DEVELOPMENT.md`'s own "ACL / permitted-methods
-gating" write-up for the full design/verification trail): `get_permitted_
+**Shape shipped** (see `specs/design/acl-permitted-methods-gating.md` for the full
+design/verification trail): `get_permitted_
 methods()` fetched once per module, folded into the existing disco#info
 discovery flow (a second RPC round trip right after `XmppClient::
 fetchModuleInfo()` upserts) rather than per-widget; cached on a new
@@ -107,7 +107,8 @@ never writes to, only reflects what the server already reports.
 
 **Split out of the original "`ITelescope` follow-up: libnova, destination
 preview, solar-frame pointing" item** once libnova vendoring + the
-destination-coordinate preview shipped (see `DEVELOPMENT.md`) - this piece
+destination-coordinate preview shipped (see
+`specs/design/itelescope-follow-up-libnova-destination-coordinate-preview.md`) - this piece
 alone is blocked, not merely deferred, so it gets its own entry rather
 than silently vanishing from the backlog.
 
@@ -131,7 +132,7 @@ unilateral call).
 - A new lightweight mock module added to pyobs-core implementing
   `IPointingHGS` and/or `IPointingHelioprojective` (mirrors how
   `pyobs.modules.weather.MockWeather` unblocked `IWeather` - see
-  `DEVELOPMENT.md`), maintained upstream, not client-side.
+  `specs/design/custom-widget-iweather.md`), maintained upstream, not client-side.
 - Dev access to a real `SolarTelescope` deployment/hardware environment.
 
 **If/when unblocked**, the actual widget work: `TelescopeView.qml`'s Move
@@ -161,13 +162,13 @@ listed alongside MPC here - are done (`comm::SimbadClient`/
 `comm::JplHorizonsClient`, both talk their respective service's own HTTP
 API directly rather than pulling in astroquery; the compass widget is
 `TelescopeView.qml`'s own "Compass" `GroupBox`, N/S/E/W jog buttons
-ported from `compassmovewidget.py` - see `DEVELOPMENT.md`'s own
-write-ups for all three); MPC remains out of scope purely because
+ported from `compassmovewidget.py` - see `specs/design/simbad-name-resolution.md`,
+`specs/design/jpl-horizons-ephemeris-lookup.md`, and `specs/design/compass-widget.md`);
+MPC remains out of scope purely because
 nothing in this project needs its API specifically yet, not because of
 any technical blocker the other two's own solutions didn't already
 clear. The rest of telescopewidget.ui's own fourth sidebar (Filter/Focus/
-Temperatures) is done - see `DEVELOPMENT.md`'s `TelescopeView.qml`/
-`CameraView.qml` follow-ups.
+Temperatures) is done - see `specs/design/ifilters-ifocuser-shared-panels.md`.
 
 ---
 
@@ -178,8 +179,8 @@ Temperatures) is done - see `DEVELOPMENT.md`'s `TelescopeView.qml`/
 needed a genuinely new project-wide capability, not a widget-local
 addition:
 
-- **VFS (virtual file system) client transport** (see `DEVELOPMENT.md`'s
-  "VFS transport" write-up): `config::VfsEndpointsModel` (a new
+- **VFS (virtual file system) client transport** (see
+  `specs/design/vfs-transport.md`): `config::VfsEndpointsModel` (a new
   per-account, keychain-backed Settings page, mirroring
   `SavedAccountsModel`'s pattern) maps a VFS root name to an HTTP base
   URL, and `comm::VfsClient` fetches it via `QNetworkAccessManager`, live-
@@ -190,7 +191,7 @@ addition:
   `HttpFile`, never `LocalFile`/`SFTPFile`/`SMBFile`/etc. directly, so
   those aren't a "not yet" gap, they're permanently out of scope for a
   client-side VFS reader.
-- **FITS decode** (see `DEVELOPMENT.md`'s "FITS decode" write-up):
+- **FITS decode** (see `specs/design/fits-decode.md`):
   `fits::FitsImage` (new `src/fits/`, plain C++ class, no QML surface of
   its own) decodes a complete in-memory FITS file via `cfitsio` (added as
   this project's first real Conan dependency, `conanfile.txt`) into
@@ -199,8 +200,8 @@ addition:
   `VfsClient::fetchFile()` round trip: decoded dimensions/header
   values/pixel min-max all matched an independent `astropy` read of the
   same bytes exactly.
-- **The image display widget** (see `DEVELOPMENT.md`'s "Image display
-  widget" write-up): `fits::FitsImageItem` (`QQuickPaintedItem`,
+- **The image display widget** (see `specs/design/image-display-widget.md`):
+  `fits::FitsImageItem` (`QQuickPaintedItem`,
   `src/fits/`, following `plot::PlotItem`'s existing precedent) decodes,
   stretches (min/max or percentile-clip), and renders a `NewImageEvent`'s
   image into `CameraView.qml`. Zoom/pan are QML-side (`Flickable` +
@@ -278,7 +279,7 @@ passes:
     `ColumnLayout` rather than `cameraDelegate`, and `ComboBox.indexOfValue()`
     turned out unreliable for these object-array models (silently left
     `currentIndex` at -1, blank combo text, no QML warning at all) - see
-    `DEVELOPMENT.md`'s write-up for both.
+    `specs/design/cameraview-image-controls-round-2.md` for both.
 
 `fits::FitsStretch` now covers everything `qfitswidget`'s own toolbar
 does except full matplotlib colormap parity (deliberately out of scope,

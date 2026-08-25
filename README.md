@@ -47,20 +47,27 @@ Conan-generated toolchain and `find_package(cfitsio)` fails outright
 (`cfitsio` is Conan-only, no system package fallback). If the IDE
 doesn't support presets directly, add
 `-DCMAKE_TOOLCHAIN_FILE=<repo>/build/<Release|Debug>/generators/conan_toolchain.cmake`
-to that profile's CMake options instead. See `DEVELOPMENT.md`'s own
-build section for the full write-up.
+to that profile's CMake options instead. See
+[`specs/steering/environment-setup.md`](specs/steering/environment-setup.md) for the full
+write-up.
 
 ## Documentation
 
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** — the primary reference: full
-  environment setup, a phase-by-phase history of every completed
-  feature with its design decisions and gotchas, the plugin file
-  contract, and the release process.
+- Full docs, including the C++ API reference and a per-view catalog:
+  https://docs.pyobs.org/projects/pyobs-polaris/
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** — short pointer into `specs/` plus a git-history escape
+  hatch; not a growing log.
+- **[specs/](specs/index.md)** — design docs (one per shipped feature), ADRs, and steering docs
+  (environment setup, releases, handoff notes).
 - **[TODO.md](TODO.md)** — what's planned next.
 
 ## Releases
 
-Pushing a `vX.Y.Z` tag triggers CI to build, test, fix up the RUNPATH
-via `patchelf`, and publish a GitHub release with the binary plus its
-vendored `.so`s. System Qt6 is a runtime requirement and is documented
-as such in each release's notes.
+See [`specs/steering/releases.md`](specs/steering/releases.md) — in short: push a `vX.Y.Z` tag,
+CI builds/tests/packages/publishes automatically.
+
+## Repository
+
+Renamed from `pyobs-gui++` (itself renamed from `pyobs-qml-client` during early development): `++`
+isn't valid in a GitHub repo name, which the old name only worked around with a trailing hyphen
+(`pyobs-gui-`) — the project and its GUI are both just called Polaris now.
