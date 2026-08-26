@@ -17,15 +17,19 @@ GENERATE_HTML          = YES
 GENERATE_LATEX         = NO
 GENERATE_XML           = NO
 
-# Required by doxysphinx: output must live inside the Sphinx source root, without per-file
-# subdirectories, and with the classic (non-treeview, indexed) HTML layout.
+# Required by doxysphinx: output must live inside the Sphinx source root, in the default
+# html/ subdirectory doxysphinx expects, without per-file subdirectories, and with the
+# classic (non-treeview, indexed) HTML layout.
 OUTPUT_DIRECTORY        = docs/source/api
-HTML_OUTPUT              = .
+HTML_OUTPUT              = html
 CREATE_SUBDIRS          = NO
 GENERATE_TREEVIEW       = NO
 DISABLE_INDEX           = NO
 SEARCHENGINE            = NO
-GENERATE_TAGFILE        = docs/source/api/tagfile.xml
+GENERATE_TAGFILE        = docs/source/api/html/tagfile.xml
+# AUTO_LIGHT (the default) emits a dark-mode CSS toggle using CSS4 relative-color syntax
+# (hsl(from ...)) that doxysphinx's libsass backend can't parse. LIGHT avoids it.
+HTML_COLORSTYLE         = LIGHT
 DOT_IMAGE_FORMAT        = svg
 
 QUIET                   = YES
