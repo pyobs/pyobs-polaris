@@ -378,9 +378,23 @@ jobs:
             Windows) ASSET=polaris-windows-x86_64.zip ;;
             macOS) ASSET=polaris-macos-arm64.zip ;;
           esac
-          if gh release create "${{ github.ref_name }}" "$ASSET" \
-            --title "${{ github.ref_name }}" \
-            --notes "$(cat <<'EOF'
+
+          # Written to a file rather than passed inline via --notes
+          # "$(cat <<'EOF' ... EOF)": on the macOS runner specifically,
+          # that pattern didn't reliably associate the heredoc with `cat`
+          # - the notes body's own lines (backtick-quoted names, the Usage
+          # code block) got executed as top-level shell commands instead
+          # ("libQt6Core: command not found", etc. showed up directly in
+          # the job log). Harmless when the release already existed
+          # (dev1: the corrupted step still reached its `gh release
+          # upload` fallback, which succeeded against an existing
+          # release), fatal when it didn't (dev2/dev3: the same
+          # corruption instead surfaced as "release not found",
+          # dropping the macOS asset from both releases). A plain
+          # `cat <<'EOF' > file` as its own statement, then
+          # `--notes-file`, sidesteps whatever the runner's shell was
+          # doing with the nested heredoc.
+          cat <<'EOF' > release-notes.md
           A release of Polaris (pyobs-polaris), a clean-room C++/QML client for pyobs 2.0. Every phase up to this tag was verified live against a real ejabberd server and real pyobs modules - see DEVELOPMENT.md for the full phase-by-phase history.
 
           **What's in this release:**
@@ -423,7 +437,10 @@ jobs:
 
           Built directly by this repository's CI from this tag (ubuntu-26.04/Qt 6.10.2, windows-latest/Qt 6.10.2, macos-14/Qt 6.10.2).
           EOF
-          )"; then
+
+          if gh release create "${{ github.ref_name }}" "$ASSET" \
+            --title "${{ github.ref_name }}" \
+            --notes-file release-notes.md; then
             echo "Created release and uploaded $ASSET"
           else
             echo "Release already exists - uploading $ASSET to it instead"
