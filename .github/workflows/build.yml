@@ -398,13 +398,16 @@ jobs:
           A release of Polaris (pyobs-polaris), a clean-room C++/QML client for pyobs 2.0. Every phase up to this tag was verified live against a real ejabberd server and real pyobs modules - see DEVELOPMENT.md for the full phase-by-phase history.
 
           **What's in this release:**
-          - XMPP connect/disconnect with live status
+          - XMPP connect/disconnect with live status, saved accounts/config file
           - disco#info-driven module/interface/schema discovery
           - Presence-driven live module list
-          - Generic PubSub state subscription + rendering (any interface, zero interface-specific code)
-          - Generic RPC command execution
-          - Live domain event log via PEP
-          - First hand-designed widget: RoofWidget for IRoof modules
+          - Status page with expandable per-module state drilldown
+          - Generic RPC command execution (Shell page, parameterized commands)
+          - Live domain event log via PEP, with real filtering (Events/Logs pages)
+          - Dedicated widgets for IRoof, IAutoFocus, IAcquisition, IAutoGuiding, IMode, IWeather, ICamera, and ITelescope - each shown in the sidebar only while a connected module actually implements that interface
+          - Camera view: FITS image display/decode, image controls (cuts, per-sensor checkboxes, time-range filter, auto-save)
+          - Plugin mechanism for loading external QML widgets without recompiling
+          - Resizable/collapsible sidebar, persistent log footer
 
           **Downloads:**
           - `polaris-linux-x86_64.tar.gz` — Linux x86_64
