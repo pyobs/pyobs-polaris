@@ -378,19 +378,36 @@ jobs:
             Windows) ASSET=polaris-windows-x86_64.zip ;;
             macOS) ASSET=polaris-macos-arm64.zip ;;
           esac
-          if gh release create "${{ github.ref_name }}" "$ASSET" \
-            --title "${{ github.ref_name }}" \
-            --notes "$(cat <<'EOF'
+
+          # Written to a file rather than passed inline via --notes
+          # "$(cat <<'EOF' ... EOF)": on the macOS runner specifically,
+          # that pattern didn't reliably associate the heredoc with `cat`
+          # - the notes body's own lines (backtick-quoted names, the Usage
+          # code block) got executed as top-level shell commands instead
+          # ("libQt6Core: command not found", etc. showed up directly in
+          # the job log). Harmless when the release already existed
+          # (dev1: the corrupted step still reached its `gh release
+          # upload` fallback, which succeeded against an existing
+          # release), fatal when it didn't (dev2/dev3: the same
+          # corruption instead surfaced as "release not found",
+          # dropping the macOS asset from both releases). A plain
+          # `cat <<'EOF' > file` as its own statement, then
+          # `--notes-file`, sidesteps whatever the runner's shell was
+          # doing with the nested heredoc.
+          cat <<'EOF' > release-notes.md
           A release of Polaris (pyobs-polaris), a clean-room C++/QML client for pyobs 2.0. Every phase up to this tag was verified live against a real ejabberd server and real pyobs modules - see DEVELOPMENT.md for the full phase-by-phase history.
 
           **What's in this release:**
-          - XMPP connect/disconnect with live status
+          - XMPP connect/disconnect with live status, saved accounts/config file
           - disco#info-driven module/interface/schema discovery
           - Presence-driven live module list
-          - Generic PubSub state subscription + rendering (any interface, zero interface-specific code)
-          - Generic RPC command execution
-          - Live domain event log via PEP
-          - First hand-designed widget: RoofWidget for IRoof modules
+          - Status page with expandable per-module state drilldown
+          - Generic RPC command execution (Shell page, parameterized commands)
+          - Live domain event log via PEP, with real filtering (Events/Logs pages)
+          - Dedicated widgets for IRoof, IAutoFocus, IAcquisition, IAutoGuiding, IMode, IWeather, ICamera, and ITelescope - each shown in the sidebar only while a connected module actually implements that interface
+          - Camera view: FITS image display/decode, image controls (cuts, per-sensor checkboxes, time-range filter, auto-save)
+          - Plugin mechanism for loading external QML widgets without recompiling
+          - Resizable/collapsible sidebar, persistent log footer
 
           **Downloads:**
           - `polaris-linux-x86_64.tar.gz` — Linux x86_64
@@ -423,7 +440,10 @@ jobs:
 
           Built directly by this repository's CI from this tag (ubuntu-26.04/Qt 6.10.2, windows-latest/Qt 6.10.2, macos-14/Qt 6.10.2).
           EOF
-          )"; then
+
+          if gh release create "${{ github.ref_name }}" "$ASSET" \
+            --title "${{ github.ref_name }}" \
+            --notes-file release-notes.md; then
             echo "Created release and uploaded $ASSET"
           else
             echo "Release already exists - uploading $ASSET to it instead"

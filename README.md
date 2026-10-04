@@ -1,5 +1,12 @@
 # pyobs-polaris
 
+> **Status: proof-of-concept, not under further development.** Polaris showed that a
+> pyobs client can be built in C++/QML with no `pyobs-core` dependency, discovering
+> everything live over XMPP. It won't be developed further: [pyobs-web-client](https://github.com/pyobs/pyobs-web-client)
+> is the maintained path forward for new clients (and can be compiled to Android/iOS), with
+> [pyobs-gui](https://github.com/pyobs/pyobs-gui) continuing alongside it. The code is kept
+> as a working reference for the protocol.
+
 **Polaris** is a clean-room C++/QML desktop client for
 [pyobs](https://www.pyobs.org) 2.0, an observatory control framework.
 It's modeled directly on
